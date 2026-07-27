@@ -1,9 +1,13 @@
 from bs4 import BeautifulSoup
+import pytest
 import requests
 
 import precision_app
 from services import serpapi_search
 from services.database import MongoRepository
+
+
+pytestmark = pytest.mark.usefixtures("walmart_offline_test_config")
 
 
 def _make_client(username="Walmart Pipeline User"):
@@ -913,6 +917,58 @@ def test_serpapi_connection_failure_does_not_expose_rendered_request_url(monkeyp
         assert "must-not-leak" not in str(exc)
     else:
         raise AssertionError("Expected a safe SerpApiError")
+
+
+def test_missing_serpapi_credential_is_normalized_without_calling_provider(monkeypatch):
+    client, user = _make_client("Walmart Missing Credential")
+    provider_calls = []
+    monkeypatch.delenv("SERPAPI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        precision_app,
+        "search_ebay_cached",
+        lambda *_args, **_kwargs: ([], {"cache_status": "miss"}),
+    )
+    monkeypatch.setattr(
+        serpapi_search.requests,
+        "get",
+        lambda *_args, **_kwargs: provider_calls.append(True),
+    )
+
+    _search(client)
+    run = precision_app.repository.list_searches(user["_id"], limit=1)[0]
+    status = run["source_statuses"]["walmart"]
+
+    assert provider_calls == []
+    assert status["status"] == status["status_code"] == "authentication_error"
+    assert status["error_code"] == "authentication_error"
+    assert status["safe_message"] == "Marketplace provider credentials are not configured."
+    assert "SERPAPI_API_KEY is not configured" not in str(status)
+
+
+def test_provider_connection_failure_is_distinct_from_missing_credentials(monkeypatch):
+    client, user = _make_client("Walmart Connection Failure")
+    provider_calls = []
+    monkeypatch.setattr(precision_app, "_serpapi_walmart_enabled", lambda: True)
+    monkeypatch.setattr(
+        precision_app,
+        "search_ebay_cached",
+        lambda *_args, **_kwargs: ([], {"cache_status": "miss"}),
+    )
+
+    def fail_provider(*_args, **_kwargs):
+        provider_calls.append(True)
+        raise requests.exceptions.ConnectionError("offline provider failure")
+
+    monkeypatch.setattr(serpapi_search.requests, "get", fail_provider)
+
+    _search(client)
+    run = precision_app.repository.list_searches(user["_id"], limit=1)[0]
+    status = run["source_statuses"]["walmart"]
+
+    assert provider_calls == [True]
+    assert status["status"] == status["status_code"] == "provider_connection_error"
+    assert status["error_code"] == "provider_connection_error"
+    assert status["safe_message"] == "Marketplace provider connection failed."
 
 
 def test_zero_walmart_offer_price_is_invalid_not_missing():

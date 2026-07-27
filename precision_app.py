@@ -44,7 +44,8 @@ from services.platforms import canonical_marketplace_platform
 from src.ecommerce_price_monitor.collectors.walmart_collector import WalmartCollector
 from src.ecommerce_price_monitor.utils.exceptions import CollectorError
 
-load_dotenv()
+if (os.getenv("APP_ENV") or os.getenv("FLASK_ENV") or "").strip().lower() not in {"test", "testing"}:
+    load_dotenv()
 validate_production_configuration()
 
 
@@ -1521,6 +1522,7 @@ def _canonical_source_statuses(query, search_scope, diagnostics, items):
             if canonical_marketplace_platform(item.get("platform"), item.get("source_type")) == platform_name
         )
         error_text = str(diagnostics.get(f"{source}_error") or diagnostics.get("serpapi_error") or "")
+        safe_message = str(diagnostics.get(f"{source}_safe_message") or "")
         error_code = None
         if source == "walmart" and query and requested:
             lowered = error_text.casefold()
@@ -1529,6 +1531,8 @@ def _canonical_source_statuses(query, search_scope, diagnostics, items):
             elif legacy.startswith("unavailable") or error_text:
                 if "normalization_failed" in lowered:
                     state, error_code = "normalization_failed", "normalization_failed"
+                elif "provider_connection_error" in lowered:
+                    state, error_code = "provider_connection_error", "provider_connection_error"
                 elif "timeout" in lowered:
                     state, error_code = "timeout", "timeout"
                 elif "429" in lowered or "rate" in lowered:
@@ -1554,7 +1558,9 @@ def _canonical_source_statuses(query, search_scope, diagnostics, items):
             state = "no_results"
         else:
             lowered = error_text.casefold()
-            if "timeout" in lowered:
+            if "provider_connection_error" in lowered:
+                state, error_code = "provider_connection_error", "provider_connection_error"
+            elif "timeout" in lowered:
                 state, error_code = "timeout", "timeout"
             elif "429" in lowered or "rate" in lowered:
                 state, error_code = "rate_limited", "rate_limited"
@@ -1564,6 +1570,7 @@ def _canonical_source_statuses(query, search_scope, diagnostics, items):
                 state, error_code = "provider_error", "provider_error"
         statuses[source] = {
             "status": state,
+            "status_code": state,
             "submitted_query": query,
             "effective_query": query,
             "raw_count": raw_count,
@@ -1574,6 +1581,7 @@ def _canonical_source_statuses(query, search_scope, diagnostics, items):
             "displayed_count": int(diagnostics.get(f"displayed_{source}_count") or retained_count),
             "retained_count": retained_count,
             "error_code": error_code,
+            "safe_message": safe_message,
             "spelling_suggestion": spelling,
             "completed_at": completed_at,
         }
@@ -1593,7 +1601,7 @@ def _source_status_messages(source_statuses):
         return ["Walmart returned listings, but none met the current comparable-product criteria."]
     if state == "query_correction_suggested":
         return [f"Walmart suggested ‘{walmart.get('spelling_suggestion')}’. Search using the suggested spelling to view those results."]
-    if state in {"timeout", "rate_limited", "authentication_error", "provider_error", "normalization_error", "normalization_failed"}:
+    if state in {"timeout", "rate_limited", "authentication_error", "provider_connection_error", "provider_error", "normalization_error", "normalization_failed"}:
         return ["Walmart is temporarily unavailable. Results shown are limited to other available sources."]
     return []
 
@@ -6844,9 +6852,18 @@ def search(search_run_id=None):
                     else:
                         raw_walmart_rows = []
                         provider_raw_walmart_count = 0
-                        walmart_request_diagnostics = {"provider": "serpapi", "app_query": query, "normalized_query": normalize_serpapi_query(query), "serpapi_params": None, "page_type": "unavailable", "error": "SERPAPI_API_KEY is not configured and legacy Walmart scraper is disabled."}
+                        walmart_request_diagnostics = {
+                            "provider": "serpapi",
+                            "app_query": query,
+                            "normalized_query": normalize_serpapi_query(query),
+                            "serpapi_params": None,
+                            "page_type": "unavailable",
+                            "error": "authentication_error",
+                            "safe_message": "Marketplace provider credentials are not configured.",
+                        }
                         search_diagnostics["serpapi_status"] = "unavailable"
                         search_diagnostics["serpapi_error"] = walmart_request_diagnostics["error"]
+                        search_diagnostics["walmart_safe_message"] = walmart_request_diagnostics["safe_message"]
                     search_diagnostics["walmart_request"] = walmart_request_diagnostics
                     app.logger.info(
                         "Walmart route diagnostics query=%r normalized_query=%r search_scope=%s data_source=%r platform_filter=%r request_url=%r status=%s final_url=%r preview=%r page_type=%s raw_count=%s normalized_count=%s final_matched_count=%s rejection_reasons=%s",
@@ -6911,12 +6928,18 @@ def search(search_run_id=None):
                 except Exception as exc:
                     app.logger.warning("Walmart source failed (%s)", exc.__class__.__name__)
                     if isinstance(exc, SerpApiError):
+                        provider_error_code = getattr(exc, "code", str(exc))
                         search_diagnostics["source_status"]["walmart"] = "unavailable"
                         search_diagnostics["walmart_status"] = "unavailable"
                         search_diagnostics["walmart_response_type"] = "serpapi_error"
                         search_diagnostics["raw_walmart_status"] = "serpapi_error"
                         search_diagnostics["serpapi_status"] = "error"
-                        search_diagnostics["serpapi_error"] = str(exc)
+                        search_diagnostics["serpapi_error"] = provider_error_code
+                        search_diagnostics["walmart_safe_message"] = getattr(
+                            exc,
+                            "safe_message",
+                            "Marketplace provider request failed.",
+                        )
                     elif isinstance(exc, CollectorError) and "bot check" in str(exc).lower():
                         search_diagnostics["source_status"]["walmart"] = "unavailable_bot_check"
                         search_diagnostics["walmart_status"] = "unavailable_bot_check"
@@ -6928,7 +6951,11 @@ def search(search_run_id=None):
                         search_diagnostics["walmart_status"] = "unavailable"
                         search_diagnostics["walmart_response_type"] = "unavailable"
                         search_diagnostics["raw_walmart_status"] = "unavailable"
-                    search_diagnostics["walmart_error"] = str(exc)
+                    search_diagnostics["walmart_error"] = (
+                        getattr(exc, "code", str(exc))
+                        if isinstance(exc, SerpApiError)
+                        else str(exc)
+                    )
                     search_diagnostics["api_response_status"]["walmart"] = "error"
                     repository.log_event(session["user_id"], "api_call_failed", session["role"], session["username"], {"query": query, "source": "Walmart", "error_type": exc.__class__.__name__})
                 stored_walmart_count = _has_stored_walmart_evidence(query)

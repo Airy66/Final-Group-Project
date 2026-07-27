@@ -12,7 +12,19 @@ from services.platforms import canonical_marketplace_platform
 
 
 class SerpApiError(RuntimeError):
-    pass
+    SAFE_MESSAGES = {
+        "authentication_error": "Marketplace provider credentials are not configured.",
+        "provider_connection_error": "Marketplace provider connection failed.",
+        "provider_timeout": "Marketplace provider request timed out.",
+    }
+
+    def __init__(self, code, *, safe_message=None):
+        self.code = str(code or "provider_error")
+        self.safe_message = safe_message or self.SAFE_MESSAGES.get(
+            self.code,
+            "Marketplace provider request failed.",
+        )
+        super().__init__(self.code)
 
 
 SERPAPI_ENDPOINT = "https://serpapi.com/search.json"
@@ -235,7 +247,7 @@ def normalize_serpapi_records(payload, *, platform, query, collected_at=None, li
 def call_serpapi_marketplace(query, *, platform, category="", min_price=None, max_price=None, sort="", location="", country="", store_id="", limit=20, no_cache=False):
     api_key = os.getenv("SERPAPI_API_KEY")
     if not api_key:
-        raise SerpApiError("SERPAPI_API_KEY is not configured.")
+        raise SerpApiError("authentication_error")
     engine = engine_for_platform(platform)
     request_query = " ".join(str(query or "").strip().split())
     normalized_query = normalize_query(query)
@@ -319,7 +331,7 @@ def call_serpapi_marketplace(query, *, platform, category="", min_price=None, ma
 def serpapi_account():
     api_key = os.getenv("SERPAPI_API_KEY")
     if not api_key:
-        raise SerpApiError("SERPAPI_API_KEY is not configured.")
+        raise SerpApiError("authentication_error")
     response = requests.get("https://serpapi.com/account.json", params={"api_key": api_key}, timeout=15)
     try:
         payload = response.json()
