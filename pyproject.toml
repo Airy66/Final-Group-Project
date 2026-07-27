@@ -1,0 +1,123 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "precision-curator"
+version = "1.0.0"
+description = "Academic marketplace price curation and analysis prototype"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = {text = "MIT"}
+keywords = ["ecommerce", "price", "monitoring", "analysis", "academic"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+]
+dependencies = [
+    "Flask>=3.0.0",
+    "requests>=2.28.0",
+    "beautifulsoup4>=4.11.0",
+    "selenium>=4.8.0",
+    "pandas>=1.5.0",
+    "numpy>=1.21.0",
+    "matplotlib>=3.6.0",
+    "seaborn>=0.11.0",
+    "plotly>=5.11.0",
+    "openpyxl>=3.0.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=0.19.0",
+    "pymongo>=4.7.0",
+    "openai>=1.40.0",
+    "google-genai>=2.0.0",
+    "gunicorn==23.0.0",
+    "click>=8.1.0",
+    "lxml>=4.9.0",
+    "scipy>=1.9.0",
+    "Werkzeug>=3.0.0",
+    "jieba>=0.42.1",
+    "zhconv>=1.4.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=22.0.0",
+    "flake8>=5.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=2.20.0",
+]
+docs = [
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+]
+
+[project.scripts]
+ecommerce-monitor = "ecommerce_price_monitor.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/tests"]
+python_files = ["test_*.py"]
+
+[tool.coverage.run]
+source = ["precision_app", "services"]
+relative_files = true
+omit = [
+    "tests/*",
+    "src/tests/*",
+    "tools/*",
+    "venv/*",
+    ".venv/*",
+    "src/ecommerce_price_monitor/collectors/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.coverage.html]
+directory = "htmlcov"

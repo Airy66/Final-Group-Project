@@ -1,0 +1,500 @@
+﻿<!doctype html>
+
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Precision Curator{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" sizes="any" href="{{ url_for('static', filename='favicon.svg', v='2') }}">
+  <link rel="shortcut icon" href="{{ url_for('site_favicon', v='2') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <script>tailwind.config={theme:{extend:{colors:{primary:'#2563eb',ink:'#172033',surface:'#f6f8fc'},fontFamily:{body:['Inter'],display:['Manrope']},boxShadow:{soft:'0 18px 45px rgba(30,64,175,.08)'}}}}}</script>
+  <script>
+    window.csrfFetch = function(input, options) {
+      const requestOptions = Object.assign({}, options || {});
+      const target = new URL(typeof input === 'string' ? input : input.url, window.location.href);
+      const method = String(requestOptions.method || (typeof input !== 'string' && input.method) || 'GET').toUpperCase();
+      if (target.origin === window.location.origin && !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+        const headers = new Headers(requestOptions.headers || (typeof input !== 'string' ? input.headers : undefined));
+        headers.set('X-CSRFToken', document.querySelector('meta[name="csrf-token"]').content);
+        requestOptions.headers = headers;
+      }
+      return window.fetch(input, requestOptions);
+    };
+    window.ensureCsrfField = function(form) {
+      if (!form || String(form.method || 'GET').toUpperCase() !== 'POST') return;
+      let field = form.querySelector('input[name="csrf_token"]');
+      if (!field) {
+        field = document.createElement('input');
+        field.type = 'hidden';
+        field.name = 'csrf_token';
+        form.appendChild(field);
+      }
+      field.value = document.querySelector('meta[name="csrf-token"]').content;
+    };
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('form').forEach(window.ensureCsrfField);
+      document.querySelectorAll('table thead th:not([scope])').forEach((header) => header.setAttribute('scope', 'col'));
+    });
+    document.addEventListener('submit', function(event) { window.ensureCsrfField(event.target); }, true);
+    const nativeFormSubmit = HTMLFormElement.prototype.submit;
+    HTMLFormElement.prototype.submit = function() { window.ensureCsrfField(this); return nativeFormSubmit.call(this); };
+  </script>
+  <style>
+    :root{--color-primary:#2563eb;--color-soft-blue:#eff6ff;--color-accent:#4f46e5;--color-violet:#6d5bd0;--color-cyan:#0e7490;--color-orange:#c26825;--color-success:#16805d;--color-warning:#b96818;--color-neutral:#0f172a;--color-body:#334155;--color-muted:#64748b;--color-surface:#f6f8fc;--color-surface-alt:#eef3f8;--color-border:#dce4ef;--radius-card:1.25rem;--shadow-soft:0 10px 28px rgba(15,23,42,.06);--shadow-hover:0 16px 36px rgba(15,23,42,.10);--transition-fast:180ms ease}
+    html,body{margin:0;padding:0}body{font-family:Inter,sans-serif;background:#f5f7fa;color:var(--color-neutral);overflow-x:hidden}
+    .font-display{font-family:Manrope,sans-serif}
+    .app-page{width:100%;margin:0;padding:0}
+    section[id]{scroll-margin-top:6.5rem}
+    .app-hero,.app-page-header{border:1px solid #d9e2ee;border-radius:.75rem;background:linear-gradient(135deg,#fff 0%,#f8fbff 58%,#eef5ff 100%);box-shadow:0 1px 2px rgba(15,23,42,.03);padding:1.75rem 2rem}
+    .app-page-header{display:flex;align-items:center;justify-content:space-between;gap:2rem}.app-page-header__content{min-width:0;max-width:68rem}.app-page-header__eyebrow{font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--color-primary)}.app-page-header__title{margin-top:.5rem;font-family:Manrope,sans-serif;font-size:2.25rem;font-weight:800;line-height:1.12;letter-spacing:-.02em;color:#0f172a}.app-page-header__subtitle{margin-top:.75rem;max-width:58rem;color:#475569}.app-page-header__actions{display:flex;flex:none;align-items:center;gap:.75rem}.app-page-header h1,.app-hero h1{line-height:1.12;letter-spacing:-.02em}.app-hero>p{max-width:68rem}
+    .app-section{padding:5rem 1.25rem}
+    .app-section-alt{padding:5rem 1.25rem;background:linear-gradient(135deg,#f8fbff 0%,#eef6ff 45%,#fff7ed 100%)}
+    .app-card{border:1px solid #dce4ef;border-radius:.75rem;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.03)}
+    .app-card-accent{position:relative;overflow:hidden;border-top:4px solid var(--accent,#dbeafe)}
+    .app-card-hover{transition:transform var(--transition-fast),border-color var(--transition-fast),box-shadow var(--transition-fast),background-color var(--transition-fast),filter var(--transition-fast)}
+    .app-card-hover:hover{transform:translateY(-2px);border-color:#b7c9e2;box-shadow:0 8px 20px rgba(15,23,42,.07)}
+    .app-tab{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;border-radius:999px;border:1px solid #cbd5e1;background:#fff;padding:.7rem 1rem;font-weight:800;color:#334155;box-shadow:0 8px 18px rgba(15,23,42,.04);transition:transform var(--transition-fast),background-color var(--transition-fast),border-color var(--transition-fast),color var(--transition-fast),box-shadow var(--transition-fast)}
+    .app-tab:hover{transform:translateY(-1px);background:#f8fbff;border-color:#93c5fd;box-shadow:0 12px 24px rgba(37,99,235,.08)}
+    .app-tab.is-active{background:linear-gradient(135deg,#1d4ed8,#4f46e5);border-color:#1d4ed8;color:#fff;box-shadow:0 14px 28px rgba(37,99,235,.18)}
+    .app-button-primary{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:.85rem;background:var(--color-primary);padding:.9rem 1.25rem;font-weight:800;color:#fff;box-shadow:0 8px 18px rgba(37,99,235,.18);transition:transform var(--transition-fast),box-shadow var(--transition-fast),background-color var(--transition-fast)}
+    .app-button-primary:hover{transform:translateY(-1px);background:#1d4ed8;box-shadow:0 11px 22px rgba(37,99,235,.22)}
+    .app-button-secondary{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border:1px solid #bfdbfe;border-radius:1rem;background:#fff;padding:.9rem 1.25rem;font-weight:800;color:#1d4ed8;transition:transform var(--transition-fast),background-color var(--transition-fast),box-shadow var(--transition-fast)}
+    .app-button-secondary:hover{transform:translateY(-2px);background:#eff6ff;box-shadow:0 12px 26px rgba(37,99,235,.12)}
+    .app-export-button{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:1rem;border:1px solid #bfdbfe;background:linear-gradient(135deg,#ffffff,#eff6ff);padding:.9rem 1.15rem;font-weight:900;color:#1d4ed8;box-shadow:0 12px 24px rgba(37,99,235,.12);transition:transform var(--transition-fast),box-shadow var(--transition-fast),border-color var(--transition-fast),background-color var(--transition-fast)}
+    .app-export-button:hover{transform:translateY(-2px);border-color:#93c5fd;background:linear-gradient(135deg,#eff6ff,#dbeafe);box-shadow:0 16px 34px rgba(37,99,235,.18)}
+    .app-export-summary{display:inline-flex;align-items:center;gap:.5rem;border:1px solid #1d4ed8;border-radius:1rem;background:linear-gradient(135deg,#1d4ed8,#4f46e5);padding:.9rem 1.15rem;font-weight:900;color:#fff;box-shadow:0 16px 30px rgba(29,78,216,.24);transition:transform var(--transition-fast),box-shadow var(--transition-fast),filter var(--transition-fast)}
+    .app-export-summary:hover{transform:translateY(-2px);box-shadow:0 20px 38px rgba(29,78,216,.3);filter:saturate(1.08)}
+    .app-dropdown{position:relative;display:inline-block}
+    .app-dropdown > summary{list-style:none;display:inline-flex;align-items:center;gap:.45rem;border:1px solid #cbd5e1;border-radius:1rem;background:linear-gradient(135deg,#0f172a,#1d4ed8);padding:.82rem 1.1rem;font-weight:800;color:#fff;box-shadow:0 14px 28px rgba(15,23,42,.16);transition:transform var(--transition-fast),box-shadow var(--transition-fast),filter var(--transition-fast),background-color var(--transition-fast);cursor:pointer}
+    .app-dropdown > summary::-webkit-details-marker{display:none}
+    .app-dropdown > summary:hover{transform:translateY(-2px);box-shadow:0 18px 36px rgba(15,23,42,.2);filter:saturate(1.05)}
+    .app-dropdown[open] > summary{background:linear-gradient(135deg,#111827,#312e81)}
+    .app-dropdown-panel{position:absolute;right:0;z-index:20;margin-top:.75rem;min-width:18rem;overflow:hidden;border:1px solid #dbeafe;border-radius:1.35rem;background:linear-gradient(180deg,#ffffff,#f8fbff);padding:.45rem;box-shadow:0 24px 60px rgba(15,23,42,.14)}
+    .app-dropdown-panel{transform-origin:top right;animation:dropdown-in 180ms ease both}@keyframes dropdown-in{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+    .app-dropdown-item{display:flex;align-items:center;justify-content:space-between;gap:.85rem;border-radius:1rem;padding:.85rem 1rem;font-size:.93rem;font-weight:800;color:#334155;transition:background-color var(--transition-fast),color var(--transition-fast),transform var(--transition-fast),box-shadow var(--transition-fast)}
+    .app-dropdown-item:hover{background:linear-gradient(135deg,#eff6ff,#dbeafe);color:#1d4ed8;transform:translateX(2px);box-shadow:inset 0 0 0 1px rgba(191,219,254,.8)}
+    .app-dropdown-item.is-locked{color:#94a3b8;background:linear-gradient(135deg,#f8fafc,#f1f5f9)}
+    .app-dropdown-badge{display:inline-flex;align-items:center;border-radius:999px;padding:.22rem .52rem;font-size:.67rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}
+    .app-dropdown-badge-premium{background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1px solid #93c5fd;color:#1d4ed8}
+    .app-dropdown-badge-pro{background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1px solid #c4b5fd;color:#6d28d9}
+    .app-dropdown-badge-basic{background:linear-gradient(135deg,#e2e8f0,#cbd5e1);border:1px solid #cbd5e1;color:#475569}
+    .app-icon-box{display:grid;place-items:center;width:3rem;height:3rem;border-radius:1rem;background:var(--color-soft-blue);color:var(--color-primary)}
+    .app-tooltip{border-bottom:1px dotted currentColor;cursor:help}
+    .app-toast{border:1px solid var(--color-border);border-radius:1rem;background:#fff;box-shadow:var(--shadow-soft)}
+    .app-empty-state{border:1px dashed #cbd5e1;border-radius:1.5rem;background:#f8fafc;padding:2rem;text-align:center;color:var(--color-muted)}
+    .workspace-main .border-dashed a[href$="/search"]{display:inline-flex;align-items:center;justify-content:center;border-radius:.85rem;background:#2563eb!important;padding:.9rem 1.25rem;color:#fff!important;font-weight:800;box-shadow:0 8px 18px rgba(37,99,235,.18);transition:transform var(--transition-fast),background-color var(--transition-fast),box-shadow var(--transition-fast)}
+    .workspace-main .border-dashed a[href$="/search"]:hover{transform:translateY(-1px);background:#1d4ed8!important;box-shadow:0 11px 22px rgba(37,99,235,.22)}
+    .app-table-wrap{border:1px solid #e2e8f0;border-radius:1.5rem;background:rgba(255,255,255,.92);box-shadow:0 10px 25px rgba(15,23,42,.04);overflow:hidden}
+    .app-table-wrap,.overflow-x-auto{max-width:100%;-webkit-overflow-scrolling:touch}
+    .app-table thead{background:#f1f5f9;color:#64748b;font-size:.75rem;text-transform:uppercase;letter-spacing:.14em}
+    .app-table tbody tr{border-top:1px solid #e2e8f0;transition:background-color var(--transition-fast)}
+    .app-table tbody tr:hover{background:#eff6ff}
+    .app-input{border:1px solid #cbd5e1;border-radius:.9rem;background:#fff;transition:border-color .2s ease,box-shadow .2s ease,background-color .2s ease}
+    select,.app-select{min-height:2.75rem;appearance:none!important;border:1px solid #cbd5e1!important;border-radius:.9rem!important;background-color:#fff!important;background-image:linear-gradient(45deg,transparent 50%,#475569 50%),linear-gradient(135deg,#475569 50%,transparent 50%),linear-gradient(180deg,#ffffff,#f8fbff)!important;background-position:calc(100% - 20px) 50%,calc(100% - 14px) 50%,0 0!important;background-size:6px 6px,6px 6px,100% 100%!important;background-repeat:no-repeat!important;padding:.65rem 2.65rem .65rem .9rem!important;color:#172033;font-weight:700;box-shadow:0 1px 0 rgba(15,23,42,.04);transition:border-color .2s ease,box-shadow .2s ease,background-color .2s ease,transform .2s ease}
+    select:hover,.app-select:hover,.app-input:hover{border-color:#93c5fd!important;background-color:#f8fbff!important}
+    select:disabled,.app-select:disabled{background-color:#f1f5f9!important;color:#94a3b8;cursor:not-allowed}
+    .app-choice-card{position:relative;border:1px solid #e2e8f0;border-radius:1rem;background:#fff;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease,background-color .2s ease}
+    .app-choice-card:hover{border-color:#93c5fd;box-shadow:0 10px 24px rgba(37,99,235,.08);transform:translateY(-1px)}
+    .app-choice-card.is-selected{border-color:#2563eb;background:#eff6ff;box-shadow:0 0 0 3px rgba(147,197,253,.35)}
+    .app-choice-input{position:absolute;inline-size:1px;block-size:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%)}
+    .app-choice-indicator{display:grid;place-items:center;width:1.35rem;height:1.35rem;border-radius:999px;border:1px solid #cbd5e1;background:#fff;color:transparent;font-size:.75rem;font-weight:800;transition:all .2s ease}
+    .app-choice-card.is-selected .app-choice-indicator{border-color:#2563eb;background:#2563eb;color:#fff}
+    .app-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid transparent;padding:.2rem .55rem;font-size:.58rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.75)}
+    .app-badge-premium{border-color:#bfdbfe;background:linear-gradient(135deg,#eff6ff,#dbeafe);color:#1d4ed8}
+    .app-badge-pro{border-color:#ddd6fe;background:linear-gradient(135deg,#f5f3ff,#fff7ed);color:#6d28d9}
+    .app-logo{height:3.25rem;width:auto;object-fit:contain}
+    .user-avatar{display:inline-grid;place-items:center;flex:none;border-radius:999px;background:linear-gradient(135deg,#2563eb,#4f46e5 55%,#7c3aed);color:#fff;font-family:Manrope,sans-serif;font-weight:900;letter-spacing:0;box-shadow:0 10px 22px rgba(37,99,235,.2);overflow:hidden}
+    .user-avatar img{height:100%;width:100%;object-fit:cover}
+    .app-header{position:fixed;inset:0 0 auto 0;height:4rem;min-height:4rem;background:#eef3f8}.app-header-inner{height:4rem;min-height:4rem}.app-brand{display:flex;align-items:center;width:17.5rem;align-self:stretch;border-right:1px solid #d7e0ea;padding:0 1.25rem}.app-header .user-avatar{width:2rem;height:2rem}.app-header .app-logo{height:2rem;mix-blend-mode:multiply}
+    .header-utilities{display:flex;height:100%;align-items:center;gap:.5rem;overflow:visible;padding:0}
+    .header-utility{display:flex;height:2.5rem;min-height:2.5rem;align-items:center;border:1px solid transparent;border-radius:.625rem;background:transparent;padding:.25rem .75rem}
+    .header-plan{height:2.5rem;min-height:2.5rem;transition:background-color var(--transition-fast),color var(--transition-fast),border-color var(--transition-fast),box-shadow var(--transition-fast)}
+    .header-plan-basic{border-color:#d7e0ea;background:#f3f6f9;color:#526174}.header-plan-basic:hover{background:#eaf0f5;color:#334155}
+    .header-plan-premium{border-color:#bfd7ff;background:#eef5ff;color:#2358af}.header-plan-premium:hover{background:#e3efff;color:#1d4ed8}
+    .header-plan-professional{border-color:#d8ccff;background:#f4f1ff;color:#6546bc}.header-plan-professional:hover{border-color:#c3b1fb;background:#eee9ff;color:#5438a8}
+    .header-workspace{height:2.5rem;min-height:2.5rem;border:0;border-left:1px solid #d3dde8;border-radius:0;background:transparent;padding-left:1rem}
+    .header-workspace select{height:2.25rem!important;min-height:2.25rem!important;border:0!important;background-color:transparent!important;box-shadow:none!important;padding-top:.2rem!important;padding-bottom:.2rem!important}
+    .user-menu-summary{list-style:none;display:inline-flex;height:2.5rem;min-height:2.5rem;min-width:8.5rem;align-items:center;gap:.5rem;border:0;border-left:1px solid #d3dde8;border-radius:0;background:transparent;padding:.2rem 0 .2rem 1rem;color:#0f172a;cursor:pointer;transition:background-color var(--transition-fast),box-shadow var(--transition-fast)}
+    .app-dropdown>.user-menu-summary,.app-dropdown[open]>.user-menu-summary{border:0;border-left:1px solid #d3dde8;border-radius:0;background:transparent;color:#0f172a;box-shadow:none;filter:none;transform:none}
+    .user-menu-summary::-webkit-details-marker{display:none}
+    .user-menu-summary:hover{background:#e4ebf3;box-shadow:none}
+    .user-menu-panel{position:absolute;right:0;z-index:60;margin-top:.55rem;min-width:17rem;max-width:calc(100vw - 1.5rem);overflow:hidden;border:1px solid var(--color-border);border-radius:1rem;background:#fff;padding:.45rem;box-shadow:0 18px 42px rgba(15,23,42,.14)}
+    .account-logout{margin-top:.35rem;border-top:1px solid #e2e8f0;padding-top:.35rem}
+    .account-logout .app-dropdown-item:hover{background:#fff1f2;color:#b42336;box-shadow:none}
+    .app-nav-item{display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:.625rem}
+    .app-nav-item .material-symbols-outlined{justify-self:center}
+    .app-nav-item .sidebar-link-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .sidebar-badge{justify-self:end;min-width:0;max-width:3.25rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+    input:not([type="hidden"]),select{min-height:2.75rem}
+    button:not(.sidebar-collapse-button){min-height:2.75rem}
+    .workspace-main button[aria-label]{min-width:2.75rem}
+    input:focus,select:focus{outline:none;border-color:#60a5fa!important;box-shadow:0 0 0 3px rgba(147,197,253,.35)!important}
+    button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid rgba(96,165,250,.65);outline-offset:2px}
+    .is-loading{opacity:.7;cursor:wait!important}
+    button:disabled{cursor:not-allowed;filter:saturate(.55)}
+    .workspace-shell{display:block;min-height:100vh;gap:0;overflow-x:hidden;background:#f5f7fa;padding-top:4rem}
+    .workspace-sidebar,.workspace-shell{transition:width 200ms ease,margin-left 200ms ease}
+    .app-sidebar{flex-shrink:0;min-width:0;background:#16243a;border-color:#2b3b52!important}
+    .sidebar-brand{height:4rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-bottom:1px solid #2b3b52;padding:0 .625rem;color:#fff}.sidebar-brand-link{display:flex;min-width:0;flex:1;align-items:center;gap:.5rem}.sidebar-brand img,.sidebar-brand-fallback{flex:0 0 1.875rem;width:1.875rem;height:1.875rem}.sidebar-brand img{object-fit:contain}.sidebar-brand-fallback{display:grid;place-items:center;border-radius:.5rem;background:#2563d9;color:#fff;font-size:.7rem;font-weight:900;letter-spacing:.04em}.sidebar-brand-fallback[hidden]{display:none!important}.sidebar-brand-name{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:.85rem;font-weight:600;white-space:nowrap}.sidebar-collapse-button{width:1.875rem;height:1.875rem;flex:0 0 1.875rem}.workspace-main{min-width:0;overflow-x:hidden;min-height:calc(100vh - 4rem);background:#f5f7fa}
+    .workspace-content{max-width:90rem}.workspace-content--dense{max-width:108rem}
+    .workspace-main .max-w-7xl{max-width:100%}
+    .app-action-row{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}
+    .app-overflow-summary{display:inline-flex;min-width:2.75rem;min-height:2.75rem;align-items:center;justify-content:center;border:1px solid #cbd5e1;border-radius:.625rem;background:#fff;color:#475569}
+    .app-overflow-summary:hover{background:#f8fafc;color:#1d4ed8}
+    .app-dropdown>.analysis-more-summary,.app-dropdown[open]>.analysis-more-summary{height:2.25rem;width:2.25rem;min-height:0;border:1px solid #dce4ef;border-radius:.5rem;background:#fff;padding:0;color:#475569;box-shadow:none;filter:none;transform:none}.app-dropdown>.analysis-more-summary:hover{background:#f8fafc;color:#1d4ed8;transform:none;box-shadow:none}
+    .app-sidebar .sidebar-section-label{padding-left:1rem;color:#8ea1b8;font-size:.65rem;letter-spacing:.13em}.app-sidebar .sidebar-nav{gap:.25rem}.app-sidebar .sidebar-nav a{border-radius:.625rem;color:#d7e2ef}.app-sidebar .sidebar-nav a:hover{transform:none;background:#1a2b40;color:#fff}.app-sidebar .sidebar-nav a.bg-blue-600,.app-sidebar .sidebar-nav a.bg-indigo-600,.app-sidebar .sidebar-nav a.bg-violet-600{background:#2563d9;box-shadow:none;color:#fff}.app-sidebar .sidebar-nav a .material-symbols-outlined{color:inherit}.app-sidebar .sidebar-badge{box-shadow:none}.app-sidebar #sidebar-toggle{border-radius:.5rem;color:#a5b5c8}.app-sidebar #sidebar-toggle:hover{background:#1a2b40;color:#fff}
+    .workspace-main .rounded-3xl{border-radius:.75rem}.workspace-main .rounded-2xl{border-radius:.625rem}.workspace-main .rounded-\[1\.75rem\]{border-radius:.75rem}.workspace-main .shadow-soft,.workspace-main .shadow-sm{box-shadow:0 1px 2px rgba(15,23,42,.035)}
+    .workspace-main > .mx-auto > section:not(.workspace-context){border-color:#dce4ef}.workspace-main table thead{background:#f8fafc}.workspace-main table tbody tr{border-color:#e7edf4}.workspace-main table tbody tr:hover{background:#f8fbff}
+    .workspace-context{border:1px solid #dce4ef;border-left-width:3px;border-radius:.75rem;background:#fff;padding:1.75rem;box-shadow:0 1px 2px rgba(15,23,42,.03)}
+    .workspace-context--consumer{border-left-color:#2563eb;background:#f8fbff}.workspace-context--retailer{border-left-color:#c26825;background:#fffaf5}.workspace-context--researcher{border-left-color:#6d5bd0;background:#fbfaff}.workspace-context--administrator{border-left-color:#475569;background:#f8fafc}
+    .workspace-main .app-badge,.workspace-main .app-dropdown-badge{box-shadow:none}.workspace-main .app-export-button{border-radius:.625rem;box-shadow:none}.workspace-main .app-export-button:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(37,99,235,.10)}
+    .sidebar-link-text,.sidebar-label{transition:opacity .2s ease-in-out}
+    .sidebar-nav a{transition:transform .2s ease,background-color .2s ease,color .2s ease,box-shadow .2s ease}
+    .sidebar-nav a:hover{transform:translateX(2px);background:#eef4ff;box-shadow:none}
+    .toast-item{opacity:0;transform:translateY(.75rem);transition:opacity .3s ease,transform .3s ease}
+    .toast-item.toast-visible{opacity:1;transform:translateY(0)}
+    .scroll-top-btn{position:fixed;right:1rem;bottom:1rem;z-index:45;display:inline-flex;align-items:center;justify-content:center;width:3rem;height:3rem;border-radius:999px;border:1px solid rgba(191,219,254,.9);background:linear-gradient(135deg,rgba(29,78,216,.94),rgba(49,46,129,.94));backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;box-shadow:0 18px 40px rgba(15,23,42,.2);opacity:0;pointer-events:none;transform:translateY(14px) scale(.92);filter:saturate(.96);transition:opacity .24s ease,transform .24s ease,box-shadow .24s ease,filter .24s ease,background-color .24s ease}
+    .scroll-top-btn:hover{box-shadow:0 22px 48px rgba(15,23,42,.28);filter:saturate(1.05)}
+    .scroll-top-btn.is-visible{opacity:1;pointer-events:auto;transform:translateY(0) scale(1);filter:saturate(1)}
+    .scroll-top-btn.is-visible:hover{transform:translateY(-2px) scale(1)}
+    .public-header{position:fixed;inset:0 0 auto 0;height:4rem;min-height:4rem;border-color:#e2e8f0;background:rgba(255,255,255,.97);box-shadow:0 1px 3px rgba(15,23,42,.05);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+    .public-header-inner{height:4rem;min-height:4rem}.public-header .app-logo{height:2.5rem;width:auto;max-width:13.5rem;mix-blend-mode:multiply}.public-main{padding-top:0}.public-nav-link{border-radius:.5rem;padding:.45rem .65rem;transition:background-color var(--transition-fast),color var(--transition-fast)}.public-nav-link:hover{background:#f1f5f9;color:#1d4ed8}
+    [id$="-echart"],[id*="-echart"]{min-height:260px}
+    @media (min-width: 768px){
+      .workspace-shell{display:block;align-items:stretch}
+      .workspace-sidebar{position:fixed;inset:0 auto 0 0;z-index:50;width:15rem;overflow-y:auto;padding:0!important;transition:width 200ms ease}
+      .workspace-sidebar .sidebar-nav{padding:.5rem}
+      .workspace-main{margin-left:15rem}
+      .app-header{left:15rem;margin-left:0}
+      body[data-sidebar-collapsed="true"] .workspace-sidebar{width:4.5rem}
+      body[data-sidebar-collapsed="true"] .workspace-main{margin-left:4.5rem}body[data-sidebar-collapsed="true"] .app-header{left:4.5rem;margin-left:0}
+    }
+    @media (min-width:768px) and (max-width:900px){
+      header .app-logo{height:2.35rem;max-width:9rem}
+      .header-plan{display:none!important}
+      .header-workspace select{min-width:8.5rem!important}
+      .user-menu-summary{min-width:9rem}
+      .user-menu-panel{position:fixed;left:auto;right:.75rem;top:4.5rem;min-width:min(17rem,calc(100vw - 1.5rem));margin-top:0}
+    }
+    @media (max-width: 767px){
+      .app-brand{width:auto;border-right:0;padding:0 1rem}.app-header .app-logo{height:2rem}
+      .workspace-shell{overflow-x:hidden}
+      .workspace-main{margin-left:0}.app-header{left:0;margin-left:0}.workspace-sidebar{position:relative;inset:auto;width:100%;overflow-x:auto;overflow-y:hidden;padding:.5rem .5rem .75rem!important}
+      .workspace-sidebar .sidebar-nav{display:flex;flex-direction:row;flex-wrap:nowrap;gap:.5rem;min-width:max-content;width:max-content}
+      .workspace-sidebar .sidebar-nav a{min-height:2.75rem;white-space:nowrap}
+      .workspace-sidebar .sidebar-badge{min-width:auto;max-width:3rem}
+      #sidebar-toggle,.sidebar-support{display:none!important}
+      .workspace-main{width:100%;padding-left:1rem!important;padding-right:1rem!important}
+      .workspace-sidebar::-webkit-scrollbar{height:4px}
+      .workspace-sidebar{scrollbar-width:thin;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+      .app-hero,.app-page-header{padding:1.25rem;border-radius:1.25rem}.app-page-header{align-items:flex-start;flex-direction:column;gap:1.25rem}.app-page-header__title{font-size:1.875rem}.app-page-header__actions{width:100%;flex-wrap:wrap}
+      .app-section,.app-section-alt{padding:3.25rem 1rem}
+      .app-dropdown-panel{left:0;right:auto;min-width:min(18rem,calc(100vw - 2rem))}
+      table{font-size:.82rem}
+      header .mx-auto{flex-wrap:wrap}
+      header .flex.items-center.gap-3.text-sm{flex-wrap:wrap;justify-content:flex-end;gap:.5rem}
+      header .app-logo{max-width:10rem;height:2.35rem}
+      header .app-badge,header .sidebar-user{display:none!important}
+      .header-utilities{border:0;box-shadow:none;background:transparent}
+      .header-utilities>.header-utility{display:none}
+      .header-utilities>.app-dropdown{border:0;background:transparent}
+      .user-menu-summary{min-width:auto}
+      .user-menu-panel{position:fixed;left:auto;right:.75rem;top:4.5rem;min-width:min(17rem,calc(100vw - 1.5rem));margin-top:0}
+    }
+    @media (max-width: 640px){
+      .scroll-top-btn{right:.75rem;bottom:.75rem;width:2.7rem;height:2.7rem}
+      .app-logo{height:2.5rem;max-width:11rem}
+      .app-badge{padding:.18rem .45rem;font-size:.54rem}
+      [id$="-echart"],[id*="-echart"]{min-height:240px}
+    }
+    body[data-sidebar-collapsed="true"] .sidebar-label,
+    body[data-sidebar-collapsed="true"] .sidebar-section-label,
+    body[data-sidebar-collapsed="true"] .sidebar-badge,
+    body[data-sidebar-collapsed="true"] .sidebar-support,
+    body[data-sidebar-collapsed="true"] .sidebar-link-text{display:none}
+    body[data-sidebar-collapsed="true"] .sidebar-nav{align-items:center}
+    body[data-sidebar-collapsed="true"] .sidebar-nav a{justify-content:center;padding-left:0.85rem;padding-right:0.85rem}
+    body[data-sidebar-collapsed="true"] .app-nav-item{display:flex}
+    body[data-sidebar-collapsed="true"] .sidebar-brand{gap:.25rem;padding-inline:.375rem}body[data-sidebar-collapsed="true"] .sidebar-brand img,body[data-sidebar-collapsed="true"] .sidebar-brand-fallback,body[data-sidebar-collapsed="true"] .sidebar-collapse-button{width:1.75rem;height:1.75rem;flex-basis:1.75rem}
+    body[data-sidebar-collapsed="true"] .sidebar-toggle-icon{transform:rotate(180deg)}
+    @media (prefers-reduced-motion: reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+    @keyframes float-slow{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+    @keyframes float-delayed{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}
+    .float-slow{animation:float-slow 12s ease-in-out infinite}
+    .float-delayed{animation:float-delayed 16s ease-in-out infinite}
+  </style>
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="bg-surface text-ink antialiased" data-sidebar-collapsed="false">
+<script>document.body.dataset.sidebarCollapsed=localStorage.getItem('sidebarCollapsed')==='true'?'true':'false'</script>
+{% if current_user %}
+  <header class="app-header z-40 border-b border-slate-200 backdrop-blur">
+    <div class="app-header-inner flex w-full items-center justify-between gap-4">
+      {% set current_tier = normalize_membership_tier(current_user.membership_tier or current_user.plan) %}
+      <a href="{{ url_for('dashboard_redirect') }}" class="mobile-brand inline-flex items-center md:hidden"><img src="{{ url_for('static', filename='images/precision-curator-logo.png') }}" alt="Precision Curator" class="h-8 w-auto"></a>
+      <div class="header-utilities ml-auto mr-4 text-sm md:mr-6">
+        {% if current_user.role == 'administrator' %}
+        <span class="header-utility header-plan hidden text-xs font-bold text-indigo-700 sm:inline-flex"><span class="mr-2 h-2 w-2 rounded-full bg-indigo-500"></span>System access</span>
+        {% else %}
+        <a href="{{ url_for('membership') }}" class="header-utility header-plan header-plan-{{ current_tier }} hidden gap-2 text-xs font-bold sm:flex">
+          <span class="h-2 w-2 rounded-full {{ 'bg-violet-500' if current_tier == 'professional' else ('bg-blue-500' if current_tier == 'premium' else 'bg-slate-400') }}"></span>
+          <span>{{ tier_label(current_tier) }} Plan</span>
+        </a>
+        {% endif %}
+        {% if current_user.roles and current_user.roles|length > 1 %}<form action="{{ url_for('role_switch') }}" method="post" class="header-utility header-workspace hidden sm:flex"><label class="sr-only" for="role-switch">Workspace</label><span class="material-symbols-outlined text-[18px] text-slate-400">workspaces</span><select id="role-switch" name="role" onchange="this.form.submit()" class="app-select min-w-[145px] text-sm font-bold">{% for value in current_user.roles %}<option value="{{ value }}" {{ 'selected' if current_user.active_role == value }}>{{ role_names[value] }}</option>{% endfor %}</select></form>{% elif developer_role_preview %}<form action="{{ url_for('role_switch') }}" method="post" class="header-utility header-workspace hidden sm:flex"><label class="sr-only" for="role-switch">Workspace</label><span class="material-symbols-outlined text-[18px] text-slate-400">workspaces</span><select id="role-switch" name="role" onchange="this.form.submit()" class="app-select min-w-[145px] text-sm font-bold">{% for value,label in role_names.items() %}<option value="{{ value }}" {{ 'selected' if current_user.active_role == value }}>{{ label }}</option>{% endfor %}</select></form>{% else %}<div class="header-utility hidden gap-2 sm:flex"><span class="material-symbols-outlined text-[18px] text-slate-400">workspaces</span><span><span class="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Workspace</span><strong class="block text-xs text-slate-800">{{ role_names[current_user.active_role or current_user.role] }}</strong></span></div>{% endif %}
+        <details class="app-dropdown">
+          <summary class="user-menu-summary" aria-label="Open account menu"><span class="sr-only">Account</span>
+            <span class="user-avatar h-10 w-10 text-sm">
+              {% if avatar_url(current_user) %}
+              <img src="{{ avatar_url(current_user) }}" alt="">
+              {% else %}
+              {{ user_initials(current_user) }}
+              {% endif %}
+            </span>
+            <span class="user-menu-name min-w-0 flex-1 text-left">
+              <strong class="block max-w-[12rem] overflow-hidden text-ellipsis whitespace-nowrap text-sm text-slate-900" title="{{ current_user.display_name or current_user.username }}">{{ current_user.display_name or current_user.username }}</strong>
+            </span>
+            <span class="material-symbols-outlined text-[20px] text-slate-400">expand_more</span>
+          </summary>
+          <div class="user-menu-panel">
+            <div class="border-b border-slate-100 px-3 py-2.5"><p class="overflow-hidden text-ellipsis whitespace-nowrap text-sm font-bold text-slate-900" title="{{ current_user.display_name or current_user.username }}">{{ current_user.display_name or current_user.username }}</p><p class="mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-slate-500">{{ current_user.email or role_names[current_user.active_role or current_user.role] }}</p></div>
+            <a href="{{ url_for('profile') }}" class="app-dropdown-item"><span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">account_circle</span>My Profile</span></a>
+            {% if current_user.role == 'administrator' %}
+            <a href="{{ url_for('administrator_dashboard') }}" class="app-dropdown-item"><span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">workspace_premium</span>Membership</span><span class="text-xs font-bold text-indigo-500">System</span></a>
+            {% else %}
+            <a href="{{ url_for('membership') }}" class="app-dropdown-item"><span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">workspace_premium</span>Membership</span><span class="text-xs font-bold text-blue-500">{{ tier_label(current_tier) }}</span></a>
+            {% endif %}
+            <a href="{{ url_for('dashboard_redirect') }}" class="app-dropdown-item"><span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">dashboard_customize</span>Workspace</span></a>
+            <a href="{{ url_for('change_password') }}" class="app-dropdown-item"><span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">lock_reset</span>Change Password</span></a>
+            <form action="{{ url_for('logout') }}" method="post" class="account-logout">
+              <button class="app-dropdown-item w-full text-left" type="submit"><span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">logout</span>Log out</span></button>
+            </form>
+          </div>
+        </details>
+      </div>
+    </div>
+  </header>
+  <div class="app-page workspace-shell">
+    <aside class="app-sidebar workspace-sidebar overflow-hidden border-b border-slate-200 p-2 md:border-b-0 md:border-r md:p-2">
+      <div class="sidebar-brand"><a href="{{ url_for('dashboard_redirect') }}" class="sidebar-brand-link"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="Precision Curator logo" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="sidebar-brand-fallback" aria-hidden="true" hidden>PC</span><span class="sidebar-brand-name sidebar-label">Precision Curator</span></a>
+        <button id="sidebar-toggle" type="button" title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true" class="sidebar-collapse-button inline-flex shrink-0 items-center justify-center rounded-lg text-slate-300 transition duration-200 hover:bg-slate-700 hover:text-white">
+          <span class="material-symbols-outlined sidebar-toggle-icon text-[20px]">chevron_left</span>
+        </button>
+      </div>
+      <nav class="sidebar-nav flex gap-2 md:flex-col" aria-label="Workspace navigation">
+        {% set is_dashboard = request.endpoint in ['dashboard_redirect','consumer_dashboard','retailer_dashboard','researcher_dashboard','administrator_dashboard'] %}
+        {% set is_search = request.path == url_for('search') %}
+        {% set is_saved = request.path == url_for('saved') %}
+        {% set is_analytics = request.endpoint == 'analytics_compatibility' %}
+        {% set is_audit = request.path == url_for('audit') %}
+        {% set is_logs = request.path == url_for('logs') %}
+        {% set is_demo = request.path in [url_for('demo'), url_for('demo') + '', url_for('demo')] %}
+        {% if current_user.role == 'administrator' %}
+          <a title="Dashboard" href="{{ url_for('dashboard_redirect') }}" class="flex items-center gap-3 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-indigo-600 text-white shadow-sm' if is_dashboard else 'hover:bg-indigo-50 hover:text-indigo-700' }}"><span class="material-symbols-outlined text-[20px]">space_dashboard</span><span class="sidebar-link-text">Dashboard</span></a>
+          <a title="Source Status" href="{{ url_for('administrator_dashboard') }}#source-status" class="flex items-center gap-3 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold hover:bg-emerald-50 hover:text-emerald-700"><span class="material-symbols-outlined text-[20px]">dns</span><span class="sidebar-link-text">Source Status</span></a>
+          <a title="User Management" href="{{ url_for('administrator_dashboard') }}#user-management" class="flex items-center gap-3 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold hover:bg-indigo-50 hover:text-indigo-700"><span class="material-symbols-outlined text-[20px]">group</span><span class="sidebar-link-text">User Management</span></a>
+          <a href="{{ url_for('audit') }}" class="flex items-center gap-3 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_audit else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined text-[20px]">history</span><span class="sidebar-link-text">Evidence History</span></a>
+          <a href="{{ url_for('logs') }}" class="flex items-center gap-3 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_logs else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined text-[20px]">list_alt</span><span class="sidebar-link-text">Activity Logs</span></a>
+        {% else %}
+          <div class="sidebar-section-label px-4 pt-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Core workflow</div>
+          <a title="Dashboard" href="{{ url_for('dashboard_redirect') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_dashboard else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">space_dashboard</span><span class="sidebar-link-text">Dashboard</span><span class="sidebar-badge"></span></a>
+          <a title="Product Search" href="{{ url_for('search', search_record_id=session.get('last_search_record_id')) if session.get('last_search_record_id') else url_for('search') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_search else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">search</span><span class="sidebar-link-text">Product Search</span><span class="sidebar-badge"></span></a>
+          <div class="sidebar-section-label px-4 pt-4 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Evidence & tracking</div>
+          <a href="{{ url_for('watchlist') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if request.endpoint == 'watchlist' else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">visibility</span><span class="sidebar-link-text" title="Watchlist">Watchlist</span>{% if current_tier == 'basic' %}<span class="sidebar-badge app-badge app-badge-premium shrink-0" title="Premium feature" aria-label="Premium feature">Premium</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>
+          <a href="{{ url_for('saved') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_saved else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">bookmark</span><span class="sidebar-link-text" title="Saved Research">Saved Research</span>{% if current_tier == 'basic' %}<span class="sidebar-badge app-badge app-badge-premium shrink-0" title="Premium feature" aria-label="Premium feature">Premium</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>
+          <div class="sidebar-section-label px-4 pt-4 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Analysis</div>
+          <a href="{{ url_for('analytics_compatibility') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-violet-600 text-white shadow-sm' if is_analytics else 'hover:bg-violet-50 hover:text-violet-700' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">analytics</span><span class="sidebar-link-text" title="Analytics">Analytics</span>{% if current_tier == 'basic' %}<span class="sidebar-badge app-badge app-badge-premium shrink-0" title="Premium feature" aria-label="Premium feature">Premium</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>
+          <a href="{{ url_for('audit') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_audit else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">policy</span><span class="sidebar-link-text" title="Source Audit">Source Audit</span>{% if current_tier == 'professional' %}<span class="sidebar-badge"></span>{% else %}<span class="sidebar-badge app-badge app-badge-pro shrink-0" title="Professional feature" aria-label="Professional feature"><span aria-hidden="true">Pro</span><span class="sr-only">Professional feature</span></span>{% endif %}</a>
+          {% if current_user.role == 'researcher' %}<a href="{{ url_for('logs') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_logs else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">list_alt</span><span class="sidebar-link-text">Logs</span>{% if current_tier == 'professional' %}<span class="sidebar-badge"></span>{% else %}<span class="sidebar-badge app-badge app-badge-pro shrink-0">Professional</span>{% endif %}</a>{% if demo_tools_enabled and (current_user.role == 'administrator' or current_user.is_developer) %}<a href="{{ url_for('demo') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_demo else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined text-[20px]">science</span><span class="sidebar-link-text">Test Data</span><span class="sidebar-badge"></span></a>{% endif %}{% endif %}
+        {% endif %}
+      </nav>
+      {% if current_user.role == 'administrator' %}<div class="sidebar-support mt-8 hidden rounded-2xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800 md:block">
+        <strong class="block">Workspace status</strong>
+        <span class="mt-1 block opacity-75">Ready for review.</span>
+      </div>{% endif %}
+    </aside>
+    <main class="workspace-main overflow-x-hidden px-4 py-4 md:px-6 md:py-6 lg:px-6 lg:py-8">
+      {% set dense_workspace = request.endpoint in ['search','search_results','saved','watchlist','audit','analytics','analytics_compatibility','administrator_dashboard'] %}
+      <div class="workspace-content mx-auto w-full {{ 'workspace-content--dense' if dense_workspace }}">
+        {% if request.endpoint in ['consumer_dashboard','retailer_dashboard','researcher_dashboard','administrator_dashboard'] %}
+          <section id="workflow-guide-shell" class="mb-6 hidden">
+            {% include "partials/workflow_guide.html" %}
+          </section>
+        {% endif %}
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+  <script>
+    (function () {
+      const key = 'sidebarCollapsed';
+      const guideKey = 'workflowGuideSeen';
+      const body = document.body;
+      const toggle = document.getElementById('sidebar-toggle');
+      const guideShell = document.getElementById('workflow-guide-shell');
+      if (guideShell && !localStorage.getItem(guideKey)) {
+        guideShell.classList.remove('hidden');
+        localStorage.setItem(guideKey, 'true');
+      }
+      document.querySelectorAll('.sidebar-nav a').forEach((link) => {
+        if (!link.title) link.title = link.textContent.trim();
+      });
+      const apply = () => {
+        const collapsed = localStorage.getItem(key) === 'true';
+        body.dataset.sidebarCollapsed = collapsed ? 'true' : 'false';
+        if (toggle) {
+          toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+          toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+          toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+          toggle.setAttribute('title', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+        }
+      };
+      apply();
+      if (toggle) {
+        toggle.addEventListener('click', () => {
+          const collapsed = localStorage.getItem(key) === 'true';
+          localStorage.setItem(key, collapsed ? 'false' : 'true');
+          apply();
+        });
+      }
+      document.querySelectorAll('form').forEach((form) => form.addEventListener('submit', () => {
+        if (form.id === 'source-search-form') return;
+        const action = form.getAttribute('action') || '';
+        if (!/(search|refresh|prediction)/i.test(action)) return;
+        const button = form.querySelector('button:not([type="button"])');
+        if (!button) return;
+        button.disabled = true; button.classList.add('is-loading');
+        button.dataset.originalText = button.textContent;
+        button.textContent = 'Working…';
+      }));
+    })();
+  </script>
+{% else %}
+  <header class="public-header z-40 border-b">
+  <div class="public-header-inner mx-auto flex max-w-7xl items-center justify-between px-5">
+    <a href="{{ url_for('home') }}" class="flex items-center">
+      <img src="{{ url_for('static', filename='images/precision-curator-logo.png') }}" alt="Precision Curator" class="app-logo max-w-[210px]">
+    </a>
+
+    <nav class="flex items-center gap-1 text-[13px] font-bold text-slate-600 sm:gap-2">
+      <a href="{{ url_for('home') }}" class="public-nav-link hidden md:inline-flex">Home</a>
+      <a href="{{ url_for('home') }}#features" class="public-nav-link hidden lg:inline-flex">Features</a>
+      <a href="{{ url_for('home') }}#roles" class="public-nav-link hidden lg:inline-flex">Roles</a>
+      <a href="{{ url_for('home') }}#membership" class="public-nav-link hidden sm:inline-flex">Pricing</a>
+      <a href="{{ url_for('home') }}#faq" class="public-nav-link hidden lg:inline-flex">FAQ</a>
+      <a
+        href="{{ url_for('login') }}"
+        class="rounded-lg border border-blue-200 bg-white px-3.5 py-2 text-[13px] font-bold text-blue-700 shadow-sm transition duration-200 hover:border-blue-300 hover:bg-blue-50"
+      >
+        Workspace login
+      </a>
+    </nav>
+  </div>
+</header>
+  <main class="public-main">{% block public_content %}{% endblock %}</main>
+{% endif %}
+{% with messages=get_flashed_messages(with_categories=true) %}{% if messages %}<div class="fixed right-5 top-5 z-50 flex w-[min(24rem,calc(100vw-2.5rem))] flex-col gap-3">{% for category,message in messages %}{% set toast_kind = 'success' if category=='success' else ('error' if category in ['error','danger'] else ('warning' if category=='warning' else 'info')) %}{% set toast_classes = {'success':'border-emerald-200 bg-emerald-50 text-emerald-800','error':'border-red-200 bg-red-50 text-red-800','warning':'border-amber-200 bg-amber-50 text-amber-800','info':'border-blue-200 bg-blue-50 text-blue-800'} %}{% set toast_icon = {'success':'check_circle','error':'error','warning':'warning','info':'info'} %}<div class="toast-item pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm shadow-soft {{ toast_classes[toast_kind] }}" data-toast data-timeout="3000" role="status" aria-live="polite"><span class="material-symbols-outlined mt-0.5 text-[20px]">{{ toast_icon[toast_kind] }}</span><p class="flex-1 leading-6">{{ message }}</p><button type="button" class="ml-1 rounded-lg px-2 py-1 text-xs font-bold opacity-70 transition hover:opacity-100" aria-label="Dismiss notification">✕</button></div>{% endfor %}</div>{% endif %}{% endwith %}
+<button id="scroll-top-btn" type="button" class="scroll-top-btn" aria-label="Back to top" title="Back to top">
+  <span class="material-symbols-outlined text-[22px]">arrow_upward</span>
+</button>
+<dialog id="confirm-dialog" class="max-w-lg rounded-[2rem] border border-slate-200 bg-white p-0 shadow-2xl backdrop:bg-slate-900/40">
+  <form method="dialog" class="p-6 md:p-7">
+    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Confirm action</p>
+    <h3 class="mt-2 font-display text-2xl font-bold text-slate-950">Please confirm</h3>
+    <p id="confirm-dialog-message" class="mt-3 text-sm leading-6 text-slate-600">This action cannot be undone.</p>
+    <div class="mt-6 flex items-center justify-end gap-3">
+      <button value="cancel" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+      <button id="confirm-dialog-accept" value="confirm" class="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700">Confirm</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  (function () {
+    const toasts = Array.from(document.querySelectorAll('[data-toast]'));
+    const dialog = document.getElementById('confirm-dialog');
+    const dialogMessage = document.getElementById('confirm-dialog-message');
+    const dialogAccept = document.getElementById('confirm-dialog-accept');
+    const scrollTopBtn = document.getElementById('scroll-top-btn');
+    let pendingForm = null;
+    const dismiss = (toast) => {
+      if (!toast || toast.dataset.dismissed === 'true') return;
+      toast.dataset.dismissed = 'true';
+      toast.classList.remove('toast-visible');
+      window.setTimeout(() => toast.remove(), 220);
+    };
+    if (toasts.length) {
+      requestAnimationFrame(() => {
+        toasts.forEach((toast) => {
+          requestAnimationFrame(() => toast.classList.add('toast-visible'));
+          const timeout = Number(toast.dataset.timeout || 3000);
+          window.setTimeout(() => dismiss(toast), timeout);
+          const button = toast.querySelector('button');
+          if (button) button.addEventListener('click', () => dismiss(toast));
+        });
+      });
+    }
+    const updateScrollTop = () => {
+      if (!scrollTopBtn) return;
+      const visible = window.scrollY > 320;
+      scrollTopBtn.classList.toggle('is-visible', visible);
+      scrollTopBtn.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    };
+    scrollTopBtn?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    window.addEventListener('scroll', updateScrollTop, { passive: true });
+    updateScrollTop();
+    const accountMenus = Array.from(document.querySelectorAll('details.app-dropdown'));
+    document.querySelectorAll('details').forEach((details) => {
+      const summary = details.querySelector(':scope > summary');
+      if (!summary) return;
+      const syncExpanded = () => summary.setAttribute('aria-expanded', details.open ? 'true' : 'false');
+      syncExpanded();
+      details.addEventListener('toggle', syncExpanded);
+    });
+    accountMenus.forEach((menu) => menu.addEventListener('toggle', () => {
+      if (!menu.open) return;
+      accountMenus.forEach((other) => { if (other !== menu) other.removeAttribute('open'); });
+    }));
+    document.addEventListener('click', (event) => {
+      accountMenus.forEach((menu) => {
+        if (menu.open && !menu.contains(event.target)) menu.removeAttribute('open');
+      });
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      accountMenus.forEach((menu) => {
+        if (!menu.open) return;
+        menu.removeAttribute('open');
+        menu.querySelector('summary')?.focus();
+      });
+    });
+    document.addEventListener('submit', (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement) || !form.matches('[data-confirm-form]')) return;
+      if (form.dataset.confirmBypass === 'true') return;
+      event.preventDefault();
+      pendingForm = form;
+      if (dialogMessage) dialogMessage.textContent = form.dataset.confirmMessage || 'This action cannot be undone.';
+      if (dialog && typeof dialog.showModal === 'function') dialog.showModal();
+    });
+    dialogAccept?.addEventListener('click', () => {
+      if (!pendingForm) return;
+      const form = pendingForm;
+      pendingForm = null;
+      if (dialog && typeof dialog.close === 'function') dialog.close();
+      form.dataset.confirmBypass = 'true';
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.submit();
+      }
+      form.dataset.confirmBypass = 'false';
+    });
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,423 @@
+﻿{% extends "product_base.html" %}
+{% block title %}Administrator dashboard{% endblock %}
+{% block content %}
+<section class="workspace-context workspace-context--administrator">
+  <p class="text-xs font-bold uppercase tracking-widest text-indigo-700">Administrator workspace</p>
+  <h1 class="mt-2 font-display text-4xl font-extrabold text-slate-950">System and evidence oversight</h1>
+  <p class="mt-3 text-slate-600">Monitor account access, service availability, evidence volume, and recent system activity.</p>
+</section>
+<section class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="System summary">
+  {% for key,label,icon in [('users','Users','group'),('search_records','Searches','search'),('evidence_records','Evidence','bookmark'),('audit_logs','Activity events','history')] %}
+  <article class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ label }}</p><p class="mt-2 font-display text-2xl font-extrabold text-slate-950">{{ snapshot.get(key,0) }}</p></div><span class="material-symbols-outlined grid h-9 w-9 place-items-center rounded-lg bg-blue-50 text-[19px] text-blue-700">{{ icon }}</span></div>
+  </article>
+  {% endfor %}
+</section>
+<div class="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(24rem,.95fr)]">
+<section id="source-status" class="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+  <div class="mb-4 flex items-start justify-between gap-3">
+    <div><p class="text-xs font-bold uppercase tracking-widest text-primary">Operations</p><h2 class="mt-1 font-display text-xl font-bold text-slate-950">Service health</h2>
+    <p class="mt-1 text-sm text-slate-500">Storage, collection, and analysis service availability.</p>
+    </div><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{{ sources|length }} services</span></div>
+  <div class="grid gap-2">
+    {% for source in sources %}
+    <div class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+      <span class="min-w-0">
+        <strong class="block truncate text-sm text-slate-950">{{ source.name }}</strong>
+        <small class="mt-0.5 block truncate text-slate-500" title="{{ source.detail }}">{{ source.detail }}</small>
+      </span>
+      <span class="inline-flex h-fit shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold {{ 'border-emerald-100 bg-emerald-50 text-emerald-700' if source.status in ['connected','available'] else ('border-blue-100 bg-blue-50 text-blue-700' if source.status == 'configured' else ('border-amber-100 bg-amber-50 text-amber-700' if source.status in ['fallback mode','not configured'] else 'border-red-100 bg-red-50 text-red-700')) }}"><span class="h-1.5 w-1.5 rounded-full {{ 'bg-emerald-500' if source.status in ['connected','available'] else ('bg-blue-500' if source.status == 'configured' else ('bg-amber-500' if source.status in ['fallback mode','not configured'] else 'bg-red-500')) }}"></span>{{ source.status }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+<section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+  <div class="flex items-start justify-between gap-3"><div><p class="text-xs font-bold uppercase tracking-widest text-primary">Traceability</p><h2 class="mt-1 font-display text-xl font-bold">Recent activity</h2><p class="mt-1 text-sm text-slate-500">Latest security, account, and workflow events.</p></div><a href="{{ url_for('logs') }}" class="whitespace-nowrap text-sm font-bold text-primary hover:underline">View all logs →</a></div>
+  <div class="mt-4 divide-y divide-slate-100">
+    {% for row in audit_logs[:6] %}
+    <article class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0"><div class="min-w-0"><strong class="block truncate text-sm text-slate-900">{{ row.label }}</strong><p class="mt-0.5 truncate text-xs text-slate-500">{{ row.message }}</p><p class="mt-1 text-[11px] text-slate-400">{{ row.display_name }} · {{ role_names.get(row.role,row.role) }}</p></div><time class="shrink-0 text-[11px] text-slate-400">{{ display_sgt_datetime(row.created_at) }}</time></article>
+    {% else %}<p class="py-8 text-center text-sm text-slate-400">No activity recorded.</p>{% endfor %}
+  </div>
+</section>
+</div>
+<section id="user-management" class="mt-5 scroll-mt-24 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+  <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-xs font-bold uppercase tracking-widest text-primary">Administrator</p>
+      <h2 class="mt-1 font-display text-2xl font-bold text-slate-950">User management</h2>
+      <p class="mt-1 text-sm text-slate-500">Assigned roles, active workspace, plan, and activation state for this workspace.</p>
+    </div>
+  </div>
+  <div class="w-full overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <div class="border-b border-slate-100 bg-slate-50/90 p-4">
+      <div class="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_180px_180px_auto]">
+        <label class="block text-sm font-bold text-slate-700">
+          Search
+          <input id="user-search" type="search" placeholder="Search by name or email" class="mt-2 w-full rounded-2xl border-slate-200 bg-white text-sm">
+        </label>
+        <label class="block text-sm font-bold text-slate-700">
+          Role filter
+          <select id="role-filter" class="mt-2 w-full rounded-2xl border-slate-200 bg-white text-sm">
+            <option value="">All roles</option>
+            <option value="consumer">Consumer</option>
+            <option value="retailer">Retailer</option>
+            <option value="researcher">Researcher</option>
+            <option value="administrator">Administrator</option>
+          </select>
+        </label>
+        <label class="block text-sm font-bold text-slate-700">
+          Status filter
+          <select id="status-filter" class="mt-2 w-full rounded-2xl border-slate-200 bg-white text-sm">
+            <option value="">All status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </label>
+        <div class="flex items-end">
+          <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-500">
+            Showing latest 10 users per page
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-white px-4 py-3">
+      <p class="text-sm text-slate-600">Bulk actions apply only to selected non-administrator accounts.</p>
+      <div class="flex items-center gap-2">
+        <button id="delete-selected-users" form="bulk-user-delete" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">Delete selected</button>
+        <span class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">{{ test_account_count }} suspected test accounts tagged</span>
+      </div>
+    </div>
+    <div class="max-h-[720px] overflow-auto">
+      <form id="bulk-user-delete" method="post" action="{{ url_for('administrator_delete_selected_users') }}" data-confirm-form data-confirm-message="Delete the selected accounts permanently? This cannot be undone."></form>
+      <table class="w-full min-w-[1080px] table-fixed text-left text-sm">
+        <colgroup>
+          <col class="w-[6%]">
+          <col class="w-[38%]">
+          <col class="w-[17%]">
+          <col class="w-[14%]">
+          <col class="w-[13%]">
+          <col class="w-[12%]">
+        </colgroup>
+        <thead class="sticky top-0 z-10 bg-indigo-50 text-xs uppercase tracking-widest text-slate-500">
+          <tr>
+            <th class="px-4 py-4 align-middle"><input id="select-all-users" type="checkbox" class="rounded border-slate-300 text-blue-600" aria-label="Select all accounts"></th>
+            <th class="px-4 py-4 align-middle">User</th>
+            <th class="px-4 py-4 align-middle">Role</th>
+            <th class="px-4 py-4 align-middle">Status</th>
+            <th class="px-4 py-4 align-middle">Last login</th>
+            <th class="px-4 py-4 align-middle text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="user-management-body">
+          {% for user in users %}
+          {% set is_self = user._id == current_user._id %}
+          {% set row_is_admin = 'administrator' in (user.roles or [user.role]) or (user.active_role or user.role) == 'administrator' %}
+          {% set status_value = (user.account_status or 'active')|lower %}
+          <tr class="user-row border-t border-slate-100 align-middle transition duration-150 hover:bg-indigo-50/40" data-user-row data-name="{{ (user.display_name or user.username or '')|lower }}" data-email="{{ (user.email or '')|lower }}" data-role="{{ user.active_role or user.role }}" data-status="{{ status_value }}">
+            <td class="px-4 py-3 align-middle">
+              {% if not is_self and not row_is_admin %}
+              <input form="bulk-user-delete" type="checkbox" name="user_id" value="{{ user._id }}" class="rounded border-slate-300 text-red-600" aria-label="Select {{ user.display_name or user.username }}">
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 align-middle">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <strong class="block truncate text-slate-950">{{ user.display_name or user.username }}</strong>
+                  {% if is_test_account_row(user) %}
+                  <span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">Test</span>
+                  {% endif %}
+                </div>
+                <span class="block truncate text-xs text-slate-500">{{ user.email or '—' }}</span>
+              </div>
+            </td>
+            <td class="px-4 py-3 align-middle">
+              <div class="space-y-1.5">
+                <span class="inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold {{ 'border-blue-100 bg-blue-50 text-blue-700' if (user.active_role or user.role)=='consumer' else ('border-orange-100 bg-orange-50 text-orange-700' if (user.active_role or user.role)=='retailer' else ('border-violet-100 bg-violet-50 text-violet-700' if (user.active_role or user.role)=='researcher' else 'border-indigo-100 bg-indigo-50 text-indigo-700')) }}">{{ role_names.get(user.active_role or user.role,user.active_role or user.role) }}</span>
+                {% if row_is_admin %}
+                <p class="text-xs text-indigo-600">System access</p>
+                {% else %}
+                <p class="text-xs capitalize text-slate-500">{{ normalize_membership_tier(user.membership_tier or user.plan or 'basic') }} plan</p>
+                {% endif %}
+              </div>
+            </td>
+            <td class="px-4 py-3 align-middle">
+              <span class="inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold {{ 'border-emerald-100 bg-emerald-50 text-emerald-700' if status_value == 'active' else 'border-slate-200 bg-slate-100 text-slate-700' }}">{{ status_value }}</span>
+            </td>
+            <td class="px-4 py-3 align-middle">
+              <span class="block max-w-[12rem] truncate text-xs text-slate-600" title="{{ display_sgt_datetime(user.last_login_at) }}">{{ display_sgt_datetime(user.last_login_at) }}</span>
+            </td>
+            <td class="px-4 py-3 align-middle text-right">
+              <button
+                type="button"
+                class="manage-toggle inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-bold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100"
+                aria-expanded="false"
+                aria-controls="user-details-{{ loop.index }}"
+                data-target="user-details-{{ loop.index }}"
+              >
+                <span class="material-symbols-outlined text-[18px]">tune</span>
+                Manage
+              </button>
+            </td>
+          </tr>
+          <tr id="user-details-{{ loop.index }}" class="user-detail-row hidden border-t border-slate-100 bg-indigo-50/40" data-detail-row data-user-row="{{ loop.index }}">
+            <td colspan="6" class="px-4 pb-5 pt-0">
+              <div class="rounded-3xl border border-indigo-100 bg-white p-5 shadow-sm ring-1 ring-indigo-50">
+                <div class="grid gap-4 lg:grid-cols-[1fr_220px_220px]">
+                  <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Account details</p>
+                    <dl class="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-400">Created</dt>
+                        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ display_sgt_datetime(user.created_at) }}</dd>
+                      </div>
+                      <div>
+                        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-400">Last login</dt>
+                        <dd class="mt-1 text-sm font-semibold text-slate-900">{{ display_sgt_datetime(user.last_login_at) }}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <form method="post" action="{{ url_for('administrator_update_user', user_id=user._id) }}" class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Assigned roles</p>
+                    <div class="mt-3 space-y-2 text-sm text-slate-700">
+                      {% for value,label in role_names.items() %}
+                      <label class="flex items-center gap-3">
+                        <input type="checkbox" name="roles" value="{{ value }}" class="rounded border-slate-300 text-blue-600" {% if value in (user.roles or [user.role]) %}checked{% endif %} {% if is_self and value == 'administrator' %}disabled{% endif %}>
+                        <span>{{ label }}</span>
+                      </label>
+                      {% endfor %}
+                    </div>
+                    <label class="mt-4 block text-sm font-semibold text-slate-700">
+                      Active workspace
+                      <select name="active_role" class="app-select mt-2 w-full text-sm" {% if is_self %}disabled{% endif %}>
+                        {% for value in user.roles or [user.role] %}
+                        <option value="{{ value }}" {{ 'selected' if (user.active_role or user.role) == value }}>{{ role_names.get(value, value) }}</option>
+                        {% endfor %}
+                      </select>
+                    </label>
+                    {% if row_is_admin %}
+                    <div class="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-800">
+                      <p class="font-semibold">System administrator access</p>
+                      <p class="mt-1 text-xs text-indigo-700/80">Administrator accounts are not assigned a membership tier.</p>
+                    </div>
+                    {% else %}
+                    <label class="mt-4 block text-sm font-semibold text-slate-700">
+                      Membership plan
+                      <select name="membership_tier" class="app-select mt-2 w-full text-sm" {% if is_self %}disabled{% endif %}>
+                        {% for value in ['basic', 'premium', 'professional'] %}
+                        <option value="{{ value }}" {{ 'selected' if normalize_membership_tier(user.plan or user.membership_tier or 'basic') == value }}>{{ value|capitalize }}</option>
+                        {% endfor %}
+                      </select>
+                    </label>
+                    {% endif %}
+                    <button class="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 {% if is_self %}opacity-50{% endif %}" {% if is_self %}disabled{% endif %}>Update roles</button>
+                  </form>
+                  <form method="post" action="{{ url_for('administrator_update_user', user_id=user._id) }}" class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Status</p>
+                    <label class="mt-3 block text-sm font-semibold text-slate-700">
+                      Change status
+                      <select name="account_status" class="app-select mt-2 w-full text-sm" {% if is_self %}disabled{% endif %}>
+                        <option value="active" {{ 'selected' if status_value == 'active' }}>Active</option>
+                        <option value="inactive" {{ 'selected' if status_value == 'inactive' }}>Inactive</option>
+                      </select>
+                    </label>
+                    <input type="hidden" name="active_role" value="{{ user.active_role or user.role }}">
+                    {% for value in user.roles or [user.role] %}<input type="hidden" name="roles" value="{{ value }}">{% endfor %}
+                    {% if not row_is_admin %}<input type="hidden" name="membership_tier" value="{{ normalize_membership_tier(user.membership_tier or user.plan or 'basic') }}">{% endif %}
+                    <button class="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 {% if is_self %}opacity-50{% endif %}" {% if is_self %}disabled{% endif %}>Update status</button>
+                  </form>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr class="border-t border-slate-100">
+            <td colspan="6" class="px-4 py-10 text-center text-slate-500">No users recorded.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/70 px-4 py-4 md:flex-row md:items-center md:justify-between">
+      <p id="user-management-summary" class="text-sm text-slate-600">Select accounts to delete. Suspected test accounts are tagged as Test.</p>
+      <div class="flex items-center gap-2">
+        <button id="user-page-prev" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Previous</button>
+        <div id="user-page-indicator" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Page 1</div>
+        <button id="user-page-next" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Next</button>
+      </div>
+    </div>
+  </div>
+  <p class="mt-4 text-xs text-slate-500">Role and status changes are logged to the activity feed.</p>
+</section>
+<script>
+  (function () {
+    const rows = Array.from(document.querySelectorAll('[data-user-row]')).filter((row) => row.tagName === 'TR' && row.hasAttribute('data-name'));
+    if (!rows.length) return;
+
+    const detailRows = new Map(Array.from(document.querySelectorAll('[data-detail-row]')).map((row) => [row.id, row]));
+    const pageSize = 10;
+    let currentPage = 1;
+
+    const searchInput = document.getElementById('user-search');
+    const roleFilter = document.getElementById('role-filter');
+    const statusFilter = document.getElementById('status-filter');
+    const summary = document.getElementById('user-management-summary');
+    const indicator = document.getElementById('user-page-indicator');
+    const prevButton = document.getElementById('user-page-prev');
+    const nextButton = document.getElementById('user-page-next');
+
+    const closeDetails = () => {
+      document.querySelectorAll('.manage-toggle[aria-expanded="true"]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+      detailRows.forEach((row) => row.classList.add('hidden'));
+    };
+
+    const getFilteredRows = () => {
+      const query = (searchInput?.value || '').trim().toLowerCase();
+      const role = roleFilter?.value || '';
+      const status = statusFilter?.value || '';
+      return rows.filter((row) => {
+        const matchesQuery = !query || row.dataset.name.includes(query) || row.dataset.email.includes(query);
+        const matchesRole = !role || row.dataset.role === role;
+        const matchesStatus = !status || row.dataset.status === status;
+        return matchesQuery && matchesRole && matchesStatus;
+      });
+    };
+
+    const syncVisibility = () => {
+      const filteredRows = getFilteredRows();
+      const total = filteredRows.length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      currentPage = Math.min(currentPage, totalPages);
+      if (currentPage < 1) currentPage = 1;
+
+      rows.forEach((row) => {
+        row.classList.add('hidden');
+      });
+      detailRows.forEach((row) => row.classList.add('hidden'));
+
+      const start = (currentPage - 1) * pageSize;
+      const visibleRows = filteredRows.slice(start, start + pageSize);
+      visibleRows.forEach((row) => {
+        row.classList.remove('hidden');
+        const button = row.querySelector('.manage-toggle');
+        const detailId = button?.dataset.target;
+        const detailRow = detailId ? detailRows.get(detailId) : null;
+        if (button) button.setAttribute('aria-expanded', 'false');
+        if (detailRow) detailRow.classList.add('hidden');
+      });
+
+      if (summary) {
+        summary.textContent = total
+          ? `Showing ${Math.min(start + 1, total)}-${Math.min(start + pageSize, total)} of ${total} users.`
+          : 'No users match the current search or filters.';
+      }
+      if (indicator) indicator.textContent = `Page ${total ? currentPage : 1} of ${totalPages}`;
+      if (prevButton) prevButton.disabled = currentPage <= 1 || total === 0;
+      if (nextButton) nextButton.disabled = currentPage >= totalPages || total === 0;
+    };
+
+    document.querySelectorAll('.manage-toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        const detailRow = detailRows.get(button.dataset.target);
+        if (!detailRow || detailRow.classList.contains('hidden') === false) {
+          detailRows.forEach((row, id) => {
+            if (id !== button.dataset.target) row.classList.add('hidden');
+          });
+          document.querySelectorAll('.manage-toggle').forEach((other) => {
+            if (other !== button) other.setAttribute('aria-expanded', 'false');
+          });
+        }
+        const isOpen = detailRow && !detailRow.classList.contains('hidden');
+        closeDetails();
+        if (!isOpen && detailRow) {
+          detailRow.classList.remove('hidden');
+          button.setAttribute('aria-expanded', 'true');
+        }
+      });
+    });
+
+    searchInput?.addEventListener('input', () => {
+      currentPage = 1;
+      closeDetails();
+      syncVisibility();
+    });
+    roleFilter?.addEventListener('change', () => {
+      currentPage = 1;
+      closeDetails();
+      syncVisibility();
+    });
+    statusFilter?.addEventListener('change', () => {
+      currentPage = 1;
+      closeDetails();
+      syncVisibility();
+    });
+    prevButton?.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage -= 1;
+        closeDetails();
+        syncVisibility();
+      }
+    });
+    nextButton?.addEventListener('click', () => {
+      const total = getFilteredRows().length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      if (currentPage < totalPages) {
+        currentPage += 1;
+        closeDetails();
+        syncVisibility();
+      }
+    });
+
+    const selectAll = document.getElementById('select-all-users');
+    const bulkDeleteForm = document.getElementById('bulk-user-delete');
+    const deleteSelectedButton = document.getElementById('delete-selected-users');
+
+    const selectedUserIds = () => rows
+      .map((row) => row.querySelector('input[type="checkbox"][name="user_id"]'))
+      .filter((checkbox) => checkbox && checkbox.checked && !checkbox.disabled)
+      .map((checkbox) => checkbox.value);
+
+    const syncDeleteButton = () => {
+      const count = selectedUserIds().length;
+      if (deleteSelectedButton) {
+        deleteSelectedButton.disabled = count === 0;
+        deleteSelectedButton.textContent = count ? `Delete selected (${count})` : 'Delete selected';
+      }
+    };
+
+    bulkDeleteForm?.addEventListener('submit', (event) => {
+      bulkDeleteForm.querySelectorAll('input[name="user_id"][data-bulk-hidden]').forEach((input) => input.remove());
+      const selectedIds = selectedUserIds();
+      if (!selectedIds.length) {
+        event.preventDefault();
+        return;
+      }
+      selectedIds.forEach((value) => {
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'user_id';
+        hidden.value = value;
+        hidden.dataset.bulkHidden = 'true';
+        bulkDeleteForm.appendChild(hidden);
+      });
+    });
+
+    selectAll?.addEventListener('change', () => {
+      rows.forEach((row) => {
+        const checkbox = row.querySelector('input[type="checkbox"][name="user_id"]');
+        if (checkbox && !checkbox.disabled) {
+          checkbox.checked = selectAll.checked;
+        }
+      });
+      syncDeleteButton();
+    });
+
+    rows.forEach((row) => {
+      const checkbox = row.querySelector('input[type="checkbox"][name="user_id"]');
+      checkbox?.addEventListener('change', syncDeleteButton);
+    });
+
+    syncDeleteButton();
+    syncVisibility();
+  })();
+</script>
+{% endblock %}

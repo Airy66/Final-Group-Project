@@ -1,0 +1,179 @@
+{% extends "product_base.html" %}
+{% block title %}Source audit{% endblock %}
+{% block content %}
+<section class="app-page-header">
+  <div class="app-page-header__content">
+    <p class="app-page-header__eyebrow">Evidence workspace</p>
+    <h1 class="app-page-header__title">Source and evidence audit</h1>
+    <p class="app-page-header__subtitle">Review collected records and provenance without changing the underlying evidence.</p>
+  </div>
+  <div class="app-page-header__actions">
+    <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-500">Read only</span>
+    <details class="app-dropdown">
+      <summary class="app-export-summary">Export <span class="material-symbols-outlined text-[18px]">expand_more</span></summary>
+      <div class="app-dropdown-panel" role="menu">
+        {% if can_access(current_user, 'source_audit') %}
+        <a href="{{ url_for('export_audit_csv') }}" data-filtered-audit-export data-export-base="{{ url_for('export_audit_csv') }}" class="app-dropdown-item" role="menuitem">Source audit records (CSV) · current view</a>
+        <a href="{{ url_for('export_ai_activity_log_csv') }}" class="app-dropdown-item" role="menuitem">AI activity log (CSV)</a>
+        <a href="{{ url_for('audit_report') }}" data-filtered-audit-export data-export-base="{{ url_for('audit_report') }}" class="app-dropdown-item" role="menuitem">Evidence trail report · current view</a>
+        {% else %}
+        <span class="app-dropdown-item is-locked">Export requires Professional</span>
+        {% endif %}
+      </div>
+    </details>
+  </div>
+</section>
+
+{% if locked %}
+<section class="mt-6 rounded-xl border border-indigo-100 bg-indigo-50 p-6 text-sm text-slate-700 shadow-sm">
+  <p class="font-bold text-slate-900">Locked &middot; Professional</p>
+  <p class="mt-2">Source audit is available on the Professional plan for researcher workflows. The page stays visible so the restriction is easy to understand.</p>
+</section>
+{% endif %}
+
+<section class="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="font-display text-xl font-bold">Evidence records and provenance</h2>
+      <p class="mt-1 text-sm text-slate-500">Trace searches, saved evidence, AI analysis, and source events.</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <label class="relative block">
+        <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">search</span>
+        <input id="audit-search" type="search" class="h-10 w-64 rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100" placeholder="Search records" aria-label="Search audit records">
+      </label>
+      <span id="audit-result-count" class="whitespace-nowrap rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">{{ records[:20]|length }} records</span>
+    </div>
+  </div>
+
+  <div class="mt-5 flex flex-wrap gap-2 border-b border-slate-200 pb-3" id="audit-tabs">
+    {% for key,label in [('all','All'),('search','Search records'),('evidence','Saved evidence'),('ai','AI analysis'),('source','Source events')] %}
+    <button type="button" data-tab="{{ key }}" class="audit-tab rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50" {% if key=='all' %}aria-pressed="true"{% endif %}>{{ label }}</button>
+    {% endfor %}
+  </div>
+
+  <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+    <table class="app-table w-full min-w-[880px] text-left text-sm">
+      <thead class="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-widest text-slate-500">
+        <tr>
+          <th class="p-4">Record type</th>
+          <th class="p-4">Query / Product</th>
+          <th class="p-4">Role</th>
+          <th class="p-4">Source</th>
+          <th class="p-4">Timestamp</th>
+          <th class="p-4">Status</th>
+          <th class="p-4">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in records[:20] %}
+        {% set category_text = (row.category or '')|lower %}
+        {% set badge_class = 'bg-blue-50 text-blue-700' if 'search' in category_text else ('bg-emerald-50 text-emerald-700' if 'evidence' in category_text else ('bg-violet-50 text-violet-700' if 'ai' in category_text else ('bg-indigo-50 text-indigo-700' if 'source' in category_text else 'bg-slate-100 text-slate-700'))) %}
+        {% set role_label = role_names.get(row.role, row.role or '—') if row.role else '—' %}
+        <tr class="audit-row border-t border-slate-100 hover:bg-slate-50/70" data-audit-item data-category="{{ category_text }}" data-query="{{ (row.query or '')|lower }}" data-role="{{ (row.role or '')|lower }}" data-source="{{ (row.source or '')|lower }}" data-status="{{ (row.status or '')|lower }}">
+          <td class="p-4"><span class="inline-flex rounded-full px-3 py-1 text-xs font-bold {{ badge_class }}">{{ row.type_label }}</span></td>
+          <td class="max-w-xs p-4">
+            {% if row.type_label == 'Source event' %}<span class="block font-semibold text-slate-800">{{ row.action }}</span><span class="mt-0.5 block truncate text-xs text-slate-500" title="{{ row.query }}">{{ row.query }}</span>{% else %}<span class="block truncate font-semibold" title="{{ row.query }}">{{ row.query }}</span>{% endif %}
+          </td>
+          <td class="p-4">{{ role_label }}</td>
+          <td class="p-4">{{ row.source }}</td>
+          <td class="whitespace-nowrap p-4 text-xs">{{ display_sgt_datetime(row.time) }}</td>
+          <td class="p-4 text-xs"><span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">{{ row.status }}</span></td>
+          <td class="p-4 text-xs">
+            <button type="button" class="inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-2.5 py-1.5 font-semibold text-blue-700 hover:bg-blue-50" data-audit-details data-record-type="{{ row.type_label|e }}" data-record-query="{{ row.query|e }}" data-record-role="{{ role_label|e }}" data-record-source="{{ row.source|e }}" data-record-time="{{ display_sgt_datetime(row.time)|e }}" data-record-status="{{ row.status|e }}" data-record-detail="{{ row.detail|e }}">View details <span class="material-symbols-outlined text-[15px]">chevron_right</span></button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="p-8 text-center text-slate-400">No audit records recorded.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div id="audit-empty-filter" class="hidden px-6 py-14 text-center">
+      <span class="material-symbols-outlined text-3xl text-slate-300">manage_search</span>
+      <p class="mt-2 font-semibold text-slate-700">No matching audit records</p>
+      <p class="mt-1 text-sm text-slate-500">Try another record type or search term.</p>
+    </div>
+  </div>
+  <p class="mt-3 text-xs text-slate-500">Showing the latest 20 records. Export the audit trail for a broader review.</p>
+</section>
+
+<dialog id="audit-detail-dialog" class="m-auto w-[min(32rem,calc(100%-2rem))] rounded-2xl border-0 bg-white p-0 shadow-2xl backdrop:bg-slate-950/40">
+  <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+    <div><p class="text-xs font-bold uppercase tracking-widest text-blue-600" id="audit-detail-type">Audit record</p><h3 class="mt-1 font-display text-xl font-bold text-slate-950" id="audit-detail-query">Record details</h3></div>
+    <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900" data-close-audit-dialog aria-label="Close details"><span class="material-symbols-outlined">close</span></button>
+  </div>
+  <div class="space-y-5 px-5 py-5">
+    <dl class="grid grid-cols-2 gap-4 text-sm">
+      <div><dt class="text-xs font-bold uppercase tracking-wider text-slate-400">Source</dt><dd class="mt-1 font-semibold text-slate-800" id="audit-detail-source">—</dd></div>
+      <div><dt class="text-xs font-bold uppercase tracking-wider text-slate-400">Status</dt><dd class="mt-1 font-semibold text-slate-800" id="audit-detail-status">—</dd></div>
+      <div><dt class="text-xs font-bold uppercase tracking-wider text-slate-400">Role</dt><dd class="mt-1 text-slate-700" id="audit-detail-role">—</dd></div>
+      <div><dt class="text-xs font-bold uppercase tracking-wider text-slate-400">Timestamp</dt><dd class="mt-1 text-slate-700" id="audit-detail-time">—</dd></div>
+    </dl>
+    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4"><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Audit detail</p><p class="mt-2 break-words text-sm leading-6 text-slate-700" id="audit-detail-note">—</p></div>
+  </div>
+  <div class="flex justify-end border-t border-slate-200 px-5 py-4"><button type="button" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50" data-close-audit-dialog>Close</button></div>
+</dialog>
+
+<script>
+  (function () {
+    const rows = Array.from(document.querySelectorAll('[data-audit-item]'));
+    const tabButtons = Array.from(document.querySelectorAll('.audit-tab'));
+    const searchInput = document.getElementById('audit-search');
+    const resultCount = document.getElementById('audit-result-count');
+    const emptyFilter = document.getElementById('audit-empty-filter');
+    const detailDialog = document.getElementById('audit-detail-dialog');
+    const filteredExportLinks = Array.from(document.querySelectorAll('[data-filtered-audit-export]'));
+    let activeTab = 'all';
+
+    const matchesTab = (row) => {
+      if (activeTab === 'all') return true;
+      if (activeTab === 'search') return row.dataset.category.includes('search');
+      if (activeTab === 'evidence') return row.dataset.category.includes('evidence');
+      if (activeTab === 'ai') return row.dataset.category.includes('ai');
+      if (activeTab === 'source') return row.dataset.category.includes('source') || row.dataset.category.includes('audit');
+      return true;
+    };
+
+    const render = () => {
+      const term = (searchInput?.value || '').trim().toLowerCase();
+      let visibleCount = 0;
+      rows.forEach((row) => {
+        const searchable = `${row.dataset.query} ${row.dataset.role} ${row.dataset.source} ${row.dataset.status}`;
+        const visible = matchesTab(row) && (!term || searchable.includes(term));
+        row.classList.toggle('hidden', !visible);
+        if (visible) visibleCount += 1;
+      });
+      tabButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.tab === activeTab)));
+      if (resultCount) resultCount.textContent = `${visibleCount} ${visibleCount === 1 ? 'record' : 'records'}`;
+      emptyFilter?.classList.toggle('hidden', visibleCount !== 0 || rows.length === 0);
+      const exportParams = new URLSearchParams({ record_type: activeTab });
+      if (term) exportParams.set('q', term);
+      filteredExportLinks.forEach((link) => { link.href = `${link.dataset.exportBase}?${exportParams.toString()}`; });
+    };
+
+    tabButtons.forEach((button) => button.addEventListener('click', () => {
+      activeTab = button.dataset.tab || 'all';
+      render();
+    }));
+    searchInput?.addEventListener('input', render);
+
+    document.querySelectorAll('[data-audit-details]').forEach((button) => button.addEventListener('click', () => {
+      const fields = ['type', 'query', 'role', 'source', 'time', 'status'];
+      fields.forEach((field) => {
+        const target = document.getElementById(`audit-detail-${field}`);
+        const key = `record${field.charAt(0).toUpperCase()}${field.slice(1)}`;
+        if (target) target.textContent = button.dataset[key] || '—';
+      });
+      const note = document.getElementById('audit-detail-note');
+      if (note) note.textContent = button.dataset.recordDetail || 'No additional detail was recorded.';
+      if (detailDialog?.showModal) detailDialog.showModal();
+      else detailDialog?.setAttribute('open', '');
+    }));
+    document.querySelectorAll('[data-close-audit-dialog]').forEach((button) => button.addEventListener('click', () => detailDialog?.close()));
+    detailDialog?.addEventListener('click', (event) => {
+      if (event.target === detailDialog) detailDialog.close();
+    });
+    render();
+  })();
+</script>
+{% endblock %}

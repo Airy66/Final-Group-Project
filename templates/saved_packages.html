@@ -1,0 +1,122 @@
+{% extends "product_base.html" %}
+{% block title %}Saved Research{% endblock %}
+{% block content %}
+<section id="saved-evidence-records" class="app-hero">
+  <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p class="text-xs font-bold uppercase tracking-widest text-primary">Saved research</p>
+      <h1 class="mt-2 font-display text-3xl font-extrabold text-slate-950 lg:text-4xl">Saved evidence records</h1>
+      <p class="mt-2 text-slate-600">Review, compare, and export the listings you deliberately preserved.</p>
+    </div>
+    <div class="relative shrink-0" data-export-dropdown><button type="button" class="app-export-button" aria-haspopup="menu" aria-expanded="false" data-export-trigger><span class="material-symbols-outlined text-[18px]">download</span> Export <svg aria-hidden="true" viewBox="0 0 12 8" class="ml-1 inline h-3 w-3 fill-current"><path d="M1 1l5 5 5-5z"/></svg></button><div class="absolute right-0 z-20 mt-2 hidden min-w-72 rounded-xl border border-slate-200 bg-white p-2 text-sm shadow-lg" role="menu" data-export-menu><a id="selected-evidence-export" class="pointer-events-none block rounded-lg px-3 py-2 text-slate-400" aria-disabled="true">Selected records (CSV) - Select at least one record</a>{% if can_access(current_user, 'standard_export') %}<a href="{{ url_for('saved_export_report') }}" class="block rounded-lg px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50" role="menuitem">Saved evidence report (Print / Save as PDF)</a>{% else %}<span class="block rounded-lg px-3 py-2 text-slate-400" aria-disabled="true">Saved evidence report <span class="app-dropdown-badge app-dropdown-badge-premium">Premium</span></span>{% endif %}</div></div>
+  </div>
+  {% if search_record_id %}<a href="{{ url_for('search', search_record_id=search_record_id) }}" class="mt-4 inline-block text-sm font-semibold text-primary hover:underline">&larr; Back to search results</a>{% endif %}
+</section>
+
+{% set platform_names = evidence | map(attribute='platform') | unique | list %}
+<section class="mt-6 grid gap-4 sm:grid-cols-3" aria-label="Saved research summary">
+  {% for label,value,icon,accent in [('Evidence records', evidence|length, 'bookmark', 'blue'), ('Platforms represented', platform_names|length, 'storefront', 'violet'), ('Comparison sets', comparison_sets|length, 'compare_arrows', 'indigo')] %}
+  <article class="app-card border-t-2 border-t-{{ accent }}-500 p-4"><div class="flex items-center justify-between"><div><p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ label }}</p><p class="mt-2 font-display text-2xl font-extrabold text-slate-950">{{ value }}</p></div><span class="material-symbols-outlined grid h-9 w-9 place-items-center rounded-lg bg-{{ accent }}-50 text-[20px] text-{{ accent }}-700">{{ icon }}</span></div></article>
+  {% endfor %}
+</section>
+
+<nav class="mt-6 flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm" aria-label="Saved research views"><button type="button" class="saved-tab app-tab is-active" data-saved-tab="evidence">Evidence records <span class="ml-1 text-xs opacity-70">{{ evidence|length }}</span></button><button type="button" class="saved-tab app-tab" data-saved-tab="comparisons">Comparison sets <span class="ml-1 text-xs opacity-70">{{ comparison_sets|length }}</span></button></nav>
+
+<section class="saved-tab-panel mt-6 hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" data-saved-panel="comparisons"><div class="border-b border-slate-200 px-5 py-4"><h2 class="font-display text-xl font-bold">Saved comparison sets</h2><p class="mt-1 text-sm text-slate-500">Return to a saved market comparison or start monitoring it.</p></div>{% if comparison_sets %}<div class="divide-y divide-slate-100 px-5">{% for item in comparison_sets %}<div class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"><span><strong class="block text-slate-900">{{ item.query or 'Comparison' }}</strong><small class="text-slate-500">{{ item.selected_record_ids|length }} selected records</small></span><div class="flex gap-2"><a href="{{ url_for('analytics_comparison', comparison_id=item._id) }}" class="app-button-primary py-2 text-xs">Open analysis</a><form method="post" action="{{ url_for('watchlist_from_compare') }}"><input type="hidden" name="comparison_id" value="{{ item._id }}"><button class="app-button-secondary py-2 text-xs">Add to Watchlist</button></form></div></div>{% endfor %}</div>{% else %}<div class="px-6 py-12 text-center"><span class="material-symbols-outlined text-4xl text-slate-300">compare_arrows</span><p class="mt-2 font-semibold text-slate-700">No saved comparison sets yet</p><p class="mt-1 text-sm text-slate-500">Save a comparison to return to it here.</p></div>{% endif %}</section>
+
+<section class="saved-tab-panel mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" data-saved-panel="evidence">
+  <div class="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+    <div><h2 class="font-display text-xl font-bold">Evidence records</h2><p class="mt-1 text-sm text-slate-500">Search and manage the listings in your evidence library.</p></div>
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center">{% if evidence %}<label class="relative block"><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">search</span><input id="evidence-search" type="search" class="app-input w-full py-2 pl-9 pr-3 text-sm sm:w-64" placeholder="Search saved records" aria-label="Search saved evidence"></label><select id="evidence-platform-filter" class="app-select py-2 text-sm" aria-label="Filter by platform"><option value="">All platforms</option>{% for platform in platform_names %}<option value="{{ platform|lower }}">{{ platform }}</option>{% endfor %}</select>{% endif %}<form id="bulk-evidence-delete" method="post" action="{{ url_for('delete_saved_evidence_selected') }}" data-confirm-form data-confirm-message="Delete the selected evidence records?"><button id="delete-selected-evidence" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">Delete selected (0)</button></form></div>
+  </div>
+  {% if evidence %}<div class="overflow-x-auto"><table class="app-table w-full min-w-[1020px] text-left text-sm"><thead class="sticky top-0 z-10 bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500"><tr><th class="w-12 p-3"><input id="select-visible-evidence" type="checkbox" class="rounded border-slate-300 text-primary" aria-label="Select all visible evidence"></th><th class="p-3">Query</th><th class="p-3">Platform</th><th class="w-[36%] p-3">Product</th><th class="p-3">Normalized price</th><th class="p-3">Condition</th><th class="p-3">Source</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>{% for item in evidence %}{% set product_title = item.product_name or item.title %}<tr class="border-t border-slate-100 transition hover:bg-slate-50/60" data-evidence-row data-search-text="{{ (item.query ~ ' ' ~ item.platform ~ ' ' ~ product_title ~ ' ' ~ item.condition_display)|lower|e }}" data-platform="{{ item.platform|lower|e }}"><td class="p-3 align-top"><input form="bulk-evidence-delete" type="checkbox" name="evidence_id" value="{{ item._id }}" class="evidence-select rounded border-slate-300 text-primary"></td><td class="p-3 align-top"><span class="inline-flex rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{{ item.query }}</span></td><td class="p-3 align-top"><span class="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">{{ item.platform }}</span></td><td class="p-3 align-top"><p class="line-clamp-2 max-w-xl font-semibold leading-5 text-slate-900" title="{{ product_title|e }}">{{ product_title }}</p></td><td class="p-3 align-top whitespace-nowrap font-bold text-slate-900">USD {{ item.normalized_price }}</td><td class="p-3 align-top"><span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ item.condition_display }}</span></td><td class="p-3 align-top">{% if is_safe_url(item.source_url) %}<a href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-bold text-primary hover:bg-blue-50">Open listing <span class="material-symbols-outlined text-[15px]">open_in_new</span></a>{% else %}<span class="text-xs text-slate-400">Unavailable</span>{% endif %}</td><td class="p-3 text-right align-top"><form method="post" action="{{ url_for('delete_saved_evidence', evidence_id=item._id) }}" data-confirm-form data-confirm-message="Delete this evidence record?"><button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700" title="Delete evidence" aria-label="Delete {{ product_title|e }}"><span class="material-symbols-outlined text-[17px]">delete</span></button></form></td></tr>{% endfor %}</tbody></table></div><div class="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-5 py-3 text-xs text-slate-500"><span id="evidence-visible-count">Showing {{ evidence|length }} of {{ evidence|length }} records</span><span>Select records to export or delete them in bulk.</span></div>{% else %}<div class="px-6 py-14 text-center"><span class="material-symbols-outlined text-4xl text-slate-300">bookmark_add</span><p class="mt-2 font-semibold text-slate-700">Your evidence library is empty</p><p class="mt-1 text-sm text-slate-500">Save selected listings from Product Search to build your evidence library.</p><a href="{{ url_for('search') }}" class="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Search products</a></div>{% endif %}
+</section>
+
+<script>
+  document.querySelectorAll('.saved-tab').forEach((tab) => tab.addEventListener('click', () => {
+    const selected = tab.dataset.savedTab;
+    document.querySelectorAll('.saved-tab').forEach((item) => item.classList.toggle('is-active', item === tab));
+    document.querySelectorAll('[data-saved-panel]').forEach((panel) => panel.classList.toggle('hidden', panel.dataset.savedPanel !== selected));
+  }));
+
+  document.querySelectorAll('[data-export-dropdown]').forEach((dropdown) => {
+    const trigger = dropdown.querySelector('[data-export-trigger]');
+    const menu = dropdown.querySelector('[data-export-menu]');
+    const close = () => { menu.classList.add('hidden'); trigger.setAttribute('aria-expanded', 'false'); };
+    trigger.addEventListener('click', () => {
+      const opening = menu.classList.contains('hidden');
+      document.querySelectorAll('[data-export-dropdown]').forEach((other) => {
+        if (other !== dropdown) {
+          other.querySelector('[data-export-menu]').classList.add('hidden');
+          other.querySelector('[data-export-trigger]').setAttribute('aria-expanded', 'false');
+        }
+      });
+      menu.classList.toggle('hidden', !opening);
+      trigger.setAttribute('aria-expanded', String(opening));
+    });
+    document.addEventListener('click', (event) => { if (!dropdown.contains(event.target)) close(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { close(); trigger.focus(); } });
+  });
+
+  const selectedExport = document.getElementById('selected-evidence-export');
+  const deleteButton = document.getElementById('delete-selected-evidence');
+  const selectVisible = document.getElementById('select-visible-evidence');
+  const searchInput = document.getElementById('evidence-search');
+  const platformFilter = document.getElementById('evidence-platform-filter');
+  const visibleCount = document.getElementById('evidence-visible-count');
+  const evidenceRows = [...document.querySelectorAll('[data-evidence-row]')];
+
+  const visibleCheckboxes = () => evidenceRows
+    .filter((row) => !row.classList.contains('hidden'))
+    .map((row) => row.querySelector('.evidence-select'))
+    .filter(Boolean);
+
+  const syncEvidenceActions = () => {
+    const ids = [...document.querySelectorAll('.evidence-select:checked')].map((box) => box.value);
+    if (deleteButton) {
+      deleteButton.classList.toggle('hidden', !ids.length);
+      deleteButton.textContent = `Delete selected (${ids.length})`;
+    }
+    if (selectedExport) {
+      const enabled = ids.length > 0;
+      selectedExport.classList.toggle('pointer-events-none', !enabled);
+      selectedExport.classList.toggle('text-slate-400', !enabled);
+      selectedExport.classList.toggle('font-semibold', enabled);
+      selectedExport.classList.toggle('text-slate-700', enabled);
+      selectedExport.setAttribute('aria-disabled', String(!enabled));
+      selectedExport.textContent = enabled ? `Selected records (CSV) (${ids.length})` : 'Selected records (CSV) - Select at least one record';
+      selectedExport.href = enabled ? '{{ url_for("saved_export_evidence_csv") }}?' + ids.map((id) => 'evidence_id=' + encodeURIComponent(id)).join('&') : '';
+    }
+    if (selectVisible) {
+      const visible = visibleCheckboxes();
+      const checked = visible.filter((box) => box.checked).length;
+      selectVisible.checked = visible.length > 0 && checked === visible.length;
+      selectVisible.indeterminate = checked > 0 && checked < visible.length;
+    }
+  };
+
+  const filterEvidence = () => {
+    const query = (searchInput?.value || '').trim().toLowerCase();
+    const platform = (platformFilter?.value || '').toLowerCase();
+    let shown = 0;
+    evidenceRows.forEach((row) => {
+      const matchesQuery = !query || row.dataset.searchText.includes(query);
+      const matchesPlatform = !platform || row.dataset.platform === platform;
+      const visible = matchesQuery && matchesPlatform;
+      row.classList.toggle('hidden', !visible);
+      if (visible) shown += 1;
+    });
+    if (visibleCount) visibleCount.textContent = `Showing ${shown} of ${evidenceRows.length} records`;
+    syncEvidenceActions();
+  };
+
+  document.querySelectorAll('.evidence-select').forEach((box) => box.addEventListener('change', syncEvidenceActions));
+  searchInput?.addEventListener('input', filterEvidence);
+  platformFilter?.addEventListener('change', filterEvidence);
+  selectVisible?.addEventListener('change', () => {
+    visibleCheckboxes().forEach((box) => { box.checked = selectVisible.checked; });
+    syncEvidenceActions();
+  });
+  syncEvidenceActions();
+</script>
+{% endblock %}

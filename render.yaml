@@ -1,0 +1,87 @@
+services:
+  - type: web
+    name: precision-curator
+    runtime: python
+    buildCommand: python -m pip install -r requirements.txt
+    startCommand: gunicorn precision_app:app --workers 2 --timeout 120 --access-logfile -
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.6
+      - key: APP_ENV
+        value: production
+      - key: ALLOW_MEMORY_FALLBACK
+        value: "false"
+      - key: DEMO_TOOLS_ENABLED
+        value: "false"
+      - key: DEMO_MEMBERSHIP_UPGRADE_ENABLED
+        value: "false"
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: APP_BASE_URL
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DATABASE
+        value: precision_curator
+      - key: MONITOR_DAILY_REFRESH_ENABLED
+        value: "true"
+      - key: MONITOR_AUTO_REFRESH_MAX_PER_USER
+        value: "1"
+      - key: MONITOR_SCHEDULED_RUN_LIMIT
+        value: "5"
+      - key: MONITOR_REFRESH_TIMEZONE
+        value: Asia/Singapore
+      - key: MONITOR_DAILY_REFRESH_HOUR
+        value: "8"
+      - key: EBAY_CLIENT_ID
+        sync: false
+      - key: EBAY_CLIENT_SECRET
+        sync: false
+      - key: EBAY_MARKETPLACE_ID
+        value: EBAY_US
+      - key: SERPAPI_API_KEY
+        sync: false
+      - key: SERPAPI_MARKETPLACE_ENABLED
+        value: "true"
+  - type: cron
+    name: precision-curator-daily-monitor-refresh
+    runtime: python
+    schedule: "0 0 * * *"
+    buildCommand: python -m pip install -r requirements.txt
+    startCommand: python -m tools.refresh_due_monitors --limit 5
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.6
+      - key: APP_ENV
+        value: production
+      - key: ALLOW_MEMORY_FALLBACK
+        value: "false"
+      - key: MONITOR_DAILY_REFRESH_ENABLED
+        value: "true"
+      - key: MONITOR_AUTO_REFRESH_MAX_PER_USER
+        value: "1"
+      - key: MONITOR_SCHEDULED_RUN_LIMIT
+        value: "5"
+      - key: MONITOR_REFRESH_TIMEZONE
+        value: Asia/Singapore
+      - key: MONITOR_DAILY_REFRESH_HOUR
+        value: "8"
+      - key: FLASK_SECRET_KEY
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DATABASE
+        value: precision_curator
+      - key: EBAY_CLIENT_ID
+        sync: false
+      - key: EBAY_CLIENT_SECRET
+        sync: false
+      - key: EBAY_MARKETPLACE_ID
+        value: EBAY_US
+      - key: SERPAPI_API_KEY
+        sync: false
+      - key: SERPAPI_MARKETPLACE_ENABLED
+        value: "true"

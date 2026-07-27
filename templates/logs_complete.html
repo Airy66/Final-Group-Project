@@ -1,0 +1,196 @@
+{% extends "product_base.html" %}
+{% block title %}Activity logs{% endblock %}
+{% block content %}
+<section class="app-page-header">
+  <div class="app-page-header__content">
+    <p class="app-page-header__eyebrow">Operations and audit</p>
+    <h1 class="app-page-header__title">Activity logs</h1>
+    <p class="app-page-header__subtitle">Review user actions, workflow events, AI activity, and service issues.</p>
+  </div>
+  <div class="app-page-header__actions"><a href="{{ url_for('export_activity_log_csv') }}" class="app-export-summary"><span>Export</span><span class="sr-only">Export activity logs CSV</span><span class="material-symbols-outlined text-[18px]">download</span></a></div>
+</section>
+
+<section class="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="font-display text-xl font-bold">Activity review</h2>
+      <p class="mt-1 text-sm text-slate-500">Filter the latest recorded events by category, user, role, and date.</p>
+    </div>
+  </div>
+
+  <div id="audit-tabs" class="mt-5 flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+    {% for key,label in [('all','All records'),('search','Search records'),('workflow','Workflow events'),('evidence','Saved evidence'),('ai','AI activity'),('admin','Admin actions'),('errors','Errors / warnings')] %}
+    <button type="button" data-tab="{{ key }}" class="audit-tab rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50" {% if key=='all' %}aria-pressed="true"{% endif %}>{{ label }}</button>
+    {% endfor %}
+  </div>
+
+  <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+    <div class="mb-3 flex items-center justify-between gap-3"><p class="text-xs font-bold uppercase tracking-wider text-slate-500">Filter activity</p><button id="clear-filters" type="button" class="rounded-lg px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white hover:text-primary">Clear filters</button></div>
+  <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(16rem,1.6fr)_1fr_1fr_1fr_1fr]">
+    <label class="block text-sm font-semibold text-slate-700">
+      Search user or event detail
+      <input id="log-user-filter" type="search" placeholder="Search user, product, or event" class="app-input mt-2 w-full text-sm">
+    </label>
+    <label class="block text-sm font-semibold text-slate-700">
+      Action type
+      <select id="log-action-filter" class="app-select mt-2 w-full text-sm">
+        <option value="">All actions</option>
+        <option value="search">Search</option>
+        <option value="save">Save</option>
+        <option value="workflow">Workflow</option>
+        <option value="analysis">AI analysis</option>
+        <option value="admin">Admin</option>
+        <option value="error">Error</option>
+      </select>
+    </label>
+    <label class="block text-sm font-semibold text-slate-700">
+      Role
+      <select id="log-role-filter" class="app-select mt-2 w-full text-sm">
+        <option value="">All roles</option>
+        <option value="consumer">Consumer</option>
+        <option value="retailer">Retailer</option>
+        <option value="researcher">Researcher</option>
+        <option value="administrator">Administrator</option>
+      </select>
+    </label>
+    <label class="block text-sm font-semibold text-slate-700">
+      Date from
+      <input id="log-from-filter" type="date" class="app-input mt-2 w-full text-sm">
+    </label>
+    <label class="block text-sm font-semibold text-slate-700">
+      Date to
+      <input id="log-to-filter" type="date" class="app-input mt-2 w-full text-sm">
+    </label>
+  </div>
+  </div>
+
+  <div class="mt-4 max-h-[620px] overflow-auto rounded-xl border border-slate-200">
+    <table class="app-table w-full min-w-[880px] text-left text-sm">
+      <thead class="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-widest text-slate-500">
+        <tr>
+          <th class="p-3">Action</th>
+          <th class="p-3">User</th>
+          <th class="p-3">Role</th>
+          <th class="p-3">Detail</th>
+          <th class="p-3">Time</th>
+          <th class="p-3">Status</th>
+        </tr>
+      </thead>
+      <tbody id="log-table-body">
+        {% for row in records %}
+        {% set action_text = (row.action or '')|lower %}
+        {% set category_text = (row.category or '')|lower %}
+        {% set status_text = (row.status or '')|lower %}
+        {% set badge_class = 'bg-blue-50 text-blue-700' if 'search' in category_text else ('bg-cyan-50 text-cyan-700' if 'workflow' in category_text else ('bg-emerald-50 text-emerald-700' if 'evidence' in category_text else ('bg-violet-50 text-violet-700' if 'ai' in category_text else ('bg-indigo-50 text-indigo-700' if 'admin' in category_text else ('bg-amber-50 text-amber-700' if 'error' in category_text else 'bg-slate-100 text-slate-700'))))) %}
+        <tr class="log-row border-t border-slate-100 hover:bg-slate-50/70" data-log-item data-category="{{ category_text }}" data-action="{{ action_text }}" data-role="{{ (row.role or '')|lower }}" data-user="{{ (row.user or '')|lower }}" data-detail="{{ (row.detail or '')|lower }}" data-time="{{ row.time.isoformat()[:10] if row.time and row.time.isoformat is defined else '' }}">
+          <td class="p-3">
+            <span class="block whitespace-nowrap font-semibold text-slate-800">{{ row.action or 'Event' }}</span><span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold {{ badge_class }}">{{ row.category }}</span>
+          </td>
+          <td class="p-3 font-semibold">{{ row.user }}</td>
+          <td class="p-3">{{ role_names.get(row.role,row.role or '—') if row.role else '—' }}</td>
+          <td class="max-w-sm p-3 text-slate-600"><span class="block truncate" title="{{ row.detail }}">{{ row.detail }}</span></td>
+          <td class="whitespace-nowrap p-3 text-xs text-slate-500">{{ display_sgt_datetime(row.time) }}</td>
+          <td class="p-3 text-xs"><span class="inline-flex rounded-full px-2.5 py-1 font-semibold {{ 'bg-emerald-50 text-emerald-700' if status_text == 'completed' else ('bg-red-50 text-red-700' if status_text == 'failed' else ('bg-amber-50 text-amber-700' if status_text == 'no results' else 'bg-slate-100 text-slate-600')) }}">{{ row.status }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="p-8 text-center text-slate-400">No activity records available.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-4 flex items-center justify-between gap-3">
+    <p id="log-summary" class="text-sm text-slate-600">Showing the latest recorded events.</p>
+    <div class="flex items-center gap-2">
+      <button id="log-prev" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Previous</button>
+      <div id="log-page" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Page 1 of 1</div>
+      <button id="log-next" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Next</button>
+    </div>
+  </div>
+</section>
+
+<script>
+  (function () {
+    const rows = Array.from(document.querySelectorAll('[data-log-item]'));
+    const tabButtons = Array.from(document.querySelectorAll('.audit-tab'));
+    const userFilter = document.getElementById('log-user-filter');
+    const actionFilter = document.getElementById('log-action-filter');
+    const roleFilter = document.getElementById('log-role-filter');
+    const fromFilter = document.getElementById('log-from-filter');
+    const toFilter = document.getElementById('log-to-filter');
+    const clearButton = document.getElementById('clear-filters');
+    const summary = document.getElementById('log-summary');
+    const pageLabel = document.getElementById('log-page');
+    const prevButton = document.getElementById('log-prev');
+    const nextButton = document.getElementById('log-next');
+    const pageSize = 10;
+    let page = 1;
+    let activeTab = 'all';
+
+    const tabMatches = (row) => {
+      if (activeTab === 'all') return true;
+      if (activeTab === 'search') return row.dataset.category.includes('search');
+      if (activeTab === 'workflow') return row.dataset.category.includes('workflow');
+      if (activeTab === 'evidence') return row.dataset.category.includes('evidence');
+      if (activeTab === 'ai') return row.dataset.category.includes('ai');
+      if (activeTab === 'admin') return row.dataset.category.includes('admin');
+      if (activeTab === 'errors') return row.dataset.category.includes('error');
+      return true;
+    };
+
+    const visibleRows = () => rows.filter((row) => {
+      const user = (userFilter?.value || '').trim().toLowerCase();
+      const action = (actionFilter?.value || '').trim().toLowerCase();
+      const role = (roleFilter?.value || '').trim().toLowerCase();
+      const from = fromFilter?.value || '';
+      const to = toFilter?.value || '';
+      const rowTime = row.dataset.time || '';
+      const matchUser = !user || row.dataset.user.includes(user) || row.dataset.detail.includes(user);
+      const matchAction = !action || row.dataset.action.includes(action) || row.dataset.category.includes(action);
+      const matchRole = !role || row.dataset.role === role;
+      const matchFrom = !from || !rowTime || rowTime >= from;
+      const matchTo = !to || !rowTime || rowTime <= to;
+      return tabMatches(row) && matchUser && matchAction && matchRole && matchFrom && matchTo;
+    });
+
+    const setTab = (tab) => {
+      activeTab = tab;
+      tabButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.tab === tab)));
+      page = 1;
+      render();
+    };
+
+    const render = () => {
+      const filtered = visibleRows();
+      const total = filtered.length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      if (page > totalPages) page = totalPages;
+      if (page < 1) page = 1;
+      rows.forEach((row) => row.classList.add('hidden'));
+      const start = (page - 1) * pageSize;
+      filtered.slice(start, start + pageSize).forEach((row) => row.classList.remove('hidden'));
+      if (summary) summary.textContent = total ? `Showing ${Math.min(start + 1, total)}-${Math.min(start + pageSize, total)} of ${total} matching records.` : 'No matching records.';
+      if (pageLabel) pageLabel.textContent = `Page ${total ? page : 1} of ${totalPages}`;
+      if (prevButton) prevButton.disabled = page <= 1 || total === 0;
+      if (nextButton) nextButton.disabled = page >= totalPages || total === 0;
+    };
+
+    tabButtons.forEach((button) => button.addEventListener('click', () => setTab(button.dataset.tab || 'all')));
+    [userFilter, actionFilter, roleFilter, fromFilter, toFilter].forEach((input) => {
+      input?.addEventListener('input', () => { page = 1; render(); });
+      input?.addEventListener('change', () => { page = 1; render(); });
+    });
+    clearButton?.addEventListener('click', () => {
+      [userFilter, actionFilter, roleFilter, fromFilter, toFilter].forEach((input) => { if (input) input.value = ''; });
+      setTab('all');
+    });
+    prevButton?.addEventListener('click', () => { if (page > 1) { page -= 1; render(); } });
+    nextButton?.addEventListener('click', () => {
+      const total = visibleRows().length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      if (page < totalPages) { page += 1; render(); }
+    });
+    setTab('all');
+  })();
+</script>
+{% endblock %}

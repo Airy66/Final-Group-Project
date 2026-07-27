@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecommerce Price Analysis</title>
+    <link rel="icon" type="image/svg+xml" sizes="any" href="{{ url_for('static', filename='favicon.svg', v='2') }}">
+    <link rel="shortcut icon" href="{{ url_for('site_favicon', v='2') }}">
+    <style>
+
+
+.top-links {
+    margin-bottom: 20px;
+}
+
+.top-links a {
+    display: inline-block;
+    text-decoration: none;
+    color: white;
+    background: #2563eb;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-weight: bold;
+}
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f5f7fb;
+            color: #222;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        form {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 14px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+        }
+        select {
+    padding: 12px 14px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    background: white;
+}
+
+.save-message {
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    background: #e8f5e9;
+    color: #1b5e20;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            border: none;
+            background: #2563eb;
+            color: white;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .summary-card {
+            background: white;
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+        }
+
+        .summary-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .summary-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #111827;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+        }
+
+        .card img {
+            width: 100%;
+            height: 220px;
+            object-fit: contain;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+
+        .title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 12px 0 8px;
+            min-height: 56px;
+            line-height: 1.35;
+        }
+
+        .price {
+            font-size: 20px;
+            color: #111827;
+            margin-bottom: 8px;
+        }
+
+        .meta {
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 6px;
+        }
+
+        .link {
+            display: inline-block;
+            margin-top: 10px;
+            color: #2563eb;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .empty {
+            margin-top: 30px;
+            color: #666;
+        }
+    </style>
+</head>
+<div class="top-links">
+    <a href="/demo">Go to Demo Analytics</a>
+</div>
+<body>
+    <div class="container">
+        <h1>Ecommerce Price Analysis</h1>
+
+       <form method="GET" action="/">
+    <input type="text" name="q" placeholder="Search products, e.g. iphone 15" value="{{ query }}">
+
+    <select name="sort">
+        <option value="default" {% if sort_option == "default" %}selected{% endif %}>Default</option>
+        <option value="price_asc" {% if sort_option == "price_asc" %}selected{% endif %}>Price: Low to High</option>
+        <option value="price_desc" {% if sort_option == "price_desc" %}selected{% endif %}>Price: High to Low</option>
+    </select>
+
+    <button type="submit">Search</button>
+    <button type="submit" name="save" value="1">Save Results</button>
+</form>
+
+
+{% if saved_file %}
+    <div class="save-message">
+        Results saved to: {{ saved_file }}
+    </div>
+{% endif %}
+        {% if summary %}
+        <div class="summary-grid">
+            <div class="summary-card">
+                <div class="summary-label">Total Results</div>
+                <div class="summary-value">{{ summary.total_results }}</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Lowest Price</div>
+                <div class="summary-value">
+                    {% if summary.lowest_price is not none %}
+                        USD {{ summary.lowest_price }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Highest Price</div>
+                <div class="summary-value">
+                    {% if summary.highest_price is not none %}
+                        USD {{ summary.highest_price }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Average Price</div>
+                <div class="summary-value">
+                    {% if summary.average_price is not none %}
+                        USD {{ summary.average_price }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if items %}
+            <div class="grid">
+                {% for item in items %}
+                    <div class="card">
+                        <img src="{{ item.image_url }}" alt="product image">
+                        <div class="title">{{ item.title }}</div>
+                        <div class="price">{{ item.currency }} {{ item.price }}</div>
+                        <div class="meta">Seller: {{ item.seller }}</div>
+                        <div class="meta">Condition: {{ item.condition }}</div>
+                        <a class="link" href="{{ item.item_url }}" target="_blank">View on eBay</a>
+                    </div>
+                {% endfor %}
+            </div>
+        {% elif query %}
+            <div class="empty">No results found.</div>
+        {% else %}
+            <div class="empty">Search for a product to see results.</div>
+        {% endif %}
+    </div>
+</body>
+</html>

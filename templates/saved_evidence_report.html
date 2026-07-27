@@ -1,0 +1,99 @@
+{% extends "product_base.html" %}
+{% block title %}Saved evidence report{% endblock %}
+{% block content %}
+<style>
+  .evidence-report-table th,
+  .evidence-report-table td { vertical-align: top; }
+  @media print {
+    header, .workspace-sidebar, .app-header, .no-print { display: none !important; }
+    .workspace-main { padding: 0 !important; }
+    .evidence-report { max-width: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+    .evidence-report-table { min-width: 0 !important; font-size: 10px !important; }
+    .evidence-report-table thead { display: table-header-group; }
+    .evidence-report-table tr { break-inside: avoid; }
+    .report-section { break-inside: avoid; }
+    @page { margin: 14mm; }
+  }
+</style>
+
+<section class="evidence-report mx-auto max-w-7xl rounded-3xl border border-slate-200 bg-white p-8 shadow-soft">
+  <div class="no-print flex justify-end">
+    <button type="button" onclick="window.print()" class="app-button-primary">Print / Save as PDF</button>
+  </div>
+
+  <p class="text-xs font-bold uppercase tracking-widest text-primary">Saved marketplace evidence</p>
+  <h1 class="mt-2 font-display text-4xl font-extrabold text-slate-950">Saved evidence report</h1>
+  <p class="mt-3 max-w-4xl text-sm leading-6 text-slate-600">
+    Evidence records deliberately preserved by this account. Prices, availability, seller details, and listing pages may have changed since collection.
+  </p>
+  <p class="mt-2 text-xs text-slate-500">Generated {{ format_sgt_datetime(generated_at) }}</p>
+
+  <section class="report-section mt-7 grid gap-3 sm:grid-cols-3" aria-label="Report summary">
+    {% for label, value in [('Evidence records', summary.record_count), ('Platforms represented', summary.platform_count), ('Search queries represented', summary.query_count)] %}
+    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ label }}</p>
+      <p class="mt-2 font-display text-2xl font-extrabold text-slate-950">{{ value }}</p>
+    </div>
+    {% endfor %}
+  </section>
+
+  <section class="mt-8">
+    <div class="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2 class="font-display text-xl font-bold text-slate-950">Evidence records</h2>
+        <p class="mt-1 text-sm text-slate-500">The report includes up to 200 records from the current account’s evidence library.</p>
+      </div>
+      <span class="text-xs font-semibold text-slate-500">{{ rows|length }} included</span>
+    </div>
+
+    {% if rows %}
+    <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+      <table class="evidence-report-table w-full min-w-[1180px] border-collapse text-left text-xs">
+        <thead class="bg-slate-50 uppercase tracking-wider text-slate-500">
+          <tr>
+            <th class="p-3">Query</th>
+            <th class="p-3">Platform</th>
+            <th class="w-[32%] p-3">Product</th>
+            <th class="p-3">Price</th>
+            <th class="p-3">Condition</th>
+            <th class="p-3">Source</th>
+            <th class="p-3">Collected</th>
+            <th class="p-3">Evidence link</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr class="border-t border-slate-100">
+            <td class="p-3 font-semibold text-slate-700">{{ row.query }}</td>
+            <td class="p-3 font-bold text-blue-700">{{ row.platform }}</td>
+            <td class="p-3 font-semibold leading-5 text-slate-900">{{ row.title }}</td>
+            <td class="whitespace-nowrap p-3 font-bold text-slate-900">{{ row.price }}</td>
+            <td class="p-3 text-slate-700">{{ row.condition }}</td>
+            <td class="p-3 text-slate-700">{{ row.source }}</td>
+            <td class="p-3 text-slate-600">{{ row.collected_at }}</td>
+            <td class="p-3">
+              {% if row.source_url %}
+              <a href="{{ row.source_url }}" target="_blank" rel="noopener noreferrer" class="font-bold text-primary">Open listing</a>
+              {% else %}
+              <span class="text-slate-400">Unavailable</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
+      <p class="font-semibold text-slate-700">No saved evidence records</p>
+      <p class="mt-1 text-sm text-slate-500">Save marketplace listings from Product Search before generating this report.</p>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="report-section mt-8 rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600">
+    <strong class="text-slate-800">Methodology and limitations.</strong>
+    This report reflects saved marketplace evidence, not current marketplace inventory. Normalized prices are shown in USD where available. Verify the source listing before making a decision. Demo records are not mixed into normal analytics.
+  </section>
+</section>
+{% endblock %}

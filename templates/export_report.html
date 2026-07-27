@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <style>
+    :root { color: #0f172a; font-family: Arial, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f8fafc; }
+    .report { max-width: 1120px; margin: 0 auto; padding: 36px 32px; background: #fff; }
+    .toolbar { text-align: right; }
+    button { padding: 10px 14px; border: 0; border-radius: 8px; background: #2563eb; color: #fff; font-weight: bold; }
+    h1 { margin-bottom: 8px; }
+    h2 { margin-bottom: 12px; }
+    p { line-height: 1.5; }
+    section { margin-top: 26px; }
+    .meta, .metrics, .charts { display: grid; gap: 12px; }
+    .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .meta-card, .metric, .note, .chart { padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
+    .label { color: #64748b; font-size: 11px; font-weight: bold; letter-spacing: .1em; text-transform: uppercase; }
+    .value { margin-top: 5px; font-size: 16px; font-weight: bold; line-height: 1.35; }
+    .warning { padding: 12px; border-left: 4px solid #d97706; background: #fffbeb; line-height: 1.5; }
+    .chart { min-height: 250px; break-inside: avoid; }
+    .chart img { display: block; width: 100%; height: auto; margin-top: 8px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+    th { background: #f1f5f9; }
+    a { color: #1d4ed8; font-weight: bold; }
+    footer { margin-top: 28px; }
+    @media print {
+      body { background: #fff; }
+      .report { max-width: none; padding: 0; }
+      .toolbar { display: none; }
+      .chart, section { break-inside: avoid; }
+      thead { display: table-header-group; }
+      table { font-size: 10.5px; }
+      h1 { font-size: 27px; }
+      @page { margin: 14mm; }
+    }
+  </style>
+</head>
+<body>
+<main class="report">
+  <div class="toolbar"><button onclick="window.print()">Print / Save as PDF</button></div>
+  <header>
+    <p class="label">Precision Curator · Marketplace comparison report</p>
+    <h1>{{ metadata.title_scope }}</h1>
+    <p>Frozen analysis of the comparable marketplace listings in the stated scope.</p>
+    <div class="meta">
+      <div class="meta-card"><span class="label">Analysis scope</span><div class="value">{{ metadata.scope }}</div></div>
+      <div class="meta-card"><span class="label">Platforms</span><div class="value">{{ metadata.platforms }}</div></div>
+      <div class="meta-card"><span class="label">Storage scope</span><div class="value">{{ metadata.storage_scope }}</div></div>
+      <div class="meta-card"><span class="label">Condition scope</span><div class="value">{{ metadata.condition_scope }}</div></div>
+      <div class="meta-card"><span class="label">Collected / analyzed</span><div class="value">{{ metadata.collected }} collected · {{ metadata.included }} analyzed</div></div>
+      <div class="meta-card"><span class="label">Excluded in frozen analysis</span><div class="value">{{ metadata.excluded }}</div></div>
+      <div class="meta-card"><span class="label">Applied filters</span><div class="value">{{ metadata.filters }}</div></div>
+      <div class="meta-card"><span class="label">Data collected</span><div class="value">{{ metadata.collected_at }}</div></div>
+      <div class="meta-card"><span class="label">Report generated</span><div class="value">{{ metadata.generated_at }}</div></div>
+    </div>
+  </header>
+
+  {% if metadata.mixed_variants %}
+  <section class="warning">
+    <strong>Mixed storage limitation.</strong>
+    A lowest-price platform is not stated because multiple storage capacities are included. Choose one capacity before making a platform comparison.
+  </section>
+  {% elif metadata.mixed_conditions %}
+  <section class="warning">
+    <strong>Condition mix.</strong>
+    The selected records include multiple conditions. The lowest-price platform is shown, but condition and seller details should be reviewed before making a purchasing conclusion.
+  </section>
+  {% endif %}
+
+  <section>
+    <h2>Key metrics</h2>
+    <div class="metrics">
+      <div class="metric"><span class="label">Total records</span><div class="value">{{ summary.total_records }}</div></div>
+      <div class="metric"><span class="label">Lowest</span><div class="value">USD {{ '%.2f'|format(summary.minimum_price) }}</div></div>
+      <div class="metric"><span class="label">Average</span><div class="value">USD {{ '%.2f'|format(summary.average_price) }}</div></div>
+      <div class="metric"><span class="label">Median</span><div class="value">USD {{ '%.2f'|format(summary.median_price) }}</div></div>
+      <div class="metric"><span class="label">Highest</span><div class="value">USD {{ '%.2f'|format(summary.maximum_price) }}</div></div>
+      <div class="metric"><span class="label">Price spread</span><div class="value">USD {{ '%.2f'|format(summary.price_range) }}</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Insight summary</h2>
+    <div class="note">
+      {% if metadata.mixed_variants %}
+        A lowest-price platform is not determined for this mixed-storage result set.
+      {% else %}
+        Lowest-price platform: {{ summary.best_platform or 'Not available' }}.
+      {% endif %}
+      Prices span USD {{ '%.2f'|format(summary.minimum_price) }} to USD {{ '%.2f'|format(summary.maximum_price) }}.
+      “Lowest-price platform” identifies the marketplace containing the lowest comparable listing; it is not an overall seller or marketplace recommendation.
+    </div>
+  </section>
+
+  <section>
+    <h2>Charts</h2>
+    {% if charts %}
+    <div class="charts">
+      {% for name, image in charts.items() %}
+      <figure class="chart">
+        <figcaption class="label">{{ name }}</figcaption>
+        <img src="{{ image }}" alt="{{ name }}">
+      </figure>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="note">Chart images are not available. Use Charts (PNG) for presentation images.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Analyzed records</h2>
+    <p>Showing the first {{ records|length }} of {{ summary.total_records }} analyzed records. Use the Records CSV for the complete dataset.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Title</th><th>Platform</th><th>Price</th><th>Storage</th><th>Condition</th><th>Seller</th><th>Source</th></tr>
+        </thead>
+        <tbody>
+          {% for item in records %}
+          <tr>
+            <td>{{ item.title }}</td>
+            <td>{{ item.platform or 'Not available' }}</td>
+            <td>{{ item.currency or 'USD' }} {{ '%.2f'|format(item.normalized_price) if item.normalized_price is not none else 'Not available' }}</td>
+            <td>{{ item.storage or 'Not specified' }}</td>
+            <td>{{ item.condition_display or 'Not available' }}</td>
+            <td>{{ item.seller or 'Not specified' }}</td>
+            <td>
+              {{ item.record_source or 'Stored marketplace evidence' }}
+              {% if item.source_url %}<br><a href="{{ item.source_url }}" target="_blank" rel="noopener">Open listing</a>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Methodology and limitations</h2>
+    <p>Only server-validated records frozen into this analysis are used across metrics, charts and exports. Any Analytics dashboard filters shown above are validated against that frozen set and recalculated by the server. Marketplace prices, availability and seller information may change after collection. Review source evidence before making a decision.</p>
+  </section>
+  <footer class="label">Analysis identifier: {{ metadata.analysis_id }}</footer>
+</main>
+</body>
+</html>

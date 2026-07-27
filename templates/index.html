@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}Ecommerce Price Analysis{% endblock %}
+
+{% block content %}
+<section class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+    <div>
+        <div class="flex items-center gap-2 text-xs text-slate-500 mb-2 font-medium">
+            <span>Marketplace</span>
+            <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+            <span class="text-primary font-semibold">Real-time Search</span>
+        </div>
+        <h2 class="text-4xl font-extrabold headline-font tracking-tight text-textMain">Marketplace Product Search</h2>
+      {% if query %}
+<p class="text-slate-500 mt-2 max-w-2xl">
+    Showing
+    {% if item_type == "product_only" %}
+        <span class="font-semibold text-textMain">Product Only</span>
+    {% elif item_type == "accessories_only" %}
+        <span class="font-semibold text-textMain">Accessories Only</span>
+    {% else %}
+        <span class="font-semibold text-textMain">All Results</span>
+    {% endif %}
+    from
+    {% if platform == "walmart" %}
+        <span class="font-semibold text-textMain">Walmart</span>
+    {% elif platform == "all" %}
+        <span class="font-semibold text-textMain">All Platforms</span>
+    {% else %}
+        <span class="font-semibold text-textMain">eBay</span>
+    {% endif %}
+    for &quot;{{ query }}&quot;.
+</p>
+{% endif %}
+    </div>
+</section>
+
+
+{% if recent_queries %}
+<section class="bg-white rounded-3xl shadow-soft p-8 mb-12">
+    <div class="mb-5">
+        <h3 class="text-xl font-bold headline-font text-textMain">Recent Saved Searches</h3>
+        <p class="text-sm text-slate-500 mt-1">
+            Jump back to recently saved queries and open their analytics pages.
+        </p>
+    </div>
+
+    <div class="flex flex-wrap gap-3">
+        {% for item in recent_queries %}
+        <a
+            href="/analytics?q={{ item.query|urlencode }}"
+            class="px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-semibold text-primary hover:bg-slate-100"
+        >
+            {{ item.query }}
+        </a>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<section class="mb-10">
+    <form method="GET" action="/" class="flex flex-col xl:flex-row gap-4">
+        <div class="flex-1 relative">
+            <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+            <input
+                type="text"
+                name="q"
+                value="{{ query }}"
+                placeholder="Search products, e.g. iphone 15"
+                class="w-full bg-white rounded-2xl border border-slate-200 pl-12 pr-4 py-4 text-sm shadow-soft focus:ring-2 focus:ring-primary/20"
+            />
+        </div>
+
+        <div class="flex items-center gap-3">
+            <div class="bg-white rounded-2xl border border-slate-200 px-4 py-3 shadow-soft">
+                <label class="text-[11px] uppercase tracking-wider font-bold text-slate-400 mr-2">Platform</label>
+                <select name="platform" class="border-none bg-transparent text-sm font-semibold text-primary focus:ring-0">
+                    <option value="ebay" {% if platform == "ebay" %}selected{% endif %}>eBay</option>
+                    <option value="walmart" {% if platform == "walmart" %}selected{% endif %}>Walmart</option>
+                    <option value="all" {% if platform == "all" %}selected{% endif %}>All Platforms</option>
+                </select>
+                <label class="text-[11px] uppercase tracking-wider font-bold text-slate-400 mr-2">Sort</label>
+                <select name="sort" class="border-none bg-transparent text-sm font-semibold text-primary focus:ring-0">
+                    <option value="default" {% if sort_option == "default" %}selected{% endif %}>Default</option>
+                    <option value="price_asc" {% if sort_option == "price_asc" %}selected{% endif %}>Price: Low to High</option>
+                    <option value="price_desc" {% if sort_option == "price_desc" %}selected{% endif %}>Price: High to Low</option>
+                </select>
+                <select name="item_type" class="border-none bg-transparent text-sm font-semibold text-primary focus:ring-0">
+    <option value="all" {% if item_type == "all" %}selected{% endif %}>All Results</option>
+    <option value="product_only" {% if item_type == "product_only" %}selected{% endif %}>Product Only</option>
+    <option value="accessories_only" {% if item_type == "accessories_only" %}selected{% endif %}>Accessories Only</option>
+</select>
+            </div>
+
+            <button type="submit" class="px-6 py-4 bg-primary text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-500/20 hover:opacity-90">
+                Search
+            </button>
+
+            <button type="submit" name="save" value="1" class="px-6 py-4 bg-white text-primary rounded-2xl font-bold text-sm border border-slate-200 shadow-soft hover:bg-slate-50">
+                Save Results
+            </button>
+        </div>
+    </form>
+
+    {% if saved_file %}
+    <div class="mt-4 px-4 py-3 bg-green-50 text-green-700 rounded-2xl border border-green-100 font-semibold text-sm">
+        Results saved to: {{ saved_file }}
+    </div>
+    {% endif %}
+</section>
+
+{% if summary %}
+<section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Total Results</p>
+        <p class="text-3xl font-extrabold headline-font">{{ summary.total_results }}</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Lowest Price</p>
+        <p class="text-3xl font-extrabold headline-font">
+            {% if summary.lowest_price is not none %}USD {{ summary.lowest_price }}{% else %}N/A{% endif %}
+        </p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Highest Price</p>
+        <p class="text-3xl font-extrabold headline-font">
+            {% if summary.highest_price is not none %}USD {{ summary.highest_price }}{% else %}N/A{% endif %}
+        </p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Average Price</p>
+        <p class="text-3xl font-extrabold headline-font">
+            {% if summary.average_price is not none %}USD {{ summary.average_price }}{% else %}N/A{% endif %}
+        </p>
+    </div>
+</section>
+{% endif %}
+
+{% if query and items %}
+<section class="flex items-center justify-between mb-6">
+    <div>
+        <h3 class="text-2xl font-bold headline-font text-textMain">Search Results</h3>
+       <p class="text-slate-500 text-sm mt-1">
+    Showing
+    {% if item_type == "product_only" %}
+        <span class="font-semibold text-textMain">Product Only</span>
+    {% elif item_type == "accessories_only" %}
+        <span class="font-semibold text-textMain">Accessories Only</span>
+    {% else %}
+        <span class="font-semibold text-textMain">All Results</span>
+    {% endif %}
+    from
+    {% if platform == "walmart" %}
+        <span class="font-semibold text-textMain">Walmart</span>
+    {% elif platform == "all" %}
+        <span class="font-semibold text-textMain">All Platforms</span>
+    {% else %}
+        <span class="font-semibold text-textMain">eBay</span>
+    {% endif %}
+    for &quot;{{ query }}&quot;.
+</p>
+    </div>
+
+    
+    <div class="flex items-center gap-3">
+    <a href="/analytics?q={{ query|urlencode }}" class="px-5 py-3 bg-primary text-white rounded-2xl text-sm font-bold shadow-lg shadow-blue-500/20 hover:opacity-90">
+        View Analytics
+    </a>
+    <a href="/demo" class="px-5 py-3 bg-white text-primary rounded-2xl text-sm font-bold border border-slate-200 shadow-soft hover:bg-slate-50">
+        Demo Analytics
+    </a>
+    </div>
+</section>
+
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+    {% for item in items %}
+    <article class="group bg-white rounded-3xl overflow-hidden shadow-soft hover:-translate-y-1 transition-all duration-300">
+        <div class="relative h-56 w-full overflow-hidden bg-slate-50">
+            {% if item.image_url %}
+            <img src="{{ item.image_url }}" alt="product image" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
+            {% else %}
+            <div class="w-full h-full flex items-center justify-center text-slate-400 text-sm">No image</div>
+            {% endif %}
+
+            {% if item.condition %}
+            <div class="absolute top-4 left-4">
+                <span class="bg-white/90 backdrop-blur-sm text-[10px] font-bold px-3 py-1 rounded-full shadow-sm uppercase tracking-tight text-slate-700">
+                    {{ item.condition }}
+                </span>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="p-6 space-y-4">
+            <div class="space-y-1">
+                <p class="text-[11px] font-bold text-primary uppercase tracking-wide">{{ item.platform or "Marketplace" }} Listing</p>
+                <h3 class="text-base font-bold text-textMain leading-tight line-clamp-2 headline-font">
+                    {{ item.title }}
+                </h3>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <div class="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[14px] text-slate-500">storefront</span>
+                </div>
+                <p class="text-xs font-medium text-slate-500">{{ item.seller or "Unknown seller" }}</p>
+            </div>
+
+            <div class="flex items-end justify-between pt-2">
+                <div>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Price</p>
+                    <p class="text-2xl font-extrabold headline-font text-textMain">
+                        {{ item.currency or "USD" }} {{ item.price }}
+                    </p>
+                </div>
+
+                {% if item.item_url %}
+                <a href="{{ item.item_url }}" target="_blank" class="bg-slate-100 text-primary px-4 py-2 rounded-xl text-xs font-bold hover:bg-primary hover:text-white transition-all">
+                    View on {{ item.platform or "Marketplace" }}
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </article>
+    {% endfor %}
+</section>
+
+{% elif query %}
+<section class="bg-white rounded-3xl shadow-soft p-12 text-center">
+    <h3 class="text-2xl font-bold headline-font mb-2">No results found</h3>
+
+    {% if item_type == "product_only" %}
+        <p class="text-slate-500">
+            No matching product-only results found. Try switching to <span class="font-semibold text-textMain">All Results</span> or changing your keywords.
+        </p>
+    {% elif item_type == "accessories_only" %}
+        <p class="text-slate-500">
+            No matching accessories-only results found. Try switching to <span class="font-semibold text-textMain">All Results</span> or using accessory-related keywords.
+        </p>
+    {% else %}
+        <p class="text-slate-500">
+            Try another keyword or a broader product name.
+        </p>
+    {% endif %}
+</section>
+
+{% else %}
+<section class="bg-white rounded-3xl shadow-soft p-12 text-center">
+    <h3 class="text-2xl font-bold headline-font mb-2">Start with a product search</h3>
+    <p class="text-slate-500">Search for something like “iphone 15”, “sony camera”, or “mechanical keyboard”.</p>
+</section>
+{% endif %}
+{% endblock %}

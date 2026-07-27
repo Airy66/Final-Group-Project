@@ -1,0 +1,39 @@
+{% extends "product_base.html" %}
+{% block title %}Retailer dashboard{% endblock %}
+{% block content %}
+<section class="rounded-3xl border border-orange-100 bg-gradient-to-br from-orange-50/80 via-white to-blue-50/50 p-8 shadow-sm">
+  <p class="text-xs font-bold uppercase tracking-widest text-orange-700">Retailer / reseller workspace</p>
+  <h1 class="mt-2 font-display text-4xl font-extrabold">Monitor market signals for sourcing decisions.</h1>
+  <p class="mt-2 text-slate-500">Track platform coverage, price ranges, and listing patterns from saved and collected records.</p>
+</section>
+<section class="mt-9 grid grid-cols-2 gap-5 xl:grid-cols-4">
+  {% for label,value in [('Listings monitored',prices.listings),('Lowest observed',prices.lowest),('Average observed',prices.average),('Highest observed',prices.highest)] %}
+  <article class="rounded-3xl {{ 'bg-primary text-white' if loop.first else 'bg-white shadow-soft' }} p-6">
+    <p class="text-sm opacity-75">{{ label }}</p>
+    <p class="mt-3 font-display text-3xl font-bold">{{ value if value is not none else '—' }}</p>
+  </article>
+  {% endfor %}
+</section>
+<section class="mt-8 grid gap-6 lg:grid-cols-2">
+  <div class="rounded-3xl bg-white p-6 shadow-soft">
+    <h2 class="font-display text-xl font-bold">Market overview</h2>
+    <p class="mt-2 text-sm leading-6 text-slate-500">A retailer view for sourcing, platform mix, and pricing range.</p>
+    <div class="mt-5 space-y-3">
+      {% for platform,count in distribution.items() %}
+      <div>
+        <div class="flex justify-between text-sm"><span>{{ platform }}</span><strong>{{ count }}</strong></div>
+        <div class="mt-1 h-2 rounded bg-slate-100"><div class="h-2 rounded bg-primary" style="width:{{ [count*10,100]|min }}%"></div></div>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-400">Searches will populate this comparison.</p>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="rounded-3xl bg-white p-6 shadow-soft">
+    <h2 class="font-display text-xl font-bold">Sourcing insight</h2>
+    <p class="mt-3 text-sm leading-6 text-slate-500">Review average price, spread, and category coverage before making sourcing decisions. Analytics and export stay available on membership tier.</p>
+    <a href="{{ url_for('search') }}" class="mt-5 inline-block font-bold text-primary">Create monitor →</a>
+  </div>
+</section>
+{% include "partials/search_history.html" %}
+{% endblock %}

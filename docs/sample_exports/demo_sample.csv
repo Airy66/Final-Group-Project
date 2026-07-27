@@ -1,0 +1,21 @@
+platform,product_id,name,price,currency,category,brand,rating,review_count,availability,timestamp
+Douyin,Douyin_000,OnePlus Groceries Product Model-0,161.86,CNY,Groceries,OnePlus,3.9199698989816034,3454,In Stock,2026-05-29 00:56:06.691612
+Xiaohongshu,Xiaohongshu_001,Xiaomi Groceries Product Model-1,266.93,CNY,Groceries,Xiaomi,4.054806932813931,1194,In Stock,2026-05-18 00:56:06.691865
+eBay,eBay_002,OPPO Groceries Product Model-2,24.65,USD,Groceries,OPPO,4.968506622609751,1816,In Stock,2026-05-20 00:56:06.692127
+eBay,eBay_003,OPPO Apparel Product Model-3,438.95,USD,Apparel,OPPO,3.8557404952639973,3900,In Stock,2026-05-23 00:56:06.692328
+JD.com,JD.com_004,OPPO Beauty Product Model-4,377.93,CNY,Beauty,OPPO,3.9172065368076603,1373,In Stock,2026-05-22 00:56:06.692665
+Douyin,Douyin_005,vivo Home Product Model-5,1512.02,CNY,Home,vivo,4.8911844824945385,1965,In Stock,2026-06-14 00:56:06.692904
+Douyin,Douyin_006,Samsung Beauty Product Model-6,197.04,CNY,Beauty,Samsung,4.7301593880333375,171,In Stock,2026-05-30 00:56:06.693136
+Douyin,Douyin_007,Huawei Home Product Model-7,1574.48,CNY,Home,Huawei,4.2664127476273785,347,In Stock,2026-05-27 00:56:06.693344
+Taobao,Taobao_008,OPPO Electronics Product Model-8,4338.81,CNY,Electronics,OPPO,3.889460772415725,2578,In Stock,2026-06-04 00:56:06.693546
+Douyin,Douyin_009,Apple Apparel Product Model-9,425.98,CNY,Apparel,Apple,4.748210648637446,4484,In Stock,2026-06-14 00:56:06.693738
+Taobao,Taobao_010,OPPO Electronics Product Model-10,5181.58,CNY,Electronics,OPPO,4.244981902637919,3655,In Stock,2026-06-01 00:56:06.693931
+Xiaohongshu,Xiaohongshu_011,Samsung Home Product Model-11,2293.78,CNY,Home,Samsung,4.259512249704548,2700,In Stock,2026-06-16 00:56:06.694115
+Taobao,Taobao_012,Huawei Apparel Product Model-12,500.2,CNY,Apparel,Huawei,3.837715022824081,2800,In Stock,2026-05-29 00:56:06.694300
+Amazon,Amazon_013,Samsung Home Product Model-13,427.63,USD,Home,Samsung,4.292459507642755,3252,In Stock,2026-06-10 00:56:06.694456
+Amazon,Amazon_014,Apple Apparel Product Model-14,243.96,USD,Apparel,Apple,4.0621285246602,1373,Pre-order,2026-05-20 00:56:06.694550
+Xiaohongshu,Xiaohongshu_015,OnePlus Beauty Product Model-15,538.36,CNY,Beauty,OnePlus,4.888194129854905,1316,In Stock,2026-06-10 00:56:06.694636
+Douyin,Douyin_016,Huawei Groceries Product Model-16,90.97,CNY,Groceries,Huawei,4.066529372564876,4789,In Stock,2026-05-18 00:56:06.694719
+Xiaohongshu,Xiaohongshu_017,OPPO Electronics Product Model-17,4208.18,CNY,Electronics,OPPO,4.1046984967212135,1301,In Stock,2026-05-31 00:56:06.694803
+Taobao,Taobao_018,Huawei Apparel Product Model-18,172.0,CNY,Apparel,Huawei,4.134375757083934,3484,In Stock,2026-05-25 00:56:06.694889
+Amazon,Amazon_019,Xiaomi Home Product Model-19,2144.37,USD,Home,Xiaomi,4.606562656887054,212,In Stock,2026-05-25 00:56:06.694974

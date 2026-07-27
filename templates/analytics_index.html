@@ -1,0 +1,69 @@
+{% extends "product_base.html" %}
+{% block title %}Recent Analyses{% endblock %}
+{% block content %}
+<section class="app-page-header">
+  <div class="app-page-header__content">
+    <p class="app-page-header__eyebrow">Analytics</p>
+    <h1 class="app-page-header__title">Recent Analyses</h1>
+    <p class="app-page-header__subtitle">Open a frozen search or comparison analysis. New analyses begin from Search Results or the Comparison Workspace.</p>
+  </div>
+  <div class="app-page-header__actions"><span id="analysis-count" class="rounded-full border border-blue-100 bg-white px-3 py-1.5 text-sm font-bold text-slate-600">{{ analyses|length }} saved analyses</span></div>
+</section>
+
+<section class="mt-6 rounded-xl border border-slate-200 bg-white p-4" aria-label="Analysis history filters">
+  <div class="grid gap-3 md:grid-cols-[minmax(15rem,1fr)_13rem_13rem]">
+    <label class="text-sm font-semibold text-slate-700"><span class="sr-only">Search analyses</span><input id="analysis-search" type="search" class="app-input w-full px-3 text-sm" placeholder="Search by product or query"></label>
+    <label><span class="sr-only">Analysis type</span><select id="analysis-type" class="app-select w-full text-sm"><option value="all">All analyses</option><option value="search">Search analyses</option><option value="comparison">Comparison analyses</option></select></label>
+    <label><span class="sr-only">Sort analyses</span><select id="analysis-sort" class="app-select w-full text-sm"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="viewed">Recently viewed</option></select></label>
+  </div>
+</section>
+
+<section id="analysis-list" class="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
+  {% for analysis in analyses %}
+  {% set analysis_type = 'comparison' if analysis.scope == 'selected_comparison' else 'search' %}
+  {% set comparable_count = analysis.comparable_result_count or analysis.record_count or (analysis.included_result_ids|length) %}
+  {% set platforms = analysis.platforms|join(', ') if analysis.platforms else (analysis.platform_scope or analysis.platform or 'Not recorded') %}
+  <article class="analysis-record flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-4 last:border-0" data-query="{{ (analysis.query or 'Saved analysis')|lower }}" data-type="{{ analysis_type }}" data-created="{{ analysis.created_at.isoformat() if analysis.created_at and analysis.created_at.isoformat is defined else analysis.created_at }}" data-viewed="{{ analysis.last_viewed_at.isoformat() if analysis.last_viewed_at and analysis.last_viewed_at.isoformat is defined else '' }}">
+    <div class="min-w-0 flex-1">
+      <h2 class="truncate font-bold text-slate-950" title="{{ analysis.query or 'Saved analysis' }}">{{ analysis.query or 'Saved analysis' }}</h2>
+      <div class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+        <span>{{ 'Comparison analysis' if analysis_type == 'comparison' else 'Search analysis' }}</span><span>{{ comparable_count }} comparable records</span><span>Platforms: {{ platforms }}</span><span>{{ display_sgt_datetime(analysis.created_at) }}</span>
+      </div>
+    </div>
+    <div class="flex shrink-0 items-center gap-2">
+      <a class="rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-bold text-white hover:bg-blue-700" href="{{ url_for('analytics', search_record_id=analysis._id) }}">Open analysis</a>
+      <details class="app-dropdown">
+        <summary class="analysis-more-summary inline-flex items-center justify-center" aria-label="Lifecycle actions for {{ analysis.query or 'saved analysis' }}" title="Lifecycle actions"><span class="material-symbols-outlined text-[20px]">more_horiz</span></summary>
+        <div class="app-dropdown-panel min-w-48" role="menu"><form method="post" action="{{ url_for('delete_analysis', analysis_id=analysis._id) }}" data-confirm-form data-confirm-message="Delete this saved analysis? The original Search Run, Comparison Set, Saved Evidence and Watchlist data will remain."><button class="app-dropdown-item w-full text-left text-red-700" type="submit" role="menuitem">Delete analysis</button></form></div>
+      </details>
+    </div>
+  </article>
+  {% else %}
+  <div class="p-10 text-center text-slate-500"><p class="font-semibold text-slate-800">No analysis records yet.</p><a href="{{ url_for('search') }}" class="mt-3 inline-flex font-bold text-primary">Go to Product Search</a></div>
+  {% endfor %}
+  <div id="analysis-filter-empty" class="hidden p-10 text-center text-slate-500"><p class="font-semibold text-slate-800">No analyses match these filters.</p><p class="mt-1 text-sm">Try a broader query or select All analyses.</p></div>
+</section>
+
+<script>
+  (() => {
+    const list = document.getElementById('analysis-list');
+    const rows = [...document.querySelectorAll('.analysis-record')];
+    const search = document.getElementById('analysis-search');
+    const type = document.getElementById('analysis-type');
+    const sort = document.getElementById('analysis-sort');
+    const count = document.getElementById('analysis-count');
+    const empty = document.getElementById('analysis-filter-empty');
+    const timestamp = (value) => value ? (Date.parse(value) || 0) : 0;
+    const update = () => {
+      const term = search.value.trim().toLowerCase();
+      const visible = rows.filter((row) => (!term || row.dataset.query.includes(term)) && (type.value === 'all' || row.dataset.type === type.value));
+      rows.forEach((row) => row.classList.toggle('hidden', !visible.includes(row)));
+      visible.sort((a, b) => sort.value === 'oldest' ? timestamp(a.dataset.created) - timestamp(b.dataset.created) : sort.value === 'viewed' ? timestamp(b.dataset.viewed) - timestamp(a.dataset.viewed) : timestamp(b.dataset.created) - timestamp(a.dataset.created)).forEach((row) => list.insertBefore(row, empty));
+      count.textContent = `${visible.length} saved ${visible.length === 1 ? 'analysis' : 'analyses'}`;
+      empty.classList.toggle('hidden', visible.length !== 0 || rows.length === 0);
+    };
+    [search, type, sort].forEach((control) => control.addEventListener(control === search ? 'input' : 'change', update));
+    update();
+  })();
+</script>
+{% endblock %}

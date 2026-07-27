@@ -1,0 +1,24 @@
+# Direct runtime dependencies for Precision Curator and the bundled analysis package.
+# Test and development tools live in requirements-dev.txt.
+beautifulsoup4>=4.11.0,<5
+click>=8.1.0,<9
+Flask>=3.0.0,<4
+google-genai>=2.0.0,<3
+gunicorn==23.0.0
+jieba>=0.42.1,<1
+lxml>=4.9.0,<7
+matplotlib>=3.6.0,<4
+numpy>=1.21.0,<3
+openai>=1.40.0,<3
+openpyxl>=3.0.0,<4
+pandas>=1.5.0,<4
+plotly>=5.11.0,<7
+pymongo>=4.7.0,<5
+python-dotenv>=0.19.0,<2
+PyYAML>=6.0,<7
+requests>=2.28.0,<3
+scipy>=1.9.0,<2
+seaborn>=0.11.0,<1
+selenium>=4.8.0,<5
+Werkzeug>=3.0.0,<4
+zhconv>=1.4.3,<2

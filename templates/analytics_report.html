@@ -1,0 +1,40 @@
+{% extends "product_base.html" %}
+{% block title %}Analytics report - {{ record.keyword or 'Saved results' }}{% endblock %}
+{% block content %}
+<section class="app-hero">
+  <p class="text-xs font-bold uppercase tracking-widest text-primary">Printable report</p>
+  <h1 class="mt-2 font-display text-4xl font-extrabold text-slate-950">Analytics summary report</h1>
+  <p class="mt-3 text-slate-600">A concise export-friendly view of the current analytics result set.</p>
+  <p class="mt-2 text-sm text-slate-500">{{ record.keyword or 'Search analytics' }} · {{ analytics_payload.summary.total_records }} records</p>
+</section>
+
+<section class="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+  <article class="rounded-3xl border border-blue-100 bg-blue-50 p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-widest text-blue-700">Total records</p><p class="mt-3 font-display text-3xl font-extrabold text-slate-950">{{ analytics_payload.summary.total_records }}</p></article>
+  <article class="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-widest text-indigo-700">Platforms</p><p class="mt-3 font-display text-3xl font-extrabold text-slate-950">{{ analytics_payload.summary.platform_count }}</p></article>
+  <article class="rounded-3xl border border-emerald-100 bg-emerald-50 p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-widest text-emerald-700">Average price</p><p class="mt-3 font-display text-3xl font-extrabold text-slate-950">USD {{ '%.2f'|format(analytics_payload.summary.average_price) }}</p></article>
+  <article class="rounded-3xl border border-violet-100 bg-violet-50 p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-widest text-violet-700">Price range</p><p class="mt-3 font-display text-3xl font-extrabold text-slate-950">USD {{ '%.2f'|format(analytics_payload.summary.price_range) }}</p></article>
+</section>
+
+<section class="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+  <h2 class="font-display text-2xl font-bold text-slate-950">Key takeaways</h2>
+  <div class="mt-4 grid gap-4 md:grid-cols-3">
+    <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Best visible option</p><p class="mt-2 text-base font-semibold text-slate-900">{{ analytics_payload.summary.best_platform or 'Unavailable' }}</p></div>
+    <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Market pattern</p><p class="mt-2 text-sm text-slate-700">{% if analytics_payload.summary.price_range and analytics_payload.summary.price_range > 0 %}Spread is USD {{ '%.2f'|format(analytics_payload.summary.price_range) }}.{% else %}Prices are clustered tightly.{% endif %}</p></div>
+    <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Suggested next action</p><p class="mt-2 text-sm text-slate-700">Review source links and save the strongest record before exporting.</p></div>
+  </div>
+</section>
+
+<section class="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+  <h2 class="font-display text-2xl font-bold text-slate-950">Preview rows</h2>
+  <div class="mt-4 overflow-x-auto">
+    <table class="w-full min-w-[900px] text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-widest text-slate-500"><tr><th class="p-3">Title</th><th class="p-3">Platform</th><th class="p-3">Price</th><th class="p-3">Condition</th><th class="p-3">Source</th></tr></thead>
+      <tbody>
+        {% for item in items %}
+        <tr class="border-t border-slate-100"><td class="p-3">{{ item.title }}</td><td class="p-3">{{ item.platform }}</td><td class="p-3">{{ item.currency }} {{ item.price }}</td><td class="p-3">{{ item.condition or item.availability or '—' }}</td><td class="p-3">{{ item.source_type }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

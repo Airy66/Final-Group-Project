@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Demo Analytics{% endblock %}
+
+{% block content %}
+<section class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+    <div>
+        <div class="flex items-center gap-2 text-xs text-slate-500 mb-2 font-medium">
+            <span>Marketplace</span>
+            <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+            <span class="text-primary font-semibold">Demo Analytics</span>
+        </div>
+        <h2 class="text-4xl font-extrabold headline-font tracking-tight text-textMain">
+            Multi-Platform Demo Analytics
+        </h2>
+        <p class="text-slate-500 mt-2 max-w-2xl">
+            Generated sample data used to demonstrate analytics, visualization, export, and reporting capabilities
+            across multiple e-commerce platforms.
+        </p>
+    </div>
+
+    <div class="flex items-center gap-3">
+        <a href="/" class="px-5 py-3 bg-white text-primary rounded-2xl text-sm font-bold border border-slate-200 shadow-soft hover:bg-slate-50">
+            Back to Search
+        </a>
+        <a href="{% if query %}/analytics?q={{ query|urlencode }}{% else %}/analytics?q=iphone%2015{% endif %}" class="px-5 py-3 bg-primary text-white rounded-2xl text-sm font-bold shadow-lg shadow-blue-500/20 hover:opacity-90">
+            Real Analytics
+        </a>
+    </div>
+</section>
+
+<section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Demo Records</p>
+        <p class="text-3xl font-extrabold headline-font">{{ summary.total_results }}</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Platforms</p>
+        <p class="text-3xl font-extrabold headline-font">{{ summary.platform_count }}</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Categories</p>
+        <p class="text-3xl font-extrabold headline-font">{{ summary.category_count }}</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Average Price</p>
+        <p class="text-3xl font-extrabold headline-font">
+            {% if summary.average_price is not none %}
+                {{ summary.average_price }}
+            {% else %}
+                N/A
+            {% endif %}
+        </p>
+    </div>
+</section>
+
+<section class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-12">
+    <div class="bg-white p-6 rounded-3xl shadow-soft">
+        <div class="mb-4">
+            <h3 class="text-xl font-bold headline-font text-textMain">Data Analysis Demo</h3>
+            <p class="text-sm text-slate-500 mt-1">
+                Sample multi-platform analysis output generated from the demo dataset.
+            </p>
+        </div>
+        <div class="rounded-2xl overflow-hidden bg-slate-50 border border-slate-100">
+            <img
+                src="{{ url_for('static', filename='images/' + analysis_image) }}"
+                alt="data analysis demo"
+                class="w-full h-auto"
+            />
+        </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-3xl shadow-soft">
+        <div class="mb-4">
+            <h3 class="text-xl font-bold headline-font text-textMain">Visualization Demo</h3>
+            <p class="text-sm text-slate-500 mt-1">
+                Additional visualization examples from the generated analytics module.
+            </p>
+        </div>
+        <div class="rounded-2xl overflow-hidden bg-slate-50 border border-slate-100">
+            <img
+                src="{{ url_for('static', filename='images/' + visualization_image) }}"
+                alt="visualization demo"
+                class="w-full h-auto"
+            />
+        </div>
+    </div>
+</section>
+
+<section class="bg-white rounded-3xl shadow-soft p-8 mb-12">
+    <div class="mb-5">
+        <h3 class="text-xl font-bold headline-font text-textMain">Demo Data Preview</h3>
+        <p class="text-sm text-slate-500 mt-1">
+            Preview of the first 20 generated records from the simulated multi-platform dataset.
+        </p>
+    </div>
+
+    <div class="overflow-x-auto rounded-2xl border border-slate-100">
+        <table class="w-full text-sm bg-white">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Platform</th>
+                    <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Name</th>
+                    <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Price</th>
+                    <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Currency</th>
+                    <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Category</th>
+                    <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Brand</th>
+                    <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Rating</th>
+                    <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Reviews</th>
+                    <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Availability</th>
+                    <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Timestamp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr class="border-t border-slate-100 hover:bg-slate-50/60">
+                    <td class="px-4 py-3 font-medium text-textMain whitespace-nowrap">{{ item.platform }}</td>
+                    <td class="px-4 py-3 text-slate-600 whitespace-nowrap">{{ item.name }}</td>
+                    <td class="px-4 py-3 font-semibold text-textMain whitespace-nowrap">{{ item.price }}</td>
+                    <td class="px-4 py-3 text-slate-600 whitespace-nowrap">{{ item.currency }}</td>
+                    <td class="px-4 py-3 text-slate-600 whitespace-nowrap">{{ item.category }}</td>
+                    <td class="px-4 py-3 text-slate-600 whitespace-nowrap">{{ item.brand }}</td>
+                    <td class="px-4 py-3 text-slate-600 whitespace-nowrap">
+                        {{ "%.2f"|format(item.rating) if item.rating is not none else "N/A" }}
+                    </td>
+                    <td class="px-4 py-3 text-slate-600 whitespace-nowrap">{{ item.review_count }}</td>
+                    <td class="px-4 py-3 text-slate-600 whitespace-nowrap">{{ item.availability }}</td>
+                    <td class="px-4 py-3 text-slate-600 whitespace-nowrap">{{ item.timestamp }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="bg-white rounded-3xl shadow-soft p-8">
+    <div class="flex items-start gap-4">
+        <div class="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-white shadow-lg shadow-blue-500/20 flex-shrink-0">
+            <span class="material-symbols-outlined">science</span>
+        </div>
+
+        <div class="flex-1">
+            <h3 class="text-xl font-bold headline-font text-textMain mb-2">About This Demo Module</h3>
+            <p class="text-slate-600 leading-7">
+                This page showcases generated multi-platform sample data used for visualization and export testing.
+                It complements the real-time marketplace search and analytics modules by demonstrating how the system could
+                scale to broader marketplace intelligence scenarios.
+            </p>
+        </div>
+    </div>
+</section>
+{% endblock %}

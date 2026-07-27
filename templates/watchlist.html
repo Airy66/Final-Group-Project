@@ -1,0 +1,647 @@
+{% extends "product_base.html" %}
+{% block head_extra %}
+{{ super() }}
+<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+{% endblock %}
+{% block title %}Watchlist{% endblock %}
+{% block content %}
+<section class="app-page-header">
+  <div class="app-page-header__content">
+    <p class="app-page-header__eyebrow">Watchlist</p>
+    <h1 class="app-page-header__title">Price Watchlist</h1>
+    <p class="app-page-header__subtitle">Monitor saved products and comparison groups over time.</p>
+    <p class="mt-2 text-xs text-slate-500">{{ active_count or 0 }} active monitors · {{ archived_count or 0 }} archived{% if not include_archived and selected_item and selected_item.latest_snapshot %} · Updated {{ format_sgt_datetime(selected_item.latest_snapshot.collected_at) }}{% endif %}</p>
+  </div>
+</section>
+{% if not include_archived %}
+<div class="mt-4 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm text-slate-700">
+  {% if automatic_count %}<strong>{{ automatic_count }} automatic monitor active.</strong> Automatic monitors refresh once daily.{% else %}<strong>No automatic monitor is active.</strong> Enable daily refresh on one Monitor.{% endif %}
+</div>
+{% endif %}
+{% if not can_access(current_user, 'watchlist') %}
+<section class="mt-6 rounded-3xl border border-blue-100 bg-blue-50 p-6 text-sm text-slate-700 shadow-sm">
+  <p class="font-bold text-slate-900">Premium unlocks evidence saving, watchlists, analytics dashboards, and AI-assisted price forecasting.</p>
+  <p class="mt-2">Professional adds forecast validation, source audit, activity logs, and exportable research reports.</p>
+  <a href="{{ url_for('membership') }}" class="mt-4 inline-flex rounded-xl bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">View plans</a>
+</section>
+{% endif %}
+{% if items %}
+<section class="mt-6 grid gap-5 max-xl:grid-cols-1 xl:grid-cols-[19rem_minmax(0,1fr)]">
+  <aside class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:self-start xl:overflow-y-auto">
+    <div>
+      <h2 class="font-display text-xl font-bold">{{ 'Archived monitors' if include_archived else 'Active monitors' }}</h2>
+      <div class="mt-3 grid grid-cols-2 rounded-lg bg-slate-100 p-1 text-xs font-bold" aria-label="Monitor status views">
+        <a href="{{ url_for('watchlist') }}" class="rounded-md px-2 py-1.5 text-center {{ 'bg-white text-slate-950 shadow-sm' if not include_archived else 'text-slate-500 hover:text-slate-800' }}">Active <span class="ml-1 text-[10px]">{{ active_count or 0 }}</span></a>
+        <a href="{{ url_for('watchlist', archived='1') }}" class="rounded-md px-2 py-1.5 text-center {{ 'bg-white text-slate-950 shadow-sm' if include_archived else 'text-slate-500 hover:text-slate-800' }}">Archived <span class="ml-1 text-[10px]">{{ archived_count or 0 }}</span></a>
+      </div>
+    </div>
+    <div class="mt-4 space-y-3">
+      {% for item in items %}
+      <article class="rounded-xl border p-3 transition {{ 'border-slate-300 bg-slate-50' if include_archived else ('border-blue-300 bg-blue-50/70 shadow-sm' if selected_item and item._id == selected_item._id else 'border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50/60') }}">
+        <div class="flex items-start justify-between gap-2"><div class="min-w-0"><a href="{{ url_for('watchlist', item_id=item._id, archived='1' if include_archived else '') }}" class="block truncate font-display text-base font-bold {{ 'text-slate-600' if include_archived else 'text-slate-950 hover:text-primary' }}">{{ item.product_label }}</a><p class="mt-0.5 truncate text-xs text-slate-500">{{ item.platform_scope }} · {{ 'Selected records' if item.tracking_mode == 'selected_records' else 'Full search' }}</p></div>{% if include_archived %}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-200 px-2 py-1 text-[10px] font-bold uppercase text-slate-600"><span class="material-symbols-outlined text-[12px]">archive</span>Archived</span>{% else %}<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Active</span>{% endif %}</div>
+        <div class="mt-3 grid grid-cols-2 gap-2 text-xs"><div class="rounded-lg bg-slate-50 px-2.5 py-2"><p class="text-slate-400">Snapshots</p><p class="mt-0.5 font-bold text-slate-800">{{ item.snapshot_count or 0 }}</p></div><div class="rounded-lg bg-slate-50 px-2.5 py-2"><p class="text-slate-400">Latest average</p><p class="mt-0.5 font-bold text-slate-800">{% if item.latest_snapshot and item.latest_snapshot.average_price is not none %}USD {{ '%.2f'|format(item.latest_snapshot.average_price) }}{% else %}—{% endif %}</p></div></div>
+        <p class="mt-2 truncate text-[11px] text-slate-400">Updated {{ format_sgt_datetime(item.latest_snapshot.collected_at if item.latest_snapshot else None) }}</p>
+        <p class="mt-1 text-[11px] font-semibold {{ 'text-emerald-700' if item.auto_refresh_enabled else 'text-slate-500' }}">Daily refresh: {{ 'On' if item.auto_refresh_enabled else 'Paused' }} · Last status: {{ (item.last_refresh_status or 'never')|title }}</p>
+        <div class="mt-3 flex items-center gap-1 border-t border-slate-200 pt-2">{% if include_archived %}<form class="flex-1" method="post" action="{{ url_for('restore_watchlist_item', watchlist_id=item._id) }}"><button class="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-2.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50"><span class="material-symbols-outlined text-[15px]">unarchive</span>Restore</button></form>{% else %}<a href="{{ url_for('watchlist', item_id=item._id) }}" class="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-blue-600 px-2.5 py-2 text-xs font-bold text-white hover:bg-blue-700">Open <span class="material-symbols-outlined text-[15px]">arrow_forward</span></a><form method="post" action="{{ url_for('archive_watchlist_item', watchlist_id=item._id) }}"><button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800" title="Archive monitor" aria-label="Archive {{ item.product_label }}"><span class="material-symbols-outlined text-[17px]">archive</span></button></form>{% endif %}<form method="post" action="{{ url_for('delete_watchlist_item', watchlist_id=item._id) }}"><button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700" title="Delete monitor" aria-label="Delete {{ item.product_label }}"><span class="material-symbols-outlined text-[17px]">delete</span></button></form></div>
+      </article>
+      {% endfor %}
+    </div>
+  </aside>
+  {% if include_archived %}
+  <div class="min-w-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Archived view</p><h2 class="mt-1 font-display text-2xl font-bold text-slate-950">Paused monitors</h2><p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Archived monitors are removed from the active workflow, while their snapshot and forecast history remains preserved. Restore a monitor whenever you want to continue tracking it.</p></div>
+      <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600"><span class="material-symbols-outlined text-[16px]">archive</span>{{ archived_count or 0 }} archived</span>
+    </div>
+    {% if selected_item %}
+    <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5">
+      <div class="flex flex-wrap items-start justify-between gap-4"><div><p class="font-display text-lg font-bold text-slate-800">{{ selected_item.product_label }}</p><p class="mt-1 text-sm text-slate-500">{{ selected_item.platform_scope }} · {{ 'Selected comparison records' if selected_item.tracking_mode == 'selected_records' else 'Full search result' }}</p></div><span class="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-bold text-slate-600">Archived</span></div>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2"><div class="rounded-lg bg-white p-3"><p class="text-xs text-slate-400">Preserved snapshots</p><p class="mt-1 text-lg font-bold text-slate-800">{{ selected_item.snapshot_count or 0 }}</p></div><div class="rounded-lg bg-white p-3"><p class="text-xs text-slate-400">Last observed average</p><p class="mt-1 text-lg font-bold text-slate-800">{% if selected_item.latest_snapshot and selected_item.latest_snapshot.average_price is not none %}USD {{ '%.2f'|format(selected_item.latest_snapshot.average_price) }}{% else %}—{% endif %}</p></div></div>
+      <form class="mt-5" method="post" action="{{ url_for('restore_watchlist_item', watchlist_id=selected_item._id) }}"><button class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-blue-700"><span class="material-symbols-outlined text-[18px]">unarchive</span>Restore to Active</button></form>
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div class="flex items-center justify-between">
+      <h2 class="font-display text-xl font-bold">{{ selected_item.product_label if selected_item else 'Monitor details' }}</h2>
+      {% if selected_item %}<span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-primary">Monitor</span>{% endif %}
+    </div>
+    {% if selected_item %}
+    <div class="mt-2 flex flex-wrap gap-2 text-xs"><span class="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-600">{{ selected_item.platform_scope }}</span><span class="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-600">{{ 'Selected comparison records' if selected_item.tracking_mode == 'selected_records' else 'Full search result' }}</span><span class="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-600">{{ selected_item.snapshot_count or 0 }} snapshots</span></div>
+    <div class="mt-4 grid items-start gap-4 lg:grid-cols-2" data-monitor-status-grid>
+    <section class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm" aria-label="Daily Refresh status" data-status-card="daily-refresh">
+      <div class="flex items-start justify-between gap-3"><div><p class="font-bold text-slate-900">Daily Refresh</p><p class="mt-1 text-xs text-slate-500">Automatic daily Snapshot collection.</p></div><span class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-700">{{ 'Active' if selected_item.auto_refresh_enabled else 'Paused' }}</span></div>
+      <div class="mt-3 grid grid-cols-2 gap-2 text-xs"><div><p class="text-slate-400">Last refreshed</p><p class="font-bold text-slate-800">{{ format_sgt_datetime(selected_item.last_refreshed_at) if selected_item.last_refreshed_at else 'Never' }}</p></div><div><p class="text-slate-400">Next refresh</p><p class="font-bold text-slate-800">{{ format_sgt_datetime(selected_item.next_refresh_at) if selected_item.next_refresh_at else 'Not scheduled' }}</p></div><div><p class="text-slate-400">Last result</p><p class="font-bold text-slate-800">{{ (selected_item.last_refresh_status or 'never')|title }}</p></div></div>
+      {% if selected_item.auto_refresh_enabled %}<form method="post" action="{{ url_for('pause_watchlist_auto_refresh', watchlist_id=selected_item._id) }}" class="mt-3" data-monitor-action><button class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-blue-700">Pause</button></form>{% else %}<form method="post" action="{{ url_for('enable_watchlist_auto_refresh', watchlist_id=selected_item._id) }}" class="mt-3" data-monitor-action><button class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-blue-700">{{ 'Resume' if selected_item.auto_refresh_ever_enabled else 'Enable' }}</button></form>{% endif %}
+    </section>
+    <section class="rounded-xl border border-slate-200 bg-slate-50/70 p-4" aria-labelledby="price-alert-heading" data-status-card="price-alert">
+      <div class="flex flex-wrap items-start justify-between gap-3"><div><p id="price-alert-heading" class="font-bold text-slate-900">Price Alert</p><p class="mt-1 text-xs text-slate-500">Uses the comparable average price shown in the trend chart.</p></div><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ 'bg-emerald-100 text-emerald-800' if selected_item.alert_enabled else 'bg-slate-200 text-slate-600' }}">Price alert: {{ 'On' if selected_item.alert_enabled else 'Paused' }}</span></div>
+      <div class="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
+        <div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Rule</p><p class="mt-1 font-bold text-slate-800">{{ '%.2g'|format(selected_item.alert_threshold_percent or 5) }}% price {{ selected_item.alert_direction or 'drop' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Email notification</p><p class="mt-1 font-bold text-slate-800">{{ 'On' if selected_item.alert_email_enabled else 'Off' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Last evaluated</p><p class="mt-1 font-bold text-slate-800">{{ format_sgt_datetime(selected_item.alert_last_evaluated_at) if selected_item.alert_last_evaluated_at else 'Never' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Latest change</p><p class="mt-1 font-bold text-slate-800">{{ '%+.2f%%'|format(selected_item.alert_last_change_percent) if selected_item.alert_last_change_percent is not none else 'Not available' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Last alert</p><p class="mt-1 font-bold text-slate-800">{{ format_sgt_datetime(selected_item.alert_last_triggered_at) if selected_item.alert_last_triggered_at else 'Never' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Email status</p><p class="mt-1 font-bold text-slate-800">{{ {'sent':'Sent','failed':'Failed','not_required':'Not triggered'}.get(selected_item.alert_last_email_status, 'Not triggered') }}</p></div>
+      </div>
+      {% if selected_item.alert_last_evaluated_at and selected_item.alert_last_change_percent is not none and selected_item.alert_last_email_status == 'not_required' %}<p class="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Evaluated: {{ '%+.2f%%'|format(selected_item.alert_last_change_percent) }}. Alert threshold not reached.</p>{% endif %}
+      <div class="mt-3 flex flex-wrap gap-2">
+        {% if selected_item.alert_enabled %}<form method="post" action="{{ url_for('pause_watchlist_price_alert', watchlist_id=selected_item._id) }}"><button class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Pause price alert</button></form>{% else %}<form method="post" action="{{ url_for('enable_watchlist_price_alert', watchlist_id=selected_item._id) }}"><button class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">Enable price alert</button></form>{% endif %}
+        <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700" data-alert-modal-open aria-haspopup="dialog" aria-controls="price-alert-modal">Edit alert</button>
+        <form method="post" action="{{ url_for('test_watchlist_price_alert_email', watchlist_id=selected_item._id) }}"><button class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Send test email</button></form>
+        <a href="#alert-history" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">View history</a>
+      </div>
+      <details id="alert-history" class="mt-4 border-t border-slate-200 pt-3"><summary class="cursor-pointer text-sm font-bold text-slate-800">Alert history</summary>
+        {% if alert_events %}<div class="mt-2 overflow-x-auto"><table class="min-w-full text-left text-xs"><thead class="text-slate-400"><tr><th class="py-2 pr-4">Trigger time</th><th class="py-2 pr-4">Previous</th><th class="py-2 pr-4">Current</th><th class="py-2 pr-4">Change</th><th class="py-2 pr-4">Threshold</th><th class="py-2">Email</th></tr></thead><tbody>{% for event in alert_events %}<tr class="border-t border-slate-200"><td class="py-2 pr-4">{{ format_sgt_datetime(event.triggered_at) }}</td><td class="py-2 pr-4">USD {{ '%.2f'|format(event.previous_price) }}</td><td class="py-2 pr-4">USD {{ '%.2f'|format(event.current_price) }}</td><td class="py-2 pr-4">{{ '%+.2f%%'|format(event.change_percent) }}</td><td class="py-2 pr-4">{{ '%.2f%%'|format(event.threshold_percent) }}</td><td class="py-2">{{ (event.email_status or 'not requested')|replace('_', ' ')|title }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="mt-2 text-xs text-slate-500">No threshold-triggered alerts yet.</p>{% endif %}
+      </details>
+      <dialog id="price-alert-modal" class="m-auto w-[calc(100%-2rem)] max-w-xl rounded-2xl border border-slate-200 bg-white p-0 shadow-2xl backdrop:bg-slate-950/40" aria-labelledby="price-alert-modal-title" data-alert-modal>
+        <form method="post" action="{{ url_for('configure_watchlist_price_alert', watchlist_id=selected_item._id) }}" class="p-5 sm:p-6">
+          <div class="flex items-start justify-between gap-3"><div><h3 id="price-alert-modal-title" class="font-display text-xl font-bold text-slate-950">Edit price alert</h3><p class="mt-1 text-sm text-slate-500">Configure the rule for future eligible Snapshots.</p></div><button type="button" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close Edit alert" data-alert-modal-close>×</button></div>
+          <div class="mt-5 grid gap-4 sm:grid-cols-2"><label class="text-sm font-semibold text-slate-700">Direction<select name="alert_direction" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"><option value="drop" {{ 'selected' if selected_item.alert_direction == 'drop' else '' }}>Drop</option><option value="increase" {{ 'selected' if selected_item.alert_direction == 'increase' else '' }}>Increase</option><option value="either" {{ 'selected' if selected_item.alert_direction == 'either' else '' }}>Either</option></select></label><label class="text-sm font-semibold text-slate-700">Threshold percentage<input name="alert_threshold_percent" type="number" min="1" max="50" step="0.01" required value="{{ selected_item.alert_threshold_percent or 5 }}" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"></label><label class="text-sm font-semibold text-slate-700 sm:col-span-2">Recipient account email<input type="email" value="{{ current_user.email }}" readonly aria-readonly="true" class="mt-1 w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-slate-600"></label><label class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 sm:col-span-2"><span>Email notification<span class="mt-0.5 block text-xs font-normal text-slate-500">Send an email when the selected rule crosses its threshold.</span></span><input type="checkbox" name="alert_email_enabled" role="switch" {{ 'checked' if selected_item.alert_email_enabled else '' }} aria-label="Email notification"></label></div>
+          <p class="mt-3 text-xs text-slate-500">Cooldown: {{ selected_item.alert_cooldown_hours or 24 }} hours. The recipient always comes from your persisted account.</p>
+          <div class="mt-5 flex justify-end gap-2"><button type="button" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700" data-alert-modal-close>Cancel</button><button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white">Save alert</button></div>
+        </form>
+      </dialog>
+    </section>
+    </div>
+    {% if selected_item.last_refresh_status == 'failed' %}<div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">The last refresh could not collect sufficient comparable marketplace data. Existing snapshots remain available.</div>{% endif %}
+    <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-sm text-slate-700"><div class="flex flex-wrap items-start justify-between gap-2"><div><p class="font-bold text-slate-900">{% if forecast_workflow_status == 'Forecast validated' %}Forecast validation complete{% elif forecast_workflow_status == 'Waiting for validation snapshot' %}Step 3 of 3{% elif snapshots|length >= 2 %}Step 2 of 3{% else %}Step 1 of 3{% endif %}</p><p class="mt-1">{% if forecast_workflow_status == 'Forecast validated' %}Your forecast has been checked against a later market snapshot.{% elif forecast_workflow_status == 'Waiting for validation snapshot' %}Collect a later snapshot to validate the forecast.{% elif snapshots|length >= 2 %}Enough observations are available to generate a forecast.{% else %}Collect another snapshot to establish a price trend.{% endif %}</p></div><span class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-100">{{ forecast_workflow_status }}</span></div><p class="mt-2 text-xs font-semibold text-slate-500">Track → Refresh → Review</p></div>
+    {% if snapshots and snapshots|selectattr('source_label', 'equalto', 'demo')|list %}
+    <div class="mt-4 rounded-2xl border border-dashed border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      Demo snapshot history for presentation.
+    </div>
+    {% endif %}
+    <div class="watchlist-action-row app-action-row mt-4 max-sm:flex-col lg:flex-nowrap" aria-label="Monitor actions">
+      <form method="post" action="{{ url_for('refresh_watchlist_snapshot', watchlist_id=selected_item._id) }}" class="max-sm:w-full" data-monitor-action><button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70 max-sm:w-full" data-action-button data-loading-label="Collecting…">Collect latest snapshot</button></form>
+      {% if can_access(current_user, 'prediction') %}
+      {% if forecast_workflow_status == 'Forecast validated' %}<form method="post" action="{{ url_for('generate_watchlist_prediction', watchlist_id=selected_item._id) }}" class="max-sm:w-full"><button class="app-button-primary bg-indigo-600 py-2 text-sm max-sm:w-full">Generate next forecast</button></form>{% elif forecast_workflow_status == 'Waiting for validation snapshot' %}<button type="button" disabled class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800 max-sm:w-full">Forecast pending</button>{% else %}<form method="post" action="{{ url_for('generate_watchlist_prediction', watchlist_id=selected_item._id) }}" class="max-sm:w-full"><button class="app-button-primary bg-indigo-600 py-2 text-sm max-sm:w-full" {% if not snapshots %}disabled title="Collect a snapshot before generating a forecast."{% endif %}>Generate forecast</button></form>{% endif %}
+      <a href="#snapshot-history" class="app-button-secondary py-2 text-center text-sm max-sm:w-full">View snapshots</a>
+      <div class="relative max-sm:w-full lg:ml-auto" data-export-dropdown>
+        <button type="button" class="app-export-button max-sm:w-full" aria-haspopup="menu" aria-expanded="false" data-export-trigger>Export <svg aria-hidden="true" viewBox="0 0 12 8" class="ml-1 inline h-3 w-3 fill-current"><path d="M1 1l5 5 5-5z"/></svg></button>
+        <div class="absolute right-0 z-20 mt-2 hidden min-w-64 rounded-xl border border-slate-200 bg-white p-2 text-sm shadow-lg max-sm:left-0 max-sm:right-auto" role="menu" data-export-menu>
+          <a href="{{ url_for('watchlist_report', monitor_id=selected_item._id, forecast_id=selected_forecast_id) if selected_forecast_cycle else url_for('watchlist_report', monitor_id=selected_item._id) }}" class="block rounded-lg px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50" role="menuitem">Export Monitor report</a>
+          {% if snapshots %}<a href="{{ url_for('export_watchlist_snapshots_csv', monitor_id=selected_item._id) }}" class="block rounded-lg px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50" role="menuitem">Export Snapshot history CSV</a>{% else %}<span class="block rounded-lg px-3 py-2 text-slate-400" aria-disabled="true">Export Snapshot history CSV - no snapshots</span>{% endif %}
+          {% if can_access(current_user, 'prediction_validation') and predictions and predictions|selectattr('actual_average_price')|list %}<a href="{{ url_for('export_watchlist_validation_csv', monitor_id=selected_item._id, forecast_id=selected_forecast_id) if selected_forecast_cycle else url_for('export_watchlist_validation_csv', monitor_id=selected_item._id) }}" class="block rounded-lg px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50" role="menuitem">Export Forecast validation CSV</a>{% elif not can_access(current_user, 'prediction_validation') %}<span class="block rounded-lg px-3 py-2 text-slate-400" aria-disabled="true">Export Forecast validation CSV <span class="app-dropdown-badge app-dropdown-badge-pro">Professional</span></span>{% else %}<span class="block rounded-lg px-3 py-2 text-slate-400" aria-disabled="true">Export Forecast validation CSV - no validation</span>{% endif %}
+          {% if trend_chart and trend_chart.labels %}<button type="button" id="watchlist-export-chart-png" class="block w-full rounded-lg px-3 py-2 text-left font-semibold text-slate-700 hover:bg-slate-50" role="menuitem">Export Trend chart PNG</button>{% else %}<span class="block rounded-lg px-3 py-2 text-slate-400" aria-disabled="true">Export Trend chart PNG - no chart</span>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+      <details class="app-dropdown max-sm:w-full">
+        <summary class="app-overflow-summary max-sm:w-full" aria-label="Monitor lifecycle actions" title="Monitor lifecycle actions"><span class="material-symbols-outlined" aria-hidden="true">more_horiz</span></summary>
+        <div class="app-dropdown-panel min-w-48" role="menu">
+          <form method="post" action="{{ url_for('archive_watchlist_item', watchlist_id=selected_item._id) }}" data-confirm-form data-confirm-message="Archive this monitor?"><button type="submit" class="app-dropdown-item w-full text-left" role="menuitem">Archive</button></form>
+          <form method="post" action="{{ url_for('delete_watchlist_item', watchlist_id=selected_item._id) }}" data-confirm-form data-confirm-message="Delete this monitor and its saved workflow?"><button type="submit" class="app-dropdown-item w-full text-left text-red-700" role="menuitem">Delete</button></form>
+        </div>
+      </details>
+    </div>
+    {% if current_user.role == 'researcher' %}<p class="mt-2 text-xs text-slate-500">A pending forecast will be validated automatically after the next snapshot.</p>{% endif %}
+    <p class="mt-3 text-xs text-slate-500">Collect a snapshot first, then generate a forecast. Validation appears automatically after a later snapshot is available.</p>
+    <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
+        <style>
+          .chart-card canvas {
+            width: 100%;
+            min-height: 260px;
+          }
+          .chart-card {
+            position: relative;
+          }
+          .debug-chart-box {
+            min-height: 280px;
+            height: 280px;
+            width: 100%;
+            position: relative;
+          }
+        </style>
+        {% if debug_charts %}
+        <div class="mb-5 rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/70 p-4">
+          <div class="mb-2">
+            <p class="text-xs font-bold uppercase tracking-wider text-indigo-700">Chart diagnostics</p>
+            <p class="text-sm text-indigo-900">Temporary chart diagnostics</p>
+          </div>
+          <div id="chart-debug-status" class="space-y-1 rounded-xl border border-indigo-200 bg-white/80 p-3 text-xs font-mono text-indigo-950"></div>
+          <div class="mt-4 debug-chart-box">
+            <canvas id="debugLineChart" style="width:100%; height:240px;"></canvas>
+          </div>
+          <div class="mt-4 debug-chart-box">
+            <canvas id="debugBarChart" style="width:100%; height:240px;"></canvas>
+          </div>
+        </div>
+        {% endif %}
+        <div class="mb-3">
+          <p class="font-bold">Average Price Trend</p>
+          <p class="text-xs text-slate-500">Snapshot history over time.</p>
+          {% if selected_item.source_label %}
+          <span class="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-600">{{ selected_item.source_label }}</span>
+          {% endif %}
+        {% if trend_chart.stable %}
+        <p class="mt-2 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Stable price</p>
+        {% endif %}
+        {% if trend_summary %}
+          <p class="mt-3 text-sm font-semibold text-slate-700">{{ trend_summary.summary_text }}</p>
+          <div class="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            <div class="rounded-xl bg-slate-50 p-3"><p class="text-slate-400">Snapshots</p><p class="font-bold text-slate-800">{{ trend_summary.snapshot_count }}</p></div>
+            <div class="rounded-xl bg-slate-50 p-3"><p class="text-slate-400">First avg</p><p class="font-bold text-slate-800">USD {{ '%.2f'|format(trend_summary.first_average) }}</p></div>
+            <div class="rounded-xl bg-slate-50 p-3"><p class="text-slate-400">Latest avg</p><p class="font-bold text-slate-800">USD {{ '%.2f'|format(trend_summary.latest_average) }}</p></div>
+            <div class="rounded-xl bg-slate-50 p-3"><p class="text-slate-400">Change</p><p class="font-bold text-slate-800">USD {{ '%.2f'|format(trend_summary.change_amount) }}{% if trend_summary.change_percentage is not none %} ({{ '%.2f%%'|format(trend_summary.change_percentage) }}){% endif %}</p></div>
+          </div>
+          {% endif %}
+      </div>
+        {% if snapshots|length < 2 %}
+        <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
+          {% if snapshots|length == 0 %}
+          <p class="font-semibold text-slate-700">No snapshot history yet.</p>
+          <p class="mt-1 text-xs text-slate-500">Collect a snapshot to start the trend line and enable forecast comparison.</p>
+          {% else %}
+          <p class="font-semibold text-slate-700">More history is needed for a trend.</p>
+          <p class="mt-1 text-xs text-slate-500">Collect another snapshot later to see movement and automatic validation.</p>
+          {% endif %}
+        </div>
+        {% else %}
+        {% if trend_chart.available %}
+        <div class="chart-card mb-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p class="font-bold">Price history chart</p>
+              <p class="text-xs text-slate-500">Observed snapshot averages with the recorded low and high range.</p>
+            </div>
+            <span class="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-500">Marketplace snapshots</span>
+          </div>
+          <div id="watchlist-trend-echart" class="h-[300px] w-full"></div>
+        </div>
+        {% endif %}
+        {% endif %}
+      </div>
+      <section class="mt-5" id="forecast-cycles" aria-labelledby="forecast-cycles-heading">
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <div><p id="forecast-cycles-heading" class="font-bold text-slate-900">Forecast Cycles</p><p class="text-xs text-slate-500">Review the lineage and validation for each saved forecast.</p></div>
+        {% if forecast_cycles %}<form method="get" action="{{ url_for('watchlist') }}" class="w-full sm:w-auto"><input type="hidden" name="item_id" value="{{ selected_item._id }}"><label class="text-xs font-semibold text-slate-600">Selected Forecast Cycle<select name="forecast_id" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm sm:min-w-72" onchange="this.form.submit()">{% for cycle in forecast_cycles %}<option value="{{ cycle.forecast_id }}" {{ 'selected' if cycle.forecast_id|string == selected_forecast_id|string else '' }}>{{ format_sgt_datetime(cycle.forecast_created_at) }} — {{ cycle.visible_status|title }}{% if cycle.predicted_average_price is not none %} — USD {{ '%.2f'|format(cycle.predicted_average_price) }}{% endif %}</option>{% endfor %}</select></label></form>{% endif %}
+      </div>
+      {% if not predictions %}
+    <div class="mt-5 rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-sm text-slate-600">
+      No forecast has been generated for the latest snapshot.
+    </div>
+    {% else %}
+    {% set validation_observed_price = selected_forecast_cycle.get('validation_observed_price') %}
+    {% set benchmark_absolute_error = selected_forecast_cycle.get('benchmark_absolute_error') %}
+    {% set ai_absolute_error = selected_forecast_cycle.get('ai_absolute_error') %}
+    {% set benchmark_error_percent = selected_forecast_cycle.get('benchmark_error_percent') %}
+    {% set ai_error_percent = selected_forecast_cycle.get('ai_error_percent') %}
+    <div class="mt-5 grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm" data-forecast-summary>
+        <div class="flex flex-wrap items-start justify-between gap-2"><div><p class="font-bold">Forecast summary</p><p class="mt-0.5 text-xs text-slate-500">{{ format_sgt_datetime(selected_forecast_cycle.forecast_created_at) if selected_forecast_cycle.forecast_created_at else 'Legacy forecast' }} — {{ selected_forecast_cycle.visible_status|title }}</p></div><span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700">{{ selected_forecast_cycle.visible_status|title }}</span></div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-3">
+          <section class="rounded-xl border border-slate-200 bg-white p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Source Snapshot</p><dl class="mt-2 space-y-2 text-xs"><div><dt class="text-slate-400">Snapshot time</dt><dd class="font-semibold text-slate-700">{{ format_sgt_datetime(selected_forecast_cycle.baseline_snapshot_at) if selected_forecast_cycle.baseline_snapshot_at else 'Not available in this legacy Forecast Cycle' }}</dd></div><div><dt class="text-slate-400">Observed average</dt><dd class="font-semibold text-slate-700">{{ 'USD %.2f'|format(selected_forecast_cycle.baseline_snapshot_observed_price) if selected_forecast_cycle.baseline_snapshot_observed_price is not none else 'Not available' }}</dd></div></dl></section>
+          <section class="rounded-xl border border-violet-100 bg-violet-50/50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-violet-500">Predictions</p><dl class="mt-2 space-y-2 text-xs"><div><dt class="text-slate-400">Benchmark prediction</dt><dd class="font-semibold text-slate-700">{{ 'USD %.2f'|format(selected_forecast_cycle.benchmark_predicted_price) if selected_forecast_cycle.benchmark_predicted_price is not none else 'Not available' }}</dd></div><div><dt class="text-slate-400">Benchmark method</dt><dd class="font-semibold text-slate-700">{{ selected_forecast_cycle.benchmark_method_label }}</dd></div><div><dt class="text-slate-400">AI-assisted prediction</dt><dd class="font-semibold text-slate-700">{{ 'USD %.2f'|format(selected_forecast_cycle.ai_predicted_price) if selected_forecast_cycle.ai_predicted_price is not none else 'Not available' }}</dd></div><div><dt class="text-slate-400">AI method</dt><dd class="font-semibold text-slate-700">{{ selected_forecast_cycle.ai_method|replace('_', ' ')|title if selected_forecast_cycle.ai_method else 'Not available' }}</dd></div><div><dt class="text-slate-400">Generated time</dt><dd class="font-semibold text-slate-700">{{ format_sgt_datetime(selected_forecast_cycle.generated_at) if selected_forecast_cycle.generated_at else 'Not available' }}</dd></div></dl></section>
+          <section class="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Validation</p><dl class="mt-2 space-y-2 text-xs"><div><dt class="text-slate-400">Validation Snapshot time</dt><dd class="font-semibold text-slate-700">{{ format_sgt_datetime(selected_forecast_cycle.validation_snapshot_at) if selected_forecast_cycle.validation_snapshot_at else 'Pending' }}</dd></div><div><dt class="text-slate-400">Observed market average</dt><dd class="font-semibold text-slate-700">{{ 'USD %.2f'|format(validation_observed_price) if validation_observed_price is not none else 'Pending' }}</dd></div><div><dt class="text-slate-400">Benchmark error</dt><dd class="font-semibold text-slate-700">{{ '%.2f%%'|format(benchmark_error_percent) if benchmark_error_percent is not none else 'Pending' }}</dd></div><div><dt class="text-slate-400">AI forecast error</dt><dd class="font-semibold text-slate-700">{{ '%.2f%%'|format(ai_error_percent) if ai_error_percent is not none else 'Pending' }}</dd></div></dl></section>
+        </div>
+        {% if not prediction_has_actual %}<p class="mt-3 inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">Waiting for a later eligible snapshot</p>{% else %}<p class="mt-3 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">Validated with later snapshot</p>{% endif %}
+        {% if prediction_has_actual and selected_forecast_cycle.source_label == 'demo' %}
+        <p class="mt-2 text-xs font-semibold text-amber-700">A demo validation snapshot has already been attached for review.</p>
+        {% endif %}
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 text-sm" data-forecast-evaluation>
+        <p class="font-bold">Forecast evaluation</p>
+        <p class="mt-1 text-xs leading-5 text-slate-500">Benchmark and AI forecast errors compare this selected Forecast Cycle's predictions with its later validation Snapshot.</p>
+        <p class="mt-1 text-xs leading-5 text-slate-500">{{ selected_forecast_cycle.benchmark_explanation }}</p>
+        {% if prediction_has_actual %}
+        <div class="mt-3 grid gap-2 sm:grid-cols-2">
+          <div class="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <p class="text-[11px] uppercase tracking-wider text-slate-400">Benchmark error</p>
+            <p class="mt-1 text-lg font-bold text-slate-900">{{ '%.2f%%'|format(benchmark_error_percent) if benchmark_error_percent is not none else 'Unavailable' }}</p>
+          </div>
+          <div class="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <p class="text-[11px] uppercase tracking-wider text-slate-400">AI forecast error</p>
+            <p class="mt-1 text-lg font-bold text-slate-900">{{ '%.2f%%'|format(ai_error_percent) if ai_error_percent is not none else 'Unavailable' }}</p>
+          </div>
+        </div>
+        <div class="mt-3 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="text-slate-400"><tr><th class="py-2">Method</th><th>Predicted average</th><th>Observed market average</th><th>Absolute error</th><th>Error percent</th></tr></thead>
+            <tbody>
+              <tr class="border-t border-slate-100"><td class="py-2 font-semibold">{{ selected_forecast_cycle.benchmark_method_label }}</td><td>{{ 'USD %.2f'|format(selected_forecast_cycle.benchmark_predicted_price) if selected_forecast_cycle.benchmark_predicted_price is not none else 'Unavailable' }}</td><td>{{ 'USD %.2f'|format(validation_observed_price) if validation_observed_price is not none else 'Unavailable' }}</td><td>{{ 'USD %.2f'|format(benchmark_absolute_error) if benchmark_absolute_error is not none else 'Unavailable' }}</td><td>{{ '%.2f%%'|format(benchmark_error_percent) if benchmark_error_percent is not none else 'Unavailable' }}</td></tr>
+              {% if selected_forecast_cycle.ai_predicted_price is not none %}
+              <tr class="border-t border-slate-100"><td class="py-2 font-semibold">AI-assisted forecast</td><td>{{ 'USD %.2f'|format(selected_forecast_cycle.ai_predicted_price) }}</td><td>{{ 'USD %.2f'|format(validation_observed_price) if validation_observed_price is not none else 'Unavailable' }}</td><td>{{ 'USD %.2f'|format(ai_absolute_error) if ai_absolute_error is not none else 'Unavailable' }}</td><td>{{ '%.2f%%'|format(ai_error_percent) if ai_error_percent is not none else 'Unavailable' }}</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="mt-3 font-bold">Evaluation metrics will appear after a later actual snapshot is collected.</p>
+        <p class="mt-2 text-sm text-slate-600">Forecast generated. Actual validation is pending.</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="mt-5">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        {% if debug_validation %}
+        <div class="mb-4 rounded-2xl border border-dashed border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-950">
+          <p class="mb-2 font-bold uppercase tracking-wider text-amber-700">Validation diagnostics</p>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <p>selected_watchlist_id: {{ selected_item._id if selected_item else 'none' }}</p>
+            <p>pending_prediction_id: {{ pending_prediction._id if pending_prediction else 'none' }}</p>
+            <p>pending_prediction_status: {{ pending_prediction.status if pending_prediction else 'none' }}</p>
+            <p>prediction_created_at: {{ format_sgt_datetime(pending_prediction.created_at) if pending_prediction else 'none' }}</p>
+            <p>latest_snapshot_id: {{ snapshots[0]._id if snapshots else 'none' }}</p>
+            <p>latest_snapshot_at: {{ format_sgt_datetime(snapshots[0].collected_at) if snapshots else 'none' }}</p>
+            <p>snapshots_total: {{ snapshots_total }}</p>
+            <p>snapshots_after_prediction_count: {{ snapshots_after_prediction_count }}</p>
+            <p>actual_snapshot_selected: {{ 'true' if actual_snapshot_used else 'false' }}</p>
+            <p>actual_snapshot_id: {{ actual_snapshot_used._id if actual_snapshot_used else 'none' }}</p>
+            <p>actual_snapshot_at: {{ format_sgt_datetime(actual_snapshot_used.collected_at) if actual_snapshot_used else 'none' }}</p>
+            <p>baseline_forecast_value: {{ selected_forecast_cycle.baseline_forecast_value if selected_forecast_cycle else 'none' }}</p>
+            <p>gemini_forecast_available: {{ 'true' if selected_forecast_cycle and selected_forecast_cycle.gemini_forecast_value is not none else 'false' }}</p>
+            <p>validation_status: {{ validation_status or 'none' }}</p>
+            <p>validation_chart.available: {{ 'true' if prediction_chart.available else 'false' }}</p>
+            <p>validation_chart.pending: {{ 'true' if prediction_chart.pending else 'false' }}</p>
+            <p>validation_chart.labels: {{ prediction_chart['labels']|length if prediction_chart and prediction_chart['labels'] is not none else 0 }}</p>
+            <p>validation_chart.values: {{ prediction_chart['values']|length if prediction_chart and prediction_chart['values'] is not none else 0 }}</p>
+            <p>reason_validation_not_available: {{ reason_validation_not_available or 'none' }}</p>
+            <p>last_evaluation_error: {{ last_evaluation_error or 'none' }}</p>
+          </div>
+        </div>
+        {% endif %}
+        {% if prediction_chart.available %}
+          <div class="mb-4 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-sm text-slate-700">
+            <p class="font-semibold text-slate-900">
+              {% if ai_error_percent is not none and ai_error_percent == 0 %}
+              The AI-assisted forecast matched the observed market average in this validation run.
+              {% elif benchmark_error_percent is not none and benchmark_error_percent == 0 %}
+              The benchmark prediction matched the observed market average in this validation run.
+              {% elif ai_error_percent is not none and benchmark_error_percent is not none and ai_error_percent < benchmark_error_percent %}
+              The AI-assisted forecast was closer to the observed market average than the benchmark prediction.
+              {% elif ai_error_percent is not none and benchmark_error_percent is not none and ai_error_percent > benchmark_error_percent %}
+              The benchmark prediction was closer to the observed market average than the AI-assisted forecast in this run.
+              {% else %}
+              Forecast values are compared against the observed snapshot below.
+              {% endif %}
+            </p>
+            <p class="mt-1 text-xs text-slate-500">The chart compares predicted average prices with the later observed average.</p>
+            {% if selected_forecast_cycle.ai_predicted_price is not none and benchmark_error_percent is not none and ai_error_percent is not none and selected_forecast_cycle.ai_predicted_price == selected_forecast_cycle.benchmark_predicted_price %}
+            <p class="mt-1 text-xs text-slate-500">Limited snapshot history may produce the same value.</p>
+            {% endif %}
+          </div>
+          <div class="chart-card rounded-2xl border border-slate-200 bg-slate-50 p-4" data-forecast-validation-chart>
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p class="font-bold">Forecast vs observed</p>
+                <p class="text-xs text-slate-500">{{ prediction_chart.status_text }}</p>
+                <p class="mt-1 text-[11px] text-slate-500">Forecast generated {{ format_sgt_datetime(selected_forecast_cycle.generated_at) }} · Source Snapshot {{ format_sgt_datetime(selected_forecast_cycle.baseline_snapshot_at) }} · Validation Snapshot {{ format_sgt_datetime(selected_forecast_cycle.validation_snapshot_at) }} · {{ selected_forecast_cycle.visible_status|title }}</p>
+              </div>
+              <span class="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-500">Prediction validation</span>
+            </div>
+            <div id="watchlist-validation-echart" class="h-[300px] w-full"></div>
+          </div>
+          {% elif prediction_chart.pending %}
+            <div class="rounded-2xl border border-amber-200/70 border-l-4 border-l-amber-400 bg-gradient-to-br from-amber-50 to-white p-5 text-sm text-slate-600 shadow-sm">
+              <div class="flex items-start gap-3">
+                <div class="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">!</div>
+                <div class="min-w-0">
+                  <p class="font-semibold text-slate-800">Validation is pending</p>
+                  <p class="mt-1 text-xs text-slate-500">Observation pending until a later eligible snapshot is collected.</p>
+                </div>
+              </div>
+              {% if debug_validation and reason_validation_not_available %}
+              <p class="mt-2 text-[11px] uppercase tracking-wider text-slate-400">Reason: {{ reason_validation_not_available }}</p>
+              {% endif %}
+              <div class="chart-card mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p class="font-bold">Forecast vs observed</p>
+                    <p class="text-xs text-slate-500">{{ prediction_chart.status_text }}</p>
+                    <p class="mt-1 text-[11px] text-slate-500">Forecast generated {{ format_sgt_datetime(selected_forecast_cycle.generated_at) }} · Source Snapshot {{ format_sgt_datetime(selected_forecast_cycle.baseline_snapshot_at) }} · Pending</p>
+                  </div>
+                  <span class="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-500">Prediction validation</span>
+                </div>
+                <div id="watchlist-validation-echart" class="h-[300px] w-full"></div>
+              </div>
+            </div>
+          {% elif selected_forecast_cycle %}
+          <div class="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 text-sm text-slate-600 shadow-sm">
+            <p class="font-semibold text-slate-700">No forecast is available yet</p>
+            {% if debug_validation and reason_validation_not_available %}
+            <p class="mt-2 text-[11px] uppercase tracking-wider text-slate-400">Reason: {{ reason_validation_not_available }}</p>
+            {% endif %}
+          </div>
+          {% else %}
+          <div class="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 text-sm text-slate-600 shadow-sm">
+            <p class="font-semibold text-slate-700">No forecast is available yet</p>
+            {% if debug_validation and reason_validation_not_available %}
+            <p class="mt-2 text-[11px] uppercase tracking-wider text-slate-400">Reason: {{ reason_validation_not_available }}</p>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <details class="mt-5 rounded-xl border border-slate-200 bg-white p-4" data-forecast-history>
+      <summary class="cursor-pointer font-bold text-slate-900">Forecast History <span class="ml-1 text-xs font-normal text-slate-500">{{ forecast_cycles|length }} cycle(s)</span></summary><p class="mt-1 text-xs text-slate-500">Every generated cycle remains available for this Monitor.</p>
+      <div class="mt-3 overflow-x-auto"><table class="min-w-[900px] w-full text-left text-xs"><thead class="text-slate-400"><tr><th class="py-2 pr-3">Generated</th><th class="py-2 pr-3">Source observed</th><th class="py-2 pr-3">Benchmark prediction</th><th class="py-2 pr-3">Benchmark method</th><th class="py-2 pr-3">AI-assisted forecast</th><th class="py-2 pr-3">Observed market average</th><th class="py-2 pr-3">Status</th><th class="py-2 pr-3">AI forecast error</th><th class="py-2">View</th></tr></thead><tbody>{% for cycle in forecast_cycles %}<tr class="border-t border-slate-100"><td class="py-2 pr-3">{{ format_sgt_datetime(cycle.generated_at) if cycle.generated_at else 'Legacy record' }}</td><td class="py-2 pr-3">{{ 'USD %.2f'|format(cycle.baseline_snapshot_observed_price) if cycle.baseline_snapshot_observed_price is not none else 'Not available' }}</td><td class="py-2 pr-3">{{ 'USD %.2f'|format(cycle.benchmark_predicted_price) if cycle.benchmark_predicted_price is not none else 'Not available' }}</td><td class="py-2 pr-3">{{ cycle.benchmark_method_label }}</td><td class="py-2 pr-3">{{ 'USD %.2f'|format(cycle.ai_predicted_price) if cycle.ai_predicted_price is not none else 'Not available' }}</td><td class="py-2 pr-3">{{ 'USD %.2f'|format(cycle.validation_observed_price) if cycle.validation_observed_price is not none else 'Pending' }}</td><td class="py-2 pr-3">{{ cycle.visible_status|title }}</td><td class="py-2 pr-3">{{ '%.2f%%'|format(cycle.ai_error_percent) if cycle.ai_error_percent is not none else 'Pending' }}</td><td class="py-2"><a class="font-bold text-blue-700" href="{{ url_for('watchlist', item_id=selected_item._id, forecast_id=cycle.forecast_id) }}">{{ 'Open' if cycle.forecast_id|string != selected_forecast_id|string else 'Viewing' }}</a></td></tr>{% endfor %}</tbody></table></div>
+    </details>
+    {% endif %}
+    </section>
+    <div id="snapshot-history" class="mt-5 max-h-[360px] overflow-auto rounded-xl border border-slate-200">
+      <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+        <span class="font-semibold text-slate-700">Forecast context</span> reflects eligible price history available at each snapshot: 1 uses a persistence baseline, 2 use a moving average, and 3 or more support a linear trend. The same snapshot history is supplied to the AI-assisted forecast.
+      </div>
+      <table class="app-table w-full min-w-[720px] text-left text-sm">
+        <thead class="sticky top-0 z-10 bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500"><tr><th class="p-3">Date</th><th class="p-3">Avg</th><th class="p-3">Low</th><th class="p-3">High</th><th class="p-3">Count</th><th class="p-3">Source</th><th class="p-3">Forecast context</th></tr></thead>
+        <tbody>
+        {% for snap in snapshots %}
+          <tr class="border-t border-slate-100"><td class="p-3 whitespace-nowrap text-xs text-slate-500">{{ format_sgt_datetime(snap.collected_at) }}</td><td class="p-3 whitespace-nowrap font-bold text-slate-900">{% if snap.average_price is not none %}USD {{ '%.2f'|format(snap.average_price) }}{% else %}—{% endif %}</td><td class="p-3 whitespace-nowrap">{% if snap.lowest_price is not none %}USD {{ '%.2f'|format(snap.lowest_price) }}{% else %}—{% endif %}</td><td class="p-3 whitespace-nowrap">{% if snap.highest_price is not none %}USD {{ '%.2f'|format(snap.highest_price) }}{% else %}—{% endif %}</td><td class="p-3">{{ snap.record_count }}</td><td class="p-3"><span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{{ snap.source_label }}</span></td><td class="p-3"><span title="{{ snap.forecast_context.basis }}" class="whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold {{ 'bg-emerald-50 text-emerald-700' if snap.forecast_context.key == 'trend' else 'bg-blue-50 text-blue-700' if snap.forecast_context.key == 'moving_average' else 'bg-amber-50 text-amber-800' if snap.forecast_context.key == 'persistence' else 'bg-slate-100 text-slate-600' }}">{{ snap.forecast_context.label }}</span></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="mt-4 text-sm text-slate-500">Collect more snapshots to show movement and automatic validation.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% else %}
+<div class="mt-8 rounded-xl border border-dashed {{ 'border-slate-300 bg-slate-50' if include_archived else 'border-blue-200 bg-blue-50/60' }} p-10 text-center shadow-sm">
+  <span class="material-symbols-outlined text-4xl {{ 'text-slate-400' if include_archived else 'text-blue-400' }}">{{ 'archive' if include_archived else 'visibility' }}</span>
+  <p class="mt-3 font-bold text-slate-950">{{ 'No archived monitors' if include_archived else 'Start tracking products from search results.' }}</p>
+  <p class="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate-600">{{ 'Archived monitors will appear here and can be restored at any time.' if include_archived else 'Search for a product, then track the full result set or selected listings to build snapshot history and forecast comparisons.' }}</p>
+  <a href="{{ url_for('watchlist') if include_archived else url_for('search') }}" class="app-button-primary mt-5">{{ 'Back to Active monitors' if include_archived else 'Go to Product Search' }}</a>
+</div>
+{% endif %}
+<script>
+  document.querySelectorAll('[data-monitor-action]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      if (form.dataset.submitting === 'true') {
+        event.preventDefault();
+        return;
+      }
+      form.dataset.submitting = 'true';
+      form.setAttribute('aria-busy', 'true');
+      const button = form.querySelector('[data-action-button]');
+      if (button) {
+        button.dataset.normalLabel = button.textContent.trim();
+        button.disabled = true;
+        button.textContent = button.dataset.loadingLabel || 'Working…';
+      }
+    });
+  });
+  window.addEventListener('pageshow', () => document.querySelectorAll('[data-monitor-action]').forEach((form) => {
+    form.dataset.submitting = 'false';
+    form.setAttribute('aria-busy', 'false');
+    const button = form.querySelector('[data-action-button]');
+    if (button) {
+      button.disabled = false;
+      if (button.dataset.normalLabel) button.textContent = button.dataset.normalLabel;
+    }
+  }));
+</script>
+  {% if debug_charts %}
+  <div class="mt-4 rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/70 p-4 text-xs text-indigo-950">
+    <p class="font-bold uppercase tracking-wider text-indigo-700">WATCHLIST SVG CHART MODE ACTIVE</p>
+    <p class="mt-1">trend_points_count: {{ trend_svg.points|length if trend_svg and trend_svg.points is not none else 0 }}</p>
+    <p>validation_chart_available: {{ 'true' if prediction_chart.available else 'false' }}</p>
+    <p>validation_labels: {{ prediction_chart.labels|join(', ') if prediction_chart and prediction_chart.labels is not none else '' }}</p>
+    <p>validation_values: {{ prediction_chart['values']|join(', ') if prediction_chart and prediction_chart['values'] is not none else '' }}</p>
+  </div>
+  {% endif %}
+  <script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+  <script>
+    (function () {
+      const trendData = {{ trend_chart | default({}, true) | tojson }};
+      const predictionData = {{ prediction_chart | default({}, true) | tojson }};
+      const charts = [];
+      const chartRegistry = {};
+      const attachResize = (chart, name) => {
+        charts.push(chart);
+        if (name) {
+          chartRegistry[name] = chart;
+        }
+        window.addEventListener('resize', () => chart.resize(), { passive: true });
+      };
+      const fmt = (value) => (value == null ? 'N/A' : `USD ${Number(value).toFixed(2)}`);
+      const downloadDataUrl = (filename, dataUrl) => {
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      };
+      const exportWatchlistCharts = () => {
+        const exports = [
+          ['average-price-trend.png', chartRegistry.trend],
+          ['forecast-comparison.png', chartRegistry.validation],
+        ].filter((entry) => entry[1]);
+        if (!exports.length) {
+          window.alert('No chart is available to export for the selected watchlist item.');
+          return;
+        }
+        exports.forEach(([filename, chart]) => {
+          downloadDataUrl(filename, chart.getDataURL({
+            type: 'png',
+            pixelRatio: 3,
+            backgroundColor: '#ffffff',
+            excludeComponents: ['tooltip', 'dataZoom'],
+          }));
+        });
+      };
+
+      const init = () => {
+        if (!window.echarts) {
+          return;
+        }
+
+        const trendEl = document.getElementById('watchlist-trend-echart');
+        if (trendEl && trendData && trendData.available && Array.isArray(trendData.labels) && trendData.labels.length) {
+          const chart = echarts.init(trendEl, null, { renderer: 'canvas' });
+          chart.setOption({
+            animation: true,
+            color: ['#2563eb', '#0ea5e9', '#10b981'],
+            grid: { left: 48, right: 24, top: 40, bottom: 42, containLabel: true },
+            tooltip: {
+              trigger: 'axis',
+              axisPointer: { type: 'line' },
+              backgroundColor: 'rgba(15,23,42,0.95)',
+              borderWidth: 0,
+              textStyle: { color: '#fff' },
+              formatter: function (params) {
+                const row = params && params.length ? params[0].dataIndex : 0;
+                return [
+                  `<div style="font-weight:700;margin-bottom:6px">${trendData.labels[row] || ''}</div>`,
+                  `<div>Average: ${fmt(trendData.average?.[row])}</div>`,
+                  `<div>Low: ${fmt(trendData.low?.[row])}</div>`,
+                  `<div>High: ${fmt(trendData.high?.[row])}</div>`,
+                  `<div>Count: ${trendData.counts?.[row] ?? 0}</div>`,
+                  `<div>Source: ${trendData.source_labels?.[row] || 'live'}</div>`,
+                  `<div>Forecast context: ${trendData.forecast_context_labels?.[row] || 'Not forecast eligible'}</div>`,
+                ].join('');
+              },
+            },
+            legend: { top: 0, right: 0, textStyle: { color: '#64748b' } },
+            xAxis: {
+              type: 'category',
+              data: trendData.labels,
+              axisLabel: { color: '#64748b', rotate: 18, margin: 16 },
+              axisLine: { lineStyle: { color: '#cbd5e1' } },
+              axisTick: { show: false },
+            },
+            yAxis: {
+              type: 'value',
+              axisLabel: { color: '#64748b', formatter: (value) => `USD ${value}` },
+              splitLine: { lineStyle: { color: '#e2e8f0' } },
+            },
+            dataZoom: trendData.labels.length > 8 ? [{ type: 'inside', start: 0, end: 100 }, { type: 'slider', height: 18, bottom: 6 }] : [],
+            series: [
+              { name: 'Average', type: 'line', smooth: true, symbol: 'circle', symbolSize: 9, data: trendData.average, lineStyle: { width: 3, color: '#2563eb' }, itemStyle: { color: '#2563eb', borderColor: '#ffffff', borderWidth: 2 }, areaStyle: { color: 'rgba(37,99,235,0.10)' } },
+              { name: 'Low', type: 'line', smooth: true, symbolSize: 5, data: trendData.low, lineStyle: { width: 2, color: '#0ea5e9', type: 'dashed' }, itemStyle: { color: '#0ea5e9' } },
+              { name: 'High', type: 'line', smooth: true, symbolSize: 5, data: trendData.high, lineStyle: { width: 2, color: '#10b981', type: 'dashed' }, itemStyle: { color: '#10b981' } },
+            ],
+          });
+          attachResize(chart, 'trend');
+        }
+
+        const validationEl = document.getElementById('watchlist-validation-echart');
+        if (validationEl && predictionData && Array.isArray(predictionData.labels) && predictionData.labels.length) {
+          const categories = Array.isArray(predictionData.labels) && predictionData.labels.length ? predictionData.labels : ['Benchmark prediction'];
+          const plottedValues = Array.isArray(predictionData.values) && predictionData.values.length ? predictionData.values : [];
+          const tooltipRows = Array.isArray(predictionData.tooltip_rows) ? predictionData.tooltip_rows : [];
+          const chart = echarts.init(validationEl, null, { renderer: 'canvas' });
+          chart.setOption({
+            animation: true,
+            color: ['#4f46e5', '#0ea5e9', '#10b981'],
+            grid: { left: 52, right: 26, top: 54, bottom: 44, containLabel: true },
+            tooltip: {
+              trigger: 'item',
+              backgroundColor: 'rgba(15,23,42,0.95)',
+              borderWidth: 0,
+              textStyle: { color: '#fff' },
+              formatter: (params) => {
+                const row = tooltipRows[params.dataIndex] || {};
+                const lines = [
+                  `<div style="font-weight:700;margin-bottom:6px">${row.label || params.name || ''}</div>`,
+                  `<div>Value: ${fmt(row.value ?? params.value)}</div>`,
+                ];
+                if (row.abs_error != null) {
+                  lines.push(`<div>Abs error: ${fmt(row.abs_error)}</div>`);
+                }
+                if (row.pct_error != null) {
+                  lines.push(`<div>Pct error: ${Number(row.pct_error).toFixed(2)}%</div>`);
+                }
+                return lines.join('');
+              },
+            },
+            xAxis: {
+              type: 'category',
+              data: categories,
+              axisLabel: { color: '#64748b', rotate: 12, margin: 16 },
+              axisLine: { lineStyle: { color: '#cbd5e1' } },
+              axisTick: { show: false },
+            },
+            yAxis: {
+              type: 'value',
+              axisLabel: { color: '#64748b', formatter: (value) => `USD ${value}` },
+              splitLine: { lineStyle: { color: '#e2e8f0' } },
+            },
+            series: [
+              {
+                type: 'bar',
+                data: plottedValues.map((value, index) => ({ value, itemStyle: { color: ['#4f46e5', '#0ea5e9', '#10b981'][index] || '#94a3b8', borderRadius: [8, 8, 0, 0] } })),
+                barWidth: plottedValues.length <= 2 ? '30%' : '38%',
+                emphasis: { focus: 'series' },
+                label: { show: true, position: 'top', color: '#0f172a', formatter: (params) => fmt(params.value) },
+                markLine: predictionData.available && plottedValues.length > 1 ? {
+                  symbol: 'none',
+                  lineStyle: { color: '#94a3b8', type: 'dashed', width: 1 },
+                  label: { color: '#64748b', formatter: 'Observed market average' },
+                  data: [{ yAxis: plottedValues[plottedValues.length - 1] }],
+                } : undefined,
+              },
+            ],
+          });
+          attachResize(chart, 'validation');
+        }
+      };
+
+      document.getElementById('watchlist-export-chart-png')?.addEventListener('click', exportWatchlistCharts);
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init, { once: true });
+      } else {
+        init();
+      }
+    })();
+  </script>
+  <script>
+    (() => {
+      const modal = document.querySelector('[data-alert-modal]');
+      const openButton = document.querySelector('[data-alert-modal-open]');
+      if (!modal || !openButton) return;
+      const closeModal = () => { if (modal.open) modal.close(); };
+      openButton.addEventListener('click', () => modal.showModal());
+      modal.querySelectorAll('[data-alert-modal-close]').forEach((button) => button.addEventListener('click', closeModal));
+      modal.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
+      modal.addEventListener('close', () => openButton.focus());
+    })();
+    document.querySelectorAll('[data-export-dropdown]').forEach((dropdown) => {
+      const trigger = dropdown.querySelector('[data-export-trigger]');
+      const menu = dropdown.querySelector('[data-export-menu]');
+      const close = () => { menu.classList.add('hidden'); trigger.setAttribute('aria-expanded', 'false'); };
+      trigger.addEventListener('click', () => {
+        const opening = menu.classList.contains('hidden');
+        document.querySelectorAll('[data-export-dropdown]').forEach((other) => { if (other !== dropdown) { other.querySelector('[data-export-menu]').classList.add('hidden'); other.querySelector('[data-export-trigger]').setAttribute('aria-expanded', 'false'); } });
+        menu.classList.toggle('hidden', !opening); trigger.setAttribute('aria-expanded', String(opening));
+      });
+      document.addEventListener('click', (event) => { if (!dropdown.contains(event.target)) close(); });
+      document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { close(); trigger.focus(); } });
+    });
+    document.querySelectorAll('form[action$="/refresh"], form[action*="/prediction"]').forEach((form) => {
+      form.addEventListener('submit', () => {
+        const button = form.querySelector('button[type="submit"], button:not([type])');
+        if (!button || button.disabled) return;
+        button.disabled = true;
+        button.classList.add('cursor-wait', 'opacity-70');
+        button.dataset.loadingLabel = button.textContent.trim();
+        button.textContent = form.action.includes('/prediction') ? 'Generating forecast…' : 'Collecting snapshot…';
+        form.setAttribute('aria-busy', 'true');
+      });
+    });
+    window.addEventListener('pageshow', () => document.querySelectorAll('form[aria-busy="true"]').forEach((form) => {
+      const button = form.querySelector('button');
+      if (button) { button.disabled = false; button.classList.remove('cursor-wait', 'opacity-70'); if (button.dataset.loadingLabel) button.textContent = button.dataset.loadingLabel; }
+      form.removeAttribute('aria-busy');
+    }));
+  </script>
+{% endblock %}

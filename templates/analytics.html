@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Marketplace Analytics{% endblock %}
+
+{% block content %}
+<section class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+    <div>
+        <div class="flex items-center gap-2 text-xs text-slate-500 mb-2 font-medium">
+            <span>Marketplace</span>
+            <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+            <span class="text-primary font-semibold">Analytics</span>
+        </div>
+        <h2 class="text-4xl font-extrabold headline-font tracking-tight text-textMain">
+            Marketplace Analytics for &quot;{{ summary.query }}&quot;
+        </h2>
+        <p class="text-slate-500 mt-2 max-w-2xl">
+            Analysis based on saved and collected records first. Demo records appear only when no real records exist for this identity.
+        </p>
+    </div>
+
+    <div class="flex items-center gap-3">
+        <a href="/?q={{ summary.query|urlencode }}" class="px-5 py-3 bg-white text-primary rounded-2xl text-sm font-bold border border-slate-200 shadow-soft hover:bg-slate-50">
+            Back to Search
+        </a>
+        <a href="/demo" class="px-5 py-3 bg-primary text-white rounded-2xl text-sm font-bold shadow-lg shadow-blue-500/20 hover:opacity-90">
+            Demo Analytics
+        </a>
+    </div>
+</section>
+
+<section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6 mb-12">
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Total Results</p>
+        <p class="text-3xl font-extrabold headline-font">{{ summary.total_results }}</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Lowest Price</p>
+        <p class="text-3xl font-extrabold headline-font">USD {{ summary.lowest_price }}</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Highest Price</p>
+        <p class="text-3xl font-extrabold headline-font">USD {{ summary.highest_price }}</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Average Price</p>
+        <p class="text-3xl font-extrabold headline-font">USD {{ summary.average_price }}</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-soft">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Saved Searches</p>
+        <p class="text-3xl font-extrabold headline-font">{{ summary.saved_times }}</p>
+    </div>
+</section>
+
+<section class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-12">
+    <div class="bg-white p-6 rounded-3xl shadow-soft">
+        <div class="mb-4">
+            <h3 class="text-xl font-bold headline-font text-textMain">Price Distribution</h3>
+            <p class="text-sm text-slate-500 mt-1">
+                Distribution of listing prices for the saved query results.
+            </p>
+        </div>
+        <div class="rounded-2xl overflow-hidden bg-slate-50 border border-slate-100">
+            <img
+                src="{{ url_for('static', filename='charts/' + price_dist_chart) }}"
+                alt="Price Distribution"
+                class="w-full h-auto"
+            />
+        </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-3xl shadow-soft">
+        <div class="mb-4">
+            <h3 class="text-xl font-bold headline-font text-textMain">Condition Breakdown</h3>
+            <p class="text-sm text-slate-500 mt-1">
+                Count of listings grouped by item condition.
+            </p>
+        </div>
+        <div class="rounded-2xl overflow-hidden bg-slate-50 border border-slate-100">
+            <img
+                src="{{ url_for('static', filename='charts/' + condition_chart) }}"
+                alt="Condition Breakdown"
+                class="w-full h-auto"
+            />
+        </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-3xl shadow-soft">
+        <div class="mb-4">
+            <h3 class="text-xl font-bold headline-font text-textMain">Top Sellers</h3>
+            <p class="text-sm text-slate-500 mt-1">
+                Sellers with the most listings in the saved result set.
+            </p>
+        </div>
+        <div class="rounded-2xl overflow-hidden bg-slate-50 border border-slate-100">
+            <img
+                src="{{ url_for('static', filename='charts/' + seller_chart) }}"
+                alt="Top Sellers"
+                class="w-full h-auto"
+            />
+        </div>
+    </div>
+
+    {% if trend_chart %}
+    <div class="bg-white p-6 rounded-3xl shadow-soft">
+        <div class="mb-4">
+            <h3 class="text-xl font-bold headline-font text-textMain">Saved Search Trend</h3>
+            <p class="text-sm text-slate-500 mt-1">
+                Change in average, minimum, and maximum price across saved searches over time.
+            </p>
+        </div>
+        <div class="rounded-2xl overflow-hidden bg-slate-50 border border-slate-100">
+            <img
+                src="{{ url_for('static', filename='charts/' + trend_chart) }}"
+                alt="Saved Search Trend"
+                class="w-full h-auto"
+            />
+        </div>
+    </div>
+    {% endif %}
+</section>
+
+<section class="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-12">
+    <section class="xl:col-span-2 bg-white rounded-3xl shadow-soft p-8">
+        <div class="mb-5">
+            <h3 class="text-xl font-bold headline-font text-textMain">Saved Results Preview</h3>
+            <p class="text-sm text-slate-500 mt-1">
+                Showing the latest saved result set. Total saved searches: {{ total_saved_searches }}.
+            </p>
+            <p class="text-xs text-slate-400 mt-1">
+                Latest saved at: {{ latest_saved_at }}
+            </p>
+        </div>
+
+        <div class="overflow-x-auto rounded-2xl border border-slate-100">
+            <table class="w-full text-sm bg-white">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Title</th>
+                        <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Platform</th>
+                        <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Price</th>
+                        <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Currency</th>
+                        <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Seller</th>
+                        <th class="text-left px-4 py-3 font-bold text-slate-500 uppercase text-[11px] tracking-wider">Condition</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in preview_items %}
+                    <tr class="border-t border-slate-100 hover:bg-slate-50/60">
+                        <td class="px-4 py-3 text-slate-700">
+                            {% if item.item_url %}
+                            <a href="{{ item.item_url }}" target="_blank" class="text-primary hover:underline">
+                                {{ item.title }}
+                            </a>
+                            {% else %}
+                                {{ item.title }}
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-slate-600">{{ item.platform or "Marketplace" }}</td>
+                        <td class="px-4 py-3 font-semibold text-textMain">{{ item.price }}</td>
+                        <td class="px-4 py-3 text-slate-600">{{ item.currency }}</td>
+                        <td class="px-4 py-3 text-slate-600">{{ item.seller or "Unknown" }}</td>
+                        <td class="px-4 py-3 text-slate-600">{{ item.condition or "Unknown" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="bg-white rounded-3xl shadow-soft p-8">
+        <div class="flex items-start gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-white shadow-lg shadow-blue-500/20 flex-shrink-0">
+                <span class="material-symbols-outlined">auto_awesome</span>
+            </div>
+
+            <div class="flex-1">
+                <h3 class="text-xl font-bold headline-font text-textMain mb-3">Quick Insights</h3>
+                <div class="space-y-3 text-slate-600 leading-7">
+                    <p>&bull; The current saved results for <span class="font-semibold text-textMain">&quot;{{ summary.query }}&quot;</span> range from <span class="font-semibold text-textMain">USD {{ summary.lowest_price }}</span> to <span class="font-semibold text-textMain">USD {{ summary.highest_price }}</span>, indicating noticeable price variation.</p>
+
+                    <p>&bull; The average price is <span class="font-semibold text-primary">USD {{ summary.average_price }}</span>, which provides a useful midpoint for comparing future saved searches.</p>
+
+                    <p>&bull; Based on the condition and seller breakdown, this query appears to include a mix of refurbished and resale-market listings rather than a single uniform product source.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</section>
+{% endblock %}

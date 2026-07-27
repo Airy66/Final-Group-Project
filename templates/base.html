@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>{% block title %}Ecommerce Price Analysis{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" sizes="any" href="{{ url_for('static', filename='favicon.svg', v='2') }}"/>
+    <link rel="shortcut icon" href="{{ url_for('site_favicon', v='2') }}"/>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#2563eb",
+              surface: "#f7f9fb",
+              surfaceLow: "#f2f4f6",
+              surfaceCard: "#ffffff",
+              outline: "#737686",
+              outlineVariant: "#c3c6d7",
+              textMain: "#191c1e",
+              textSub: "#5f6368",
+              tertiary: "#007d55"
+            },
+            fontFamily: {
+              headline: ["Manrope", "sans-serif"],
+              body: ["Inter", "sans-serif"]
+            },
+            boxShadow: {
+              soft: "0 20px 40px -10px rgba(37,99,235,0.06)"
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      body { font-family: 'Inter', sans-serif; }
+      .headline-font { font-family: 'Manrope', sans-serif; }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+    </style>
+
+    {% block head_extra %}{% endblock %}
+</head>
+<body class="bg-surface text-textMain antialiased">
+    <!-- Sidebar -->
+    <aside class="fixed left-0 top-0 h-screen w-64 bg-slate-50 flex flex-col py-6 z-50 border-r border-slate-100">
+        <div class="px-6 mb-10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-soft">
+                    <span class="material-symbols-outlined">insights</span>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-blue-700 headline-font">Precision Curator</h1>
+                    <p class="text-[10px] uppercase tracking-[0.18em] text-slate-400 font-bold">Market Intelligence</p>
+                </div>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-4 space-y-1.5">
+            <a href="/" class="flex items-center gap-3 px-4 py-3 rounded-xl {% if request.path == '/' %}text-blue-700 font-bold bg-slate-200/60 border-r-4 border-blue-700{% else %}text-slate-500 hover:text-blue-600 hover:bg-slate-200/50{% endif %}">
+                <span class="material-symbols-outlined">search</span>
+                <span class="headline-font tracking-tight">Search</span>
+            </a>
+
+            <a href="{% if query %}/analytics?q={{ query|urlencode }}{% else %}/analytics?q=iphone%2015{% endif %}" class="flex items-center gap-3 px-4 py-3 rounded-xl {% if request.path == '/analytics' %}text-blue-700 font-bold bg-slate-200/60 border-r-4 border-blue-700{% else %}text-slate-500 hover:text-blue-600 hover:bg-slate-200/50{% endif %}">
+                <span class="material-symbols-outlined">monitoring</span>
+                <span class="headline-font tracking-tight">Analytics</span>
+            </a>
+
+            <a href="/demo" class="flex items-center gap-3 px-4 py-3 rounded-xl {% if request.path == '/demo' %}text-blue-700 font-bold bg-slate-200/60 border-r-4 border-blue-700{% else %}text-slate-500 hover:text-blue-600 hover:bg-slate-200/50{% endif %}">
+                <span class="material-symbols-outlined">science</span>
+                <span class="headline-font tracking-tight">Demo</span>
+            </a>
+        </nav>
+
+        <div class="mt-auto px-6 pt-6 border-t border-slate-200/60">
+            <div class="p-4 rounded-2xl bg-primary/5 border border-primary/10">
+                <p class="text-xs font-bold text-primary mb-1">PROJECT MODE</p>
+                <p class="text-[11px] text-slate-500 leading-tight">Real-time search + analytics demo for final project presentation.</p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Topbar -->
+   <header class="fixed top-0 left-64 right-0 h-16 z-40 bg-white/80 backdrop-blur-xl shadow-sm shadow-blue-900/5 flex items-center justify-between px-8">
+    <div>
+        <p class="text-sm font-semibold text-slate-700 headline-font">Ecommerce Price Analysis</p>
+        <p class="text-[11px] text-slate-400">Real-time search and analytics dashboard</p>
+    </div>
+</header>
+
+    <!-- Main -->
+    <main class="ml-64 pt-20 min-h-screen">
+        <div class="max-w-[1400px] mx-auto p-8 lg:p-10">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+</body>
+</html>

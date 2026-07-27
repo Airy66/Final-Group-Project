@@ -1,0 +1,32 @@
+{% set role = current_user.role if current_user else 'consumer' %}
+{% set accent = 'blue' if role == 'consumer' else ('emerald' if role == 'retailer' else 'violet') %}
+{% set role_label = 'Consumer' if role == 'consumer' else ('Retailer' if role == 'retailer' else 'Researcher') %}
+{% set role_hint = 'personal price discovery' if role == 'consumer' else ('market monitoring and sourcing decisions' if role == 'retailer' else 'evidence review and audit') %}
+<section class="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="text-xs font-bold uppercase tracking-[0.25em] text-{{ accent }}-600">Getting Started</p>
+      <h2 class="mt-2 font-display text-2xl font-bold text-slate-950">Workflow guide</h2>
+      <p class="mt-1 text-sm text-slate-500">{{ role_label }} mode supports {{ role_hint }}.</p>
+    </div>
+    <span class="rounded-full bg-{{ accent }}-50 px-3 py-1 text-xs font-bold text-{{ accent }}-700">6 steps</span>
+  </div>
+  <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    {% for icon,title,text in [
+      ('search','Search products','Collect marketplace records from available sources.'),
+      ('compare','Compare normalized prices','Review normalized prices side by side.'),
+      ('bookmark','Save useful evidence','Preserve source-backed listings for later review.'),
+      ('visibility','Track in Watchlist','Monitor selected products as new snapshots arrive.'),
+      ('analytics','Analyse trends and export','Inspect trends, preview results, and export reports.'),
+      ('fact_check','Validate prediction results','Compare forecasts with later observed snapshots.')
+    ] %}
+    <article class="app-card app-card-hover rounded-2xl p-5">
+      <div class="flex items-center gap-3">
+        <span class="grid h-11 w-11 place-items-center rounded-xl bg-{{ accent }}-50 text-{{ accent }}-600"><span class="material-symbols-outlined">{{ icon }}</span></span>
+        <h3 class="font-display text-lg font-bold text-slate-950">{{ loop.index }}. {{ title }}</h3>
+      </div>
+      <p class="mt-3 text-sm leading-6 text-slate-600">{{ text }}</p>
+    </article>
+    {% endfor %}
+  </div>
+</section>

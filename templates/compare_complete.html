@@ -1,0 +1,90 @@
+{% extends "product_base.html" %}
+{% block title %}Price and market comparison{% endblock %}
+{% block content %}
+<section class="app-hero">
+  <div class="flex flex-wrap items-start justify-between gap-5">
+    <div><p class="text-xs font-bold uppercase tracking-widest text-primary">Comparison workspace</p><h1 class="mt-2 font-display text-4xl font-extrabold">Price and market comparison</h1><p class="mt-2 text-slate-600">{{ record.keyword if record else 'Selected comparison' }} · {{ source_summary }}</p><p class="mt-2 text-xs text-slate-500">Created {{ display_sgt_datetime(comparison_created_at) }}</p><p class="mt-3 text-xs font-semibold text-slate-500">Review → Analyze → Track or Save</p></div>
+    <a href="{{ url_for('search_results', search_run_id=record.search_run_id or record._id) if record else url_for('search') }}" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Back to search results</a>
+  </div>
+</section>
+
+{% if products|length >= 2 %}
+{% if mixed_storage %}
+<section class="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950" role="alert">
+  <h2 class="font-display text-lg font-bold">Mixed storage comparison</h2>
+  <p class="mt-2 text-sm">The selected records contain multiple storage variants: {{ storage_variants|join(', ') }}.</p>
+  <div class="mt-4 flex flex-wrap gap-3">
+    <a href="#storage-groups" class="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-bold">Compare separately by storage</a>
+    <a href="#comparison-table" class="rounded-lg bg-amber-800 px-4 py-2 text-sm font-bold text-white">Continue with mixed variants</a>
+    <a href="{{ url_for('search_results', search_run_id=record.search_run_id or record._id) if record else url_for('search') }}" class="rounded-lg px-4 py-2 text-sm font-bold">Cancel</a>
+  </div>
+</section>
+<section id="storage-groups" class="mt-4 rounded-2xl border border-slate-200 bg-white p-5">
+  <h2 class="font-display text-lg font-bold">Storage groups</h2>
+  <div class="mt-3 flex flex-wrap gap-2">{% for storage in storage_variants %}<span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold">{{ storage }} · {{ products|selectattr('storage', 'equalto', storage)|list|length }} listing(s)</span>{% endfor %}</div>
+</section>
+{% endif %}
+{% if stats.excluded_count %}
+<section class="mt-6 border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950"><strong>{{ stats.excluded_count }} selected record{{ 's' if stats.excluded_count != 1 else '' }} excluded from comparison metrics.</strong> Non-comparable payment structures remain visible below for source transparency.</section>
+{% endif %}
+
+{% set comparison_coverage = ((stats.comparable_count / stats.selected_count) * 100) if stats.selected_count else 0 %}
+<section class="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-[1.15fr_1fr_1fr_1.35fr]" aria-label="Comparison summary">
+  <article class="app-card border-t-2 border-t-blue-500 p-5">
+    <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Comparison coverage</p>
+    <div class="mt-3 flex items-end justify-between gap-4"><p class="font-display text-2xl font-bold text-slate-950">{{ stats.comparable_count }} <span class="text-base font-semibold text-slate-400">of {{ stats.selected_count }}</span></p><span class="text-xs font-bold text-blue-700">{{ '%.0f'|format(comparison_coverage) }}%</span></div>
+    <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-500" style="width:{{ comparison_coverage }}%"></div></div>
+    <p class="mt-3 text-xs text-slate-500"><span class="font-semibold text-slate-700">Comparable products:</span> {{ stats.comparable_count }} · <span class="font-semibold text-slate-700">Selected records:</span> {{ stats.selected_count }}</p>
+  </article>
+  <article class="app-card border-t-2 border-t-emerald-500 p-5">
+    <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Lowest comparable price</p>
+    <p class="mt-3 font-display text-2xl font-bold text-slate-950">{{ ('USD %.2f'|format(stats.lowest)) if stats.lowest is number else 'N/A' }}</p>
+    <p class="mt-2 text-xs text-slate-500">Lowest full-price offer in this set.</p>
+  </article>
+  <article class="app-card border-t-2 border-t-indigo-500 p-5">
+    <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Average comparable price</p>
+    <p class="mt-3 font-display text-2xl font-bold text-slate-950">{{ ('USD %.2f'|format(stats.average)) if stats.average is number else 'N/A' }}</p>
+    <p class="mt-2 text-xs text-slate-500">Average across comparable full prices.</p>
+  </article>
+  <article class="app-card border-t-2 border-t-violet-500 p-5">
+    <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Comparable price range</p>
+    <p class="mt-3 font-display text-xl font-bold text-slate-950">{% if stats.lowest is number and stats.highest is number %}USD {{ '%.2f'|format(stats.lowest) }} <span class="text-slate-400">–</span> USD {{ '%.2f'|format(stats.highest) }}{% else %}N/A{% endif %}</p>
+    <p class="mt-2 text-xs text-slate-500"><span class="font-semibold text-slate-700">Highest comparable price:</span> {{ ('USD %.2f'|format(stats.highest)) if stats.highest is number else 'N/A' }} · <span class="font-semibold text-slate-700">Comparable price spread:</span> {{ ('USD %.2f'|format(stats.spread)) if stats.spread is number else 'N/A' }}</p>
+  </article>
+</section>
+
+<section class="mt-5 flex items-start gap-4 rounded-xl border border-blue-100 border-l-4 border-l-blue-500 bg-blue-50/60 p-5">
+  <span class="material-symbols-outlined mt-0.5 text-[22px] text-blue-700">insights</span>
+  <div class="min-w-0"><p class="text-xs font-bold uppercase tracking-wider text-blue-700">Decision support</p><h2 class="mt-1 font-display text-lg font-bold text-slate-950">Market conclusion</h2><p class="mt-2 leading-7 text-slate-700">{{ conclusion }}</p></div>
+</section>
+
+<section class="mt-7 border-t border-slate-200 pt-6" id="comparison-actions">
+  <h2 class="font-display text-xl font-bold">Comparison actions</h2>
+  <div class="mt-4 flex flex-wrap gap-3">
+    {% if analysis_action == 'open' %}<a href="{{ url_for('analytics', search_record_id=current_analysis._id) }}" class="rounded-lg bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">Open analysis</a>
+    {% else %}<form action="{{ url_for('create_comparison_analysis', comparison_id=comparison_id) }}" method="post">{% if analysis_action == 'refresh' %}<input type="hidden" name="refresh" value="1">{% endif %}<button class="rounded-lg bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700" {% if not stats.comparable_count %}disabled title="No comparable full prices available"{% endif %}>{{ analysis_label }}</button></form>{% endif %}
+    <form action="{{ url_for('watchlist_from_compare') }}" method="post"><input type="hidden" name="comparison_id" value="{{ comparison_id }}"><input type="hidden" name="search_record_id" value="{{ record._id if record else '' }}"><button class="rounded-lg border border-blue-300 bg-white px-5 py-3 text-sm font-bold text-blue-700 hover:bg-blue-50" {% if not stats.comparable_count %}disabled title="No comparable full prices available"{% endif %}>Track this comparison</button></form>
+    {% if comparison_saved %}<span class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-bold text-emerald-700"><span class="material-symbols-outlined text-[18px]">check_circle</span>Saved</span>{% else %}<form action="{{ url_for('save_comparison_set', comparison_id=comparison_id) }}" method="post"><button class="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-5 py-3 text-sm font-bold text-blue-700 shadow-sm hover:border-blue-400 hover:bg-blue-50"><span class="material-symbols-outlined text-[18px]">bookmark_add</span>Save comparison set</button></form>{% endif %}
+  </div>
+  {% if not stats.comparable_count %}<p class="mt-3 text-sm text-amber-800">Analyze and Track require at least one comparable full-price record.</p>{% endif %}
+</section>
+
+<section id="comparison-table" class="mt-7 app-table-wrap overflow-x-auto">
+  <table class="app-table w-full min-w-[1100px] text-left text-sm">
+    <thead><tr><th class="p-4">Product</th><th class="p-4">Platform</th><th class="p-4">Price</th><th class="p-4">Condition</th><th class="p-4">Price quality</th><th class="p-4">Source link</th><th class="p-4">Market position</th></tr></thead>
+    <tbody>{% for item in products %}<tr>
+      <td class="max-w-[22rem] p-4 font-semibold"><span class="line-clamp-2" title="{{ item.title }}">{{ item.title }}</span></td>
+      <td class="p-4">{{ item.platform }}</td>
+      <td class="p-4 font-bold">{% if item.analytics_eligible %}{{ item.total_currency }} {{ '%.2f'|format(item.total_price) }}{% else %}{{ item.raw_price_text }}{% if item.billing_period %}<small class="block font-normal text-slate-500">{{ item.billing_period }}</small>{% endif %}{% endif %}</td>
+      <td class="p-4">{{ item.condition_display }}</td>
+      <td class="p-4">{% if item.analytics_eligible %}<span class="font-semibold text-emerald-700">Comparable full price</span>{% else %}<span class="font-semibold text-amber-800">Non-comparable</span><small class="mt-1 block max-w-[16rem] text-slate-500">{{ item.exclusion_reason }}</small><small class="mt-1 block font-semibold text-amber-800">Excluded from comparison metrics</small>{% endif %}</td>
+      <td class="p-4">{% if is_safe_url(item.source_url) %}<a href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer" class="font-bold text-primary hover:underline">Open listing &#8599;</a>{% else %}<span class="text-slate-400">Unavailable</span>{% endif %}</td>
+      <td class="p-4 font-semibold {{ 'text-slate-500' if not item.analytics_eligible else 'text-slate-800' }}">{{ item.market_position }}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+{% else %}
+<div class="mt-8 border border-slate-200 bg-white p-12 text-center"><p class="font-bold">Choose at least two products.</p><p class="mt-2 text-sm text-slate-500">Select two or more rows from the current search results.</p><a href="{{ url_for('search') }}" class="mt-4 inline-block font-bold text-primary">Back to search</a></div>
+{% endif %}
+{% endblock %}

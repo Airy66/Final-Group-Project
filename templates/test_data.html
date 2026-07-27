@@ -1,0 +1,52 @@
+﻿{% extends "product_base.html" %}
+{% block title %}Data source status{% endblock %}
+{% block content %}
+<section class="app-hero">
+  <p class="text-xs font-bold uppercase tracking-widest text-primary">Researcher workspace</p>
+  <h1 class="mt-2 font-display text-4xl font-extrabold text-slate-950">Data source and fallback status</h1>
+  <p class="mt-3 max-w-3xl text-slate-600">Controlled records for validating collection, comparison, outlier detection, and evidence workflows without relying on live external APIs.</p>
+</section>
+<div class="mt-6 flex flex-wrap gap-3">
+  <form method="post" action="{{ url_for('reset_test_data') }}" data-confirm-form data-confirm-message="Reset the demo data to the full sample set?">
+    <button class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100">Reset demo data</button>
+  </form>
+  <form method="post" action="{{ url_for('seed_watchlist_snapshots_from_test_data') }}">
+    <button class="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-primary hover:bg-blue-100">Seed watchlist snapshot demo data</button>
+  </form>
+  <form method="post" action="{{ url_for('seed_watchlist_validation_from_test_data') }}">
+    <button class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">Seed demo prediction validation</button>
+  </form>
+  {% if items %}
+  <form id="test-data-delete" method="post" action="{{ url_for('delete_test_data') }}" data-confirm-form data-confirm-message="Delete the selected test records?">
+    <button class="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">Delete selected</button>
+  </form>
+  {% endif %}
+</div>
+<div class="mt-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+  <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><strong>Not live market data.</strong> These records are synthetic test fixtures and can be reset at any time.</div>
+  <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900 shadow-sm"><strong>Fallback-friendly preview.</strong> Seeded records keep watchlist, analytics, and export flows visible even when live APIs are unavailable.</div>
+</div>
+<div class="mt-7 grid grid-cols-2 gap-4 lg:grid-cols-4">{% for label,value in [('Test records',summary.total_results),('Platforms',summary.platform_count),('Categories',summary.category_count),('Average price',summary.average_price)] %}<article class="app-card p-5"><p class="text-xs font-bold uppercase tracking-widest text-slate-500">{{ label }}</p><p class="mt-3 font-display text-3xl font-extrabold text-slate-950">{{ value }}</p></article>{% endfor %}</div>
+<div class="mt-7 overflow-hidden rounded-3xl bg-white shadow-soft">
+  <table class="w-full min-w-[900px] text-left text-sm">
+    <thead class="bg-slate-50 text-xs uppercase tracking-widest text-slate-500"><tr><th class="p-4">Select</th><th class="p-4">Product</th><th class="p-4">Platform</th><th class="p-4">Price</th><th class="p-4">Category</th><th class="p-4">Brand</th><th class="p-4">Availability</th><th class="p-4">Source type</th><th class="p-4">Timestamp</th></tr></thead>
+    <tbody>
+      {% for item in items %}
+      <tr class="border-t border-slate-100">
+        <td class="p-4"><input form="test-data-delete" type="checkbox" name="record_id" value="{{ item._id }}" class="rounded border-slate-300 text-red-600"></td>
+        <td class="p-4 font-semibold">{{ item.name or item.title }}</td>
+        <td class="p-4">{{ item.platform }}</td>
+        <td class="p-4">{{ item.currency }} {{ item.price }}</td>
+        <td class="p-4">{{ item.category }}</td>
+        <td class="p-4">{{ item.brand }}</td>
+        <td class="p-4">{{ item.availability }}</td>
+        <td class="p-4">{{ item.source_type }}</td>
+        <td class="p-4 text-xs">{{ item.timestamp }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="p-12 text-center"><p class="font-bold">No fallback records saved yet.</p></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

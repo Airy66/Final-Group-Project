@@ -1,0 +1,353 @@
+﻿{% extends "product_base.html" %}
+{% block title %}Precision Curator · Retail price intelligence{% endblock %}
+{% block head_extra %}
+<style>
+  .landing-hero{isolation:isolate;background:#101a29}.landing-hero::after{content:"";position:absolute;z-index:-1;inset:auto 0 0;height:9rem;background:linear-gradient(180deg,transparent,rgba(244,247,251,.92));pointer-events:none}.hero-grid{background-image:linear-gradient(rgba(148,163,184,.075) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.075) 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(90deg,transparent,black 26%,black 82%,transparent)}.hero-glow{background:radial-gradient(circle at 68% 40%,rgba(75,118,194,.22),transparent 27%),radial-gradient(circle at 84% 28%,rgba(104,75,180,.14),transparent 22%)}.workflow-preview{box-shadow:0 28px 70px rgba(2,8,23,.34),inset 0 1px 0 rgba(255,255,255,.08)}.workflow-step{transition:background-color .3s ease,border-color .3s ease,transform .3s ease,box-shadow .3s ease}.workflow-step.is-active{border-color:rgba(125,211,252,.58);background:rgba(30,55,82,.88);box-shadow:0 12px 24px rgba(2,8,23,.22);transform:translateY(-2px)}.workflow-step.is-active .workflow-icon{background:#60a5fa;color:#0f172a;box-shadow:0 0 0 4px rgba(96,165,250,.13)}.workflow-step.is-active .workflow-status{opacity:1;transform:translateY(0)}.workflow-status{opacity:0;transform:translateY(3px);transition:opacity .25s ease,transform .25s ease}.workflow-progress{transition:width .5s cubic-bezier(.2,.8,.2,1)}.landing-reveal{opacity:0;transform:translateY(28px) scale(.985);transition:opacity .72s cubic-bezier(.2,.8,.2,1),transform .72s cubic-bezier(.2,.8,.2,1)}.landing-reveal.is-visible{opacity:1;transform:translateY(0) scale(1)}.workflow-card{overflow:hidden;border-color:#cfd9e6;border-top-width:3px;border-top-color:#6b7f99;box-shadow:0 5px 14px rgba(15,23,42,.055)}.workflow-card::after{transform:scaleX(0);transform-origin:left;transition:transform .5s ease var(--workflow-delay,0ms)}.workflow-card.is-visible::after{transform:scaleX(1)}.workflow-card:hover{transform:translateY(-6px);border-color:#aebdd0;box-shadow:0 18px 32px rgba(15,23,42,.13)}.value-metric{border-radius:.65rem;box-shadow:0 5px 14px rgba(15,23,42,.045);transition:transform .24s ease,box-shadow .24s ease}.value-metric:hover{transform:translateY(-3px);box-shadow:0 14px 26px rgba(15,23,42,.09)}.landing-card{transition:transform .24s ease,box-shadow .24s ease,border-color .24s ease}.landing-card:hover{transform:translateY(-5px);box-shadow:0 18px 35px rgba(15,23,42,.10)}.role-consumer,.role-retailer,.role-researcher{border-top-width:3px;border-top-color:#6b7f99;box-shadow:0 7px 18px rgba(15,23,42,.06)}.role-consumer:hover,.role-retailer:hover,.role-researcher:hover{border-color:#aebdd0}@media (prefers-reduced-motion:reduce){.landing-reveal,.workflow-step,.workflow-status,.workflow-progress,.workflow-card::after,.landing-card,.value-metric{transition:none!important}.landing-reveal{opacity:1;transform:none}}
+</style>
+{% endblock %}
+{% block public_content %}
+<section class="landing-hero relative overflow-hidden text-white">
+  <div class="absolute inset-0 bg-[linear-gradient(124deg,#0c1625_0%,#101b2b_53%,#172235_100%)]"></div>
+  <div class="hero-grid absolute inset-0"></div>
+  <div class="hero-glow absolute inset-0"></div>
+  <div class="absolute inset-y-0 left-[46%] hidden w-px bg-slate-400/10 lg:block"></div>
+  <div class="relative mx-auto grid max-w-7xl items-center gap-12 px-5 py-20 lg:grid-cols-2 lg:gap-16 lg:py-28">
+    <div class="landing-reveal">
+      <span class="inline-flex items-center gap-2 rounded-full border border-slate-500/70 bg-slate-900/50 px-4 py-2 text-xs font-bold tracking-wide text-slate-200"><span class="h-1.5 w-1.5 rounded-full bg-cyan-300"></span>Market evidence, curated with precision</span>
+      <h1 class="mt-7 max-w-2xl font-display text-5xl font-extrabold leading-tight text-white md:text-7xl">
+        <span class="block">Price evidence,</span>
+        <span class="block">curated with precision.</span>
+      </h1>
+      <p class="mt-6 max-w-xl text-lg leading-8 text-slate-200">Precision Curator helps users collect marketplace records, compare normalized prices, save evidence, monitor watchlists, and validate prediction results against observed snapshots.</p>
+      <div class="mt-9 flex flex-wrap items-center gap-3">
+        <a href="{{ url_for('register', plan='basic') }}" class="app-button-primary">Start analyzing <span class="material-symbols-outlined text-lg">arrow_forward</span></a>
+        <a href="{{ url_for('sample_analysis') }}" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-500 bg-slate-800/60 px-5 py-3.5 font-bold text-white transition hover:border-slate-400 hover:bg-slate-700/70">View sample analysis</a>
+      </div>
+      <p class="mt-6 max-w-xl text-sm leading-7 text-slate-400">Move from scattered listings to a clear, traceable view of the market.</p>
+    </div>
+    <div class="workflow-preview landing-reveal rounded-2xl border border-slate-500/60 bg-[#111d2d]/95 p-5 sm:p-6" data-workflow-preview>
+      <div class="flex items-start justify-between gap-4 border-b border-slate-700/80 pb-5">
+        <div><p class="text-xs font-bold uppercase tracking-[.18em] text-cyan-200">Live workspace preview</p><p class="mt-2 font-display text-xl font-bold">Evidence workflow</p></div>
+        <span class="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-200"><span class="h-1.5 w-1.5 rounded-full bg-emerald-300"></span>Active</span>
+      </div>
+      <div class="mt-5 rounded-xl border border-slate-700 bg-slate-950/45 p-4">
+        <div class="flex items-center justify-between text-xs text-slate-400"><span data-workflow-eyebrow>Marketplace search</span><span data-workflow-count>01 / 04</span></div>
+        <p class="mt-2 font-display text-lg font-bold text-white" data-workflow-title>Finding comparable listings</p>
+        <div class="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-700"><div class="workflow-progress h-full rounded-full bg-cyan-300" data-workflow-progress style="width:25%"></div></div>
+      </div>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        {% for icon,label,text,status in [('search','Search','Collect marketplace records.','12 sources scanned'),('compare_arrows','Compare','Normalize price context.','Prices aligned'),('bookmark','Save evidence','Preserve useful listings.','Evidence saved'),('fact_check','Validate','Compare against snapshots.','Ready to validate')] %}
+        <div class="workflow-step rounded-xl border border-slate-700 bg-slate-800/65 p-4 {% if loop.first %}is-active{% endif %}" data-workflow-step data-title="{{ label }}" data-text="{{ text }}" data-status="{{ status }}" data-index="{{ loop.index }}">
+          <div class="flex items-start justify-between gap-3"><span class="workflow-icon grid h-9 w-9 place-items-center rounded-lg bg-slate-700 text-sky-200"><span class="material-symbols-outlined text-xl">{{ icon }}</span></span><span class="workflow-status text-[10px] font-bold uppercase tracking-wide text-cyan-200">{{ status }}</span></div>
+          <h3 class="mt-4 font-display text-base font-bold text-white">{{ label }}</h3><p class="mt-1 text-xs leading-5 text-slate-300">{{ text }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="value" class="relative overflow-hidden border-t border-slate-200 bg-[#f4f7fb] shadow-[inset_0_10px_24px_rgba(15,23,42,.025)]">
+  <div class="mx-auto max-w-7xl px-5 py-20">
+    <div class="relative grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+      <div class="landing-reveal">
+        <p class="text-sm font-semibold text-primary">Value proposition</p>
+        <h2 class="mt-3 font-display text-4xl font-extrabold leading-tight text-slate-950">What is Precision Curator?</h2>
+        <p class="mt-5 text-lg leading-8 text-slate-600">A focused SaaS-style market intelligence workspace for turning scattered marketplace listings into organized, traceable price evidence.</p>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-3 landing-reveal">
+        {% for metric,label,accent in [
+          ('Evidence-first','Saved records keep decisions traceable.',''),
+          ('Role-aware','Workspace context adapts to the account role.',''),
+          ('Tier-gated','Membership controls feature access account-wide.','')
+        ] %}
+        <article class="value-metric border-l-2 border-slate-200 bg-white/70 p-6 first:border-blue-500 last:border-violet-400">
+          <h3 class="font-display text-xl font-extrabold text-slate-950">{{ metric }}</h3>
+          <p class="mt-3 text-sm leading-6 text-slate-600">{{ label }}</p>
+        </article>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="relative overflow-hidden border-y border-slate-200 bg-white">
+  <div class="mx-auto max-w-7xl px-5 py-20">
+    <div class="relative mb-12 max-w-3xl landing-reveal">
+      <p class="text-sm font-semibold text-primary">Core workflow</p>
+      <h2 class="mt-3 font-display text-4xl font-extrabold text-slate-950">Workflow overview: from search to validated market insight</h2>
+      <p class="mt-3 text-slate-600">Search → Compare → Save → Validate. Use one workflow to search, compare, save evidence, track watchlists, and validate predictions against observed snapshots.</p>
+    </div>
+    <div class="relative grid gap-4 lg:grid-cols-5">
+      {% for step,title,text,icon,accent in [
+        ('01','Multi-source product search','Collect records from available marketplace sources.','travel_explore','bg-blue-500'),
+        ('02','Normalized price comparison','Compare price, condition, source and platform context.','compare_arrows','bg-cyan-500'),
+        ('03','Saved evidence records','Preserve useful listings for later review.','folder_open','bg-violet-500'),
+        ('04','Watchlist monitoring','Track selected products and searches over time.','visibility','bg-orange-400'),
+        ('05','Prediction validation','Compare predicted outcomes with observed snapshots.','fact_check','bg-emerald-500')
+      ] %}
+      <article class="workflow-card landing-card landing-reveal group relative rounded-xl border border-slate-200 bg-slate-50 p-5 lg:after:absolute lg:after:left-full lg:after:top-10 lg:after:h-px lg:after:w-4 lg:after:bg-slate-300 lg:last:after:hidden" data-reveal-delay="{{ (loop.index0 * 120) }}" style="--workflow-delay:{{ (loop.index0 * 120) }}ms">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-black uppercase tracking-[0.25em] text-slate-400">{{ step }}</span>
+          <span class="grid h-10 w-10 place-items-center rounded-lg {{ 'bg-blue-50 text-blue-700' if loop.index == 1 else ('bg-cyan-50 text-cyan-700' if loop.index == 2 else ('bg-violet-50 text-violet-700' if loop.index == 3 else ('bg-orange-50 text-orange-700' if loop.index == 4 else 'bg-emerald-50 text-emerald-700'))) }}"><span class="material-symbols-outlined">{{ icon }}</span></span>
+        </div>
+        <h3 class="mt-7 font-display text-lg font-bold text-slate-950">{{ title }}</h3>
+        <p class="mt-3 text-sm leading-6 text-slate-600">{{ text }}</p>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section id="roles" class="relative overflow-hidden bg-[#eef3f8]">
+  <div class="mx-auto max-w-7xl px-5 py-20">
+    <div class="mb-10 max-w-3xl landing-reveal">
+      <p class="text-sm font-semibold text-primary">Role + membership preview</p>
+      <h2 class="mt-3 font-display text-4xl font-extrabold text-slate-950">Choose a workspace for your use case</h2>
+      <p class="mt-3 text-slate-600">Workspace role controls interface context. Membership tier controls available features.</p>
+    </div>
+    <div class="grid gap-5 lg:grid-cols-3">
+      {% for title,text,tint,icon in [
+        ('Consumer','For individual users who want to search products, compare prices, save items, and monitor selected products.','from-blue-600 to-cyan-500','person_search'),
+        ('Retailer / Reseller','For sellers who need market overview, platform comparison, price monitoring, and resale-oriented analytics.','from-orange-500 to-blue-600','storefront'),
+        ('Researcher','For users who need evidence tracking, source audit, logs, data transparency, and exportable research records.','from-violet-600 to-indigo-600','science')
+      ] %}
+      <article class="landing-card landing-reveal {{ 'role-consumer' if loop.index == 1 else ('role-retailer' if loop.index == 2 else 'role-researcher') }} overflow-hidden rounded-xl border border-slate-200 bg-white p-7 shadow-sm" data-reveal-delay="{{ (loop.index0 * 110) }}">
+        <div class="mb-5 grid h-12 w-12 place-items-center rounded-lg {{ 'bg-blue-50 text-blue-700' if loop.index == 1 else ('bg-orange-50 text-orange-700' if loop.index == 2 else 'bg-violet-50 text-violet-700') }}"><span class="material-symbols-outlined">{{ icon }}</span></div>
+        <h3 class="font-display text-xl font-bold text-slate-950">{{ title }}</h3>
+        <p class="mt-3 text-sm leading-6 text-slate-600">{{ text }}</p>
+      </article>
+      {% endfor %}
+    </div>
+    <div id="membership" class="mt-12 border-t border-slate-300 pt-12">
+      <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-primary">Membership</p>
+          <h3 class="mt-2 font-display text-2xl font-extrabold text-slate-950">Account-wide feature access</h3>
+          <p class="mt-2 text-sm text-slate-600">Prototype pricing for demonstration only. One account uses one membership tier. Membership is not charged separately per role.</p>
+        </div>
+        <span class="rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-600">Plan overview</span>
+      </div>
+      <div class="grid gap-5 lg:grid-cols-3">
+        {% for plan in membership_plans %}
+        <article class="relative flex h-full min-h-[34rem] flex-col rounded-xl border bg-white p-7 shadow-sm {% if plan.id == 'premium' %}border-blue-400{% elif plan.id == 'professional' %}border-violet-300{% else %}border-slate-200{% endif %}">
+          {% if plan.id == 'premium' %}
+          <span class="absolute right-5 top-5 rounded-full bg-blue-600 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-sm">Recommended</span>
+          {% endif %}
+          {% if plan.id == 'professional' %}
+          <span class="absolute right-5 top-5 rounded-full bg-violet-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-violet-700">Advanced</span>
+          {% endif %}
+          <p class="text-sm font-semibold text-primary">{{ plan.name }}</p>
+          <p class="mt-2 font-display text-3xl font-extrabold text-slate-950">{{ plan.price }}</p>
+          <p class="mt-3 text-sm leading-6 text-slate-600">{{ plan.description }}</p>
+          <ul class="mt-6 space-y-2 text-sm leading-6 text-slate-700">
+            {% if plan.id == 'basic' %}
+              {% for feature in ['Product search across available sources','Simple product comparison','View essential product details','Limited search history','Read-only preview of advanced modules'] %}
+              <li class="flex gap-2"><span class="mt-1 inline-block h-2 w-2 rounded-full bg-slate-300"></span><span>{{ feature }}</span></li>
+              {% endfor %}
+            {% elif plan.id == 'premium' %}
+              {% for feature in ['Product search and comparison','Save selected evidence','Saved Research workspace','Watchlist tracking and snapshot history','Analytics dashboard and interactive charts','AI-supported market summary','AI price forecast in Watchlist','Standard CSV, chart and report exports from unlocked pages'] %}
+              <li class="flex gap-2"><span class="mt-1 inline-block h-2 w-2 rounded-full bg-blue-500"></span><span>{{ feature }}</span></li>
+              {% endfor %}
+            {% else %}
+              {% for feature in ['All search, evidence, Watchlist, Analytics and AI forecasting capabilities','Forecast validation workflow','Source Audit','Activity Logs','Validation evidence summary','Audit-log export','Research package export','Advanced reporting and provenance records'] %}
+              <li class="flex gap-2"><span class="mt-1 inline-block h-2 w-2 rounded-full bg-violet-500"></span><span>{{ feature }}</span></li>
+              {% endfor %}
+            {% endif %}
+          </ul>
+          <a href="{{ url_for('register', plan=plan.id) }}" class="mt-auto pt-7 {{ 'app-button-secondary' if plan.id == 'basic' else 'app-button-primary' }}">
+            {{ 'Start with Basic' if plan.id == 'basic' else ('Select Premium' if plan.id == 'premium' else 'Select Professional') }}
+          </a>
+        </article>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="testimonials" class="relative overflow-hidden bg-white">
+  <div class="relative mx-auto max-w-7xl px-5 py-20 pb-24">
+    <div class="mb-12 max-w-3xl">
+      <p class="text-sm font-semibold text-primary">Representative feedback</p>
+      <h2 class="mt-3 font-display text-4xl font-extrabold text-slate-950">What users noticed</h2>
+      <p class="mt-4 max-w-2xl text-slate-600">Representative feedback from early product walkthroughs, presented as short product-style takeaways.</p>
+    </div>
+    <div class="grid gap-5 md:grid-cols-3">
+      {% for initials,name,role,quote in [
+        ('MC','Maya Chen','Retailer workflow','Saved evidence and watchlist tracking helped us compare marketplace records in one workflow.'),
+        ('DL','Daniel Lim','Researcher workflow','The source audit view makes it easier to inspect provenance, AI activity and saved evidence records.'),
+        ('AT','Aisha Tan','Consumer workflow','The comparison workflow helped me preserve useful listings and review price differences later.')
+      ] %}
+      <article class="relative flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-7 shadow-sm">
+        <div class="flex items-start gap-4">
+          <span class="grid h-12 w-12 flex-none place-items-center rounded-full bg-slate-900 font-display font-bold text-white">{{ initials }}</span>
+          <div>
+            <p class="font-display text-lg font-bold text-slate-950">{{ name }}</p>
+            <p class="mt-1 text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{{ role }}</p>
+          </div>
+        </div>
+        <p class="mt-5 text-sm leading-7 text-slate-600">"{{ quote }}"</p>
+        <div class="mt-6 inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <span class="h-1.5 w-1.5 rounded-full bg-primary"></span>
+          Product note
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="relative mx-auto max-w-7xl px-5">
+    <div class="h-px bg-gradient-to-r from-transparent via-blue-200/60 to-transparent"></div>
+  </div>
+</section>
+
+<section id="faq" class="relative overflow-hidden border-t border-slate-200 bg-slate-50">
+  <div class="mx-auto max-w-7xl px-5 py-20">
+    <div class="mb-12 max-w-3xl">
+      <p class="text-sm font-semibold text-primary">FAQ</p>
+      <h2 class="mt-3 font-display text-3xl font-extrabold text-slate-950">Frequently asked questions</h2>
+      <p class="mt-4 max-w-2xl text-slate-600">Clear answers about product access, membership, workspace roles, and evidence handling.</p>
+    </div>
+    <div class="mx-auto grid max-w-4xl gap-3" data-faq-accordion>
+      {% for step,question,answer in [
+        ('01','Can one account use multiple workspace roles?','In the final academic prototype, each account uses one primary workspace role. If a user needs a different role, the administrator can update the role in User Management. Multi-role self-service approval is treated as a future commercial enhancement.'),
+        ('02','Do users pay separately for each role?','No. Membership is account-wide. A user has one membership tier, such as Basic, Premium, or Professional, and that tier controls feature access within the assigned workspace role.'),
+        ('03','Why are some features locked?','Advanced features such as watchlists, audit logs, prediction validation, and exports require higher membership tiers.'),
+        ('04','Does AI replace actual market data?','No. AI summaries and predictions are treated as assistive outputs. Actual observed marketplace records remain the evidence source.')
+      ] %}
+      <article class="faq-item overflow-hidden rounded-xl border border-slate-200 bg-white" data-faq-question="{{ question }}">
+        <button type="button" class="faq-trigger flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500" aria-expanded="false" aria-controls="faq-answer-{{ step }}" id="faq-trigger-{{ step }}">
+          <span class="flex items-center gap-3">
+            <span class="grid h-7 w-7 flex-none place-items-center rounded-full bg-blue-50 text-[10px] font-bold tracking-[0.18em] text-primary">{{ step }}</span>
+            <span class="font-display text-[15px] font-bold leading-6 text-slate-950">{{ question }}</span>
+          </span>
+          <span class="faq-icon grid h-8 w-8 flex-none place-items-center rounded-full bg-slate-100 text-slate-600 transition">+</span>
+        </button>
+        <div id="faq-answer-{{ step }}" class="faq-answer hidden border-t border-slate-100 px-5 py-5 text-sm leading-7 text-slate-600" role="region" aria-labelledby="faq-trigger-{{ step }}">{{ answer }}</div>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="border-t border-slate-800 bg-slate-950">
+  <div class="mx-auto max-w-7xl px-5 py-20">
+    <div class="rounded-2xl border border-slate-700 bg-slate-900 px-8 py-10 text-white">
+      <p class="text-sm font-semibold text-blue-300">Get started</p>
+      <h2 class="mt-3 font-display text-4xl font-extrabold">Ready to build your market intelligence workflow?</h2>
+      <p class="mt-4 max-w-2xl text-sm leading-7 text-slate-300">Start with Basic, explore the sample analysis, or choose a workspace role that matches your use case.</p>
+      <div class="mt-7 flex flex-wrap gap-3">
+        <a href="{{ url_for('register', plan='basic') }}" class="app-button-primary">Create account</a>
+        <a href="{{ url_for('sample_analysis') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-600 px-5 py-3 font-bold text-white transition hover:border-slate-400 hover:bg-slate-800">View sample analysis</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="border-t border-slate-800 bg-slate-950">
+  <div class="mx-auto grid max-w-7xl gap-12 px-5 py-16 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
+    <div class="max-w-2xl">
+      <div class="flex items-center gap-3"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" class="h-9 w-9 rounded-lg"><h3 class="font-display text-3xl font-extrabold tracking-tight text-white">Precision Curator</h3></div>
+      <p class="mt-4 max-w-xl text-sm leading-7 text-slate-300">Market intelligence for product search, evidence tracking, watchlist monitoring, and prediction validation.</p>
+      <div class="mt-6 space-y-3">
+        <p class="text-sm text-slate-400">Prototype pricing for demonstration only. No live billing is processed.</p>
+        <p class="text-xs leading-6 text-slate-500">Copyright © 2026 Precision Curator</p>
+      </div>
+    </div>
+    <div class="grid gap-8 sm:grid-cols-2 lg:justify-items-end">
+      <div class="w-full max-w-[12rem]">
+        <p class="text-xs font-bold text-slate-400">Explore</p>
+        <div class="mt-3 flex flex-col gap-2.5 text-sm font-semibold text-slate-300">
+          <a href="{{ url_for('home') }}" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">Home</a>
+          <a href="{{ url_for('home') }}#features" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">Features</a>
+          <a href="{{ url_for('home') }}#roles" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">Roles</a>
+          <a href="{{ url_for('home') }}#membership" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">Pricing</a>
+        </div>
+      </div>
+      <div class="w-full max-w-[12rem]">
+        <p class="text-xs font-bold text-slate-400">Support</p>
+        <div class="mt-3 flex flex-col gap-2.5 text-sm font-semibold text-slate-300">
+          <a href="{{ url_for('home') }}#faq" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">FAQ</a>
+          <a href="{{ url_for('login') }}" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">Workspace login</a>
+          <a href="{{ url_for('sample_analysis') }}" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">Sample analysis</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+<script>
+  (function () {
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const revealNodes = document.querySelectorAll('.landing-reveal');
+    if (reducedMotion || !('IntersectionObserver' in window)) {
+      revealNodes.forEach((node) => node.classList.add('is-visible'));
+    } else {
+      const revealObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        });
+      }, { threshold: 0.12 });
+      revealNodes.forEach((node, index) => {
+        node.style.transitionDelay = `${node.dataset.revealDelay || Math.min(index % 5, 3) * 65}ms`;
+        revealObserver.observe(node);
+      });
+    }
+
+    const preview = document.querySelector('[data-workflow-preview]');
+    if (preview && !reducedMotion) {
+      const steps = Array.from(preview.querySelectorAll('[data-workflow-step]'));
+      const title = preview.querySelector('[data-workflow-title]');
+      const eyebrow = preview.querySelector('[data-workflow-eyebrow]');
+      const count = preview.querySelector('[data-workflow-count]');
+      const progress = preview.querySelector('[data-workflow-progress]');
+      let active = 0;
+      const updateWorkflow = (index) => {
+        active = index;
+        const step = steps[index];
+        steps.forEach((item, itemIndex) => item.classList.toggle('is-active', itemIndex === index));
+        if (title) title.textContent = `${step.dataset.title}: ${step.dataset.text}`;
+        if (eyebrow) eyebrow.textContent = step.dataset.status;
+        if (count) count.textContent = `0${index + 1} / 04`;
+        if (progress) progress.style.width = `${(index + 1) * 25}%`;
+      };
+      steps.forEach((step, index) => step.addEventListener('mouseenter', () => updateWorkflow(index)));
+      let workflowTimer = window.setInterval(() => updateWorkflow((active + 1) % steps.length), 2800);
+      preview.addEventListener('mouseenter', () => window.clearInterval(workflowTimer));
+      preview.addEventListener('mouseleave', () => { workflowTimer = window.setInterval(() => updateWorkflow((active + 1) % steps.length), 2800); });
+    }
+
+    const accordion = document.querySelector('[data-faq-accordion]');
+    if (!accordion) return;
+    const items = Array.from(accordion.querySelectorAll('.faq-item'));
+    const collapse = (item) => {
+      const trigger = item.querySelector('.faq-trigger');
+      const icon = item.querySelector('.faq-icon');
+      const answer = item.querySelector('.faq-answer');
+      trigger?.setAttribute('aria-expanded', 'false');
+      icon && (icon.textContent = '+');
+      answer?.classList.add('hidden');
+      item.classList.remove('is-open');
+    };
+    const expand = (item) => {
+      const trigger = item.querySelector('.faq-trigger');
+      const icon = item.querySelector('.faq-icon');
+      const answer = item.querySelector('.faq-answer');
+      trigger?.setAttribute('aria-expanded', 'true');
+      icon && (icon.textContent = '–');
+      answer?.classList.remove('hidden');
+      item.classList.add('is-open');
+    };
+    items.forEach((item) => {
+      const trigger = item.querySelector('.faq-trigger');
+      trigger?.addEventListener('click', () => {
+        const open = item.classList.contains('is-open');
+        items.forEach(collapse);
+        if (!open) expand(item);
+      });
+    });
+    if (items[0]) expand(items[0]);
+  })();
+</script>
+
+{% endblock %}

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Precision Curator Source Audit Report</title>
+  <style>
+    :root { color: #172033; font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eef2f7; }
+    main { width: min(1180px, calc(100% - 32px)); margin: 24px auto; background: white; padding: 32px 36px; }
+    h1 { margin: 0; font-size: 28px; }
+    h2 { margin: 24px 0 9px; font-size: 16px; }
+    p { line-height: 1.5; }
+    .muted { color: #5d6b7e; }
+    .toolbar { display: flex; justify-content: flex-end; margin-bottom: 18px; }
+    button { border: 0; border-radius: 7px; background: #155eef; color: white; padding: 10px 16px; font-weight: 700; cursor: pointer; }
+    .panel { border: 1px solid #dbe4ef; border-radius: 9px; background: #fbfcfe; break-inside: avoid; }
+    .information { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 4px 16px; }
+    .info-item { display: grid; grid-template-columns: 145px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid #e5ebf3; }
+    .info-item:nth-last-child(-n+2) { border-bottom: 0; }
+    .info-item:nth-child(odd) { padding-right: 20px; }
+    .info-item:nth-child(even) { padding-left: 20px; border-left: 1px solid #e5ebf3; }
+    .label { display: block; color: #66758a; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+    .value { display: block; font-weight: 700; }
+    .summary-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); overflow: hidden; }
+    .summary-item { display: flex; min-width: 0; flex-direction: column; padding: 12px; border-left: 1px solid #dbe4ef; }
+    .summary-item:first-child { border-left: 0; }
+    .summary-item .label { display: flex; min-height: 2.45em; align-items: flex-start; line-height: 1.2; }
+    .summary-item .value { margin-top: 5px; font-size: 18px; line-height: 1; }
+    .summary-item.is-completed .value { color: #137a4a; }
+    .summary-item.is-partial .value { color: #a15c00; }
+    .summary-item.is-failed .value { color: #b42318; }
+    .source-table th:first-child, .source-table td:first-child { width: 25%; font-weight: 700; }
+    .source-table th, .source-table td { text-align: center; }
+    .source-table th:first-child, .source-table td:first-child { text-align: left; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    thead { display: table-header-group; }
+    th { background: #edf3fa; color: #40516a; text-align: left; }
+    th, td { border: 1px solid #ced9e6; padding: 8px; vertical-align: top; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    .provenance { border-left: 4px solid #155eef; background: #f5f8fc; padding: 12px 16px; }
+    @media (max-width: 760px) {
+      main { padding: 24px; }
+      .information { grid-template-columns: 1fr; }
+      .info-item:nth-child(n) { padding: 9px 0; border-left: 0; border-bottom: 1px solid #e5ebf3; }
+      .info-item:last-child { border-bottom: 0; }
+      .summary-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .summary-item { border-bottom: 1px solid #dbe4ef; }
+    }
+    @page { size: landscape; margin: 12mm; }
+    @media print {
+      :root { font-size: 11px; }
+      body { background: white; }
+      main { width: 100%; margin: 0; padding: 0; }
+      .toolbar, .sidebar, .topbar, nav, [data-interactive] { display: none !important; }
+      h2 { break-after: avoid; }
+      .table-wrap { overflow: visible; }
+      table { font-size: 9px; }
+      th, td { padding: 5px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="toolbar" data-interactive><button type="button" onclick="window.print()">Print / Save as PDF</button></div>
+  <p class="label">Evidence trail</p>
+  <h1>Precision Curator Source Audit Report</h1>
+  <p class="muted">A read-only record of marketplace searches, saved evidence, AI analysis and source events in the selected export scope.</p>
+
+  <h2>Report information</h2>
+  <div class="information panel">
+    <div class="info-item"><span class="label">Report generated</span><span class="value">{{ singapore_time_string(generated_at) }}</span></div>
+    <div class="info-item"><span class="label">User / workspace</span><span class="value">{{ report_user }} · {{ workspace }}</span></div>
+    <div class="info-item"><span class="label">Export scope</span><span class="value">Current filtered view</span></div>
+    <div class="info-item"><span class="label">Applied filters</span><span class="value">Type: {{ filters.record_type|title }}{% if filters.query %}; Search: {{ filters.query }}{% endif %}</span></div>
+    <div class="info-item"><span class="label">Date range</span><span class="value">{{ filters.date_from or 'All dates' }}{% if filters.date_to %} to {{ filters.date_to }}{% endif %}</span></div>
+    <div class="info-item"><span class="label">Total included records</span><span class="value">{{ records|length }}</span></div>
+  </div>
+
+  <h2>Audit summary</h2>
+  <div class="summary-strip panel">
+    {% for key, label, value in [('search','Search events', summary.search), ('evidence','Saved evidence events', summary.evidence), ('ai','AI analysis events', summary.ai), ('source','Source events', summary.source), ('completed','Completed records', summary.completed), ('partial','Partial records', summary.partial), ('failed','Failed records', summary.failed)] %}
+    <div class="summary-item is-{{ key }}"><span class="label">{{ label }}</span><span class="value">{{ value }}</span></div>
+    {% endfor %}
+  </div>
+
+  <h2>Marketplace source summary</h2>
+  <div class="panel table-wrap">
+    <table class="source-table">
+      <thead><tr><th>Marketplace</th><th>Success</th><th>No results</th><th>Corrections</th><th>Failures</th></tr></thead>
+      <tbody>
+        <tr><td>eBay</td><td>{{ marketplace_summary.ebay_success }}</td><td>{{ marketplace_summary.ebay_no_results }}</td><td>—</td><td>{{ marketplace_summary.ebay_failure }}</td></tr>
+        <tr><td>Walmart</td><td>{{ marketplace_summary.walmart_success }}</td><td>{{ marketplace_summary.walmart_no_results }}</td><td>{{ marketplace_summary.walmart_correction }}</td><td>{{ marketplace_summary.walmart_failure }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Evidence timeline</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Timestamp</th><th>Record Type</th><th>Query / Product</th><th>Role</th><th>Source Scope</th><th>Status</th><th>Details</th></tr></thead>
+      <tbody>
+        {% for row in records %}
+        <tr><td>{{ singapore_time_string(row.time) }}</td><td>{{ row.type_label }}</td><td>{{ row.query }}</td><td>{{ row.role or '—' }}</td><td>{{ row.source_scope }}</td><td>{{ row.status }}</td><td>{{ row.detail }}</td></tr>
+        {% else %}
+        <tr><td colspan="7">No audit records match the selected filters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Provenance and limitations</h2>
+  <div class="provenance">
+    <p><strong>eBay official marketplace API.</strong></p>
+    <p><strong>Walmart external / third-party marketplace retrieval service.</strong></p>
+    <p>Records represent listings returned and retained for individual searches. They do not represent the complete inventory of either marketplace. Availability, price and seller details may change after collection.</p>
+  </div>
+</main>
+</body>
+</html>

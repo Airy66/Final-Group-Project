@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Unit test / coverage reports
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+pytest-cache-files-*/
+pytest-cache-files-/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+data/
+*.db
+*.sqlite
+logs/
+temp/
+test_output/
+examples/output/
+
+# API keys
+.env
+*.key
+
+# Development notes
+chat.md
+.cache/
+.mypy_cache/
+.ruff_cache/
+outputs/
+
+# Precision Curator runtime output
+static/charts/*
+!static/charts/.gitkeep
+static/uploads/avatars/*
+!static/uploads/avatars/.gitkeep
+login_rendered.html
+results.csv
+test_*.csv
+reports/
+*.log
+*.tmp
+
+# Keep only the documented environment template
+.env.*
+!.env.example

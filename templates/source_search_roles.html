@@ -1,0 +1,580 @@
+{% extends "product_base.html" %}
+{% block title %}Product Price Search & Comparison{% endblock %}
+{% block content %}
+{% set include_related_variants = include_related_variants | default(false) %}
+{% set query_is_product_like = query_is_product_like | default(true) %}
+{% set result_platform_counts = result_platform_counts | default({}) %}
+{% set result_view = result_view | default('All results') %}
+{% set can_save_evidence = can_access(current_user, 'save_evidence') %}
+{% set can_analytics = can_access(current_user, 'analytics_dashboard') %}
+{% set can_ai_discover = can_access(current_user, 'ai_summary') %}
+{% set comparison_enabled = comparison_enabled | default(true) %}
+{% set category_mode = category_mode | default('single_category') %}
+<section class="app-hero">
+  <p class="text-xs font-bold uppercase tracking-widest text-primary">Marketplace research</p>
+  <h1 class="mt-2 font-display text-4xl font-extrabold">Product Search</h1>
+  <p class="mt-2 text-slate-500">Collect and compare marketplace listings for a specific product or model.</p>
+  <p class="mt-2 text-sm text-slate-500">Coverage depends on the selected marketplace sources and the comparable listings available when you search.</p>
+</section>
+
+<form id="source-search-form" method="post" action="{{ url_for('search') }}" class="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+  onsubmit="return beginSourceSearch(this)">
+  <input type="hidden" name="action" value="search">
+  <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_240px_auto]">
+    <label class="text-sm font-bold">Product keyword or model
+      <input id="query-input" name="q" type="search" required value="{{ query }}" placeholder="e.g. iPhone 14 Pro, AirPods Pro 2, Samsung Galaxy S24"
+        class="mt-2 w-full rounded-xl border-slate-200 font-normal">
+    </label>
+    <label class="text-sm font-bold">Search scope
+      <select id="platform-filter" name="search_scope" class="mt-2 w-full rounded-xl border-slate-200 font-normal">
+        {% if search_scope == 'ebay' %}<option value="ebay">All platforms</option><option value="ebay" selected>eBay</option>{% else %}
+        <option value="ebay" {{ 'selected' if search_scope=='ebay' }}>eBay</option>
+        <option value="walmart" {{ 'selected' if search_scope=='walmart' }}>Walmart</option>
+        <option value="both" {{ 'selected' if search_scope=='both' }}>Both platforms</option>{% endif %}
+      </select>
+    </label>
+    <button
+  type="submit"
+  name="action"
+  value="search"
+  class="app-button-primary self-end px-6 py-3">
+  Search Sources
+</button>
+  </div>
+</form>
+{% if spelling_suggestion %}<aside class="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900"><strong>{{ 'Also looking for the brand ' if spelling_suggestion.subtle else 'Did you mean ' }}{{ spelling_suggestion.query }}?</strong><form method="post" action="{{ url_for('search') }}"><input type="hidden" name="q" value="{{ spelling_suggestion.query }}"><input type="hidden" name="search_scope" value="{{ search_scope }}"><button name="action" value="search" class="font-bold text-blue-700 hover:underline">Search for {{ spelling_suggestion.query }}</button></form><span class="text-slate-600">Keep current search</span></aside>{% endif %}
+
+{% if search_record_id %}
+<section class="mt-5" id="result-context">
+  <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm"><div class="flex items-center gap-3"><span class="material-symbols-outlined grid h-9 w-9 place-items-center rounded-lg {{ 'bg-blue-50 text-blue-700' if items else 'bg-slate-100 text-slate-400' }}">{{ 'inventory_2' if items else 'search_off' }}</span><div><p class="font-display text-lg font-bold text-slate-950">{% if comparison_enabled %}{{ items|length }} comparable listing{{ '' if items|length == 1 else 's' }} in the collected result set{% else %}{{ items|length }} matched listing{{ '' if items|length == 1 else 's' }}{% endif %}</p><p class="mt-0.5 text-sm text-slate-500">{{ 'Multiple product categories found' if category_mode == 'multi_category' else 'Multiple product types found' if category_mode == 'multi_product_type' else category_profile.display_name }} · {{ 'eBay and Walmart' if search_scope == 'both' else search_scope|capitalize }}</p></div></div>{% if items and comparison_enabled %}<form method="post" action="{{ url_for('create_search_ai_insight', search_run_id=search_run_id) }}"><input type="hidden" name="search_record_id" value="{{ search_record_id }}"><button type="submit" aria-label="AI Discover: Generate AI price insight" {% if not can_ai_discover %}disabled title="This feature requires Premium membership."{% endif %} class="app-button-secondary">Generate AI price insight</button></form>{% endif %}</div>
+  <p class="mt-2 text-xs text-slate-500">Results reflect listings returned and retained for this search, not the full inventory of each marketplace.</p>
+  {% if not comparison_enabled %}<p class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">{% if category_mode == 'multi_product_type' %}Choose one product type to enable reliable price comparison and analysis.{% else %}Choose one product category to enable reliable price comparison and analysis.{% endif %}</p>{% endif %}
+</section>
+{% if items %}<section class="mt-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" data-facet-area>
+  <div><p class="text-xs font-bold uppercase tracking-widest text-primary">Refine results</p><p class="mt-1 text-sm text-slate-500">Filter the listings already collected for this search.</p></div>
+  {% if general_comparison_mode %}<p class="mt-2 text-sm text-slate-500">General comparison mode is active. Category-specific attributes are not available for this result set.</p>{% endif %}
+  {% if technical_facets_limited %}<p class="mt-2 text-sm text-slate-500">Some technical filters are unavailable because they were not consistently provided by the marketplace listings.</p>{% endif %}
+  <form method="post" action="{{ url_for('search_results', search_run_id=search_run_id) }}" class="mt-4 grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
+    {% if category_mode == 'multi_category' %}<label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500">Category<select name="selected_category_key" class="app-select mt-1.5 w-full py-2 text-sm font-normal normal-case"><option value="">Choose a category</option>{% for entry in category_options %}<option value="{{ entry.key }}">{{ entry.display_name }} ({{ entry.count }})</option>{% endfor %}</select></label>{% elif selected_category_key %}<input type="hidden" name="selected_category_key" value="{{ selected_category_key }}">{% endif %}
+    {% if category_mode == 'multi_product_type' %}<label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500">Product type<select name="selected_product_type" class="app-select mt-1.5 w-full py-2 text-sm font-normal normal-case"><option value="">Choose a product type</option>{% for entry in product_type_options %}<option value="{{ entry.key }}">{{ entry.display_name }} ({{ entry.count }})</option>{% endfor %}</select></label>{% elif selected_product_type %}<input type="hidden" name="selected_product_type" value="{{ selected_product_type }}">{% endif %}
+    {% for key, facet in available_facets.items() if key != 'condition' %}
+    <div><p class="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ facet.label }}</p><details class="relative" data-facet-popover><summary class="app-select flex w-full cursor-pointer list-none items-center justify-between gap-2 py-2 text-sm font-semibold text-slate-700"><span class="min-w-0 truncate" data-facet-summary>{{ selected_facets.get(key, [])|join(', ') or 'Any' }}</span><span class="material-symbols-outlined text-[17px] text-slate-400">expand_more</span></summary><div class="absolute left-0 z-20 mt-2 min-w-56 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">{% for entry in facet['values'] %}<label class="flex items-center justify-between gap-4 rounded-lg px-1 py-1.5 text-sm text-slate-700 hover:bg-slate-50"><span><input type="checkbox" name="{{ key }}" value="{{ entry['value'] }}" {{ 'checked' if entry['value'] in selected_facets.get(key, []) }} class="mr-2 rounded border-slate-300 text-primary">{{ entry['value'] }}</span><span class="text-xs text-slate-400">{{ entry['count'] }}</span></label>{% endfor %}</div></details></div>
+    {% endfor %}
+    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500">Platform<select name="platform" class="app-select mt-1.5 w-full py-2 text-sm font-normal normal-case"><option value="">All platforms</option>{% for value in available_filter_platforms %}<option value="{{ value }}" {{ 'selected' if platform==value }}>{{ value }}</option>{% endfor %}</select></label>
+    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500">Condition<select name="condition" class="app-select mt-1.5 w-full py-2 text-sm font-normal normal-case"><option value="">All conditions</option>{% for entry in available_facets.get('condition', {}).get('values', []) %}<option value="{{ entry['value'] }}" {{ 'selected' if condition_filter==entry['value'] }}>{{ entry['value'] }} ({{ entry['count'] }})</option>{% endfor %}</select></label>
+    <div><p class="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Price range</p><div class="grid grid-cols-2 gap-2"><input name="min_price" type="number" min="0" step=".01" value="{{ min_price }}" placeholder="Min" aria-label="Minimum price" class="app-input w-full py-2 text-sm"><input name="max_price" type="number" min="0" step=".01" value="{{ max_price }}" placeholder="Max" aria-label="Maximum price" class="app-input w-full py-2 text-sm"></div></div>
+    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500">Sort by<select name="sort" class="app-select mt-1.5 w-full py-2 text-sm font-normal normal-case"><option value="normalized_price_asc">Price: low to high</option><option value="normalized_price_desc" {{ 'selected' if sort_option=='normalized_price_desc' }}>Price: high to low</option></select></label>
+    <div><p class="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Actions</p><div class="flex items-center gap-2"><a href="{{ url_for('search_results', search_run_id=search_run_id, selected_category_key='', selected_product_type='') }}" class="inline-flex flex-1 items-center justify-center rounded-lg px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100">Reset</a><button class="app-button-primary flex-1 whitespace-nowrap py-2">Apply filters</button></div></div>
+  </form>
+  {% if selected_facets or platform or condition_filter or min_price or max_price %}<div class="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-xs"><span class="font-bold uppercase tracking-wider text-slate-400">Active</span>{% for key, values in selected_facets.items() %}{% for value in values %}<span class="rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">{{ available_facets[key].label }}: {{ value }}</span>{% endfor %}{% endfor %}{% if platform %}<span class="rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">Platform: {{ platform }}</span>{% endif %}{% if condition_filter %}<span class="rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">Condition: {{ condition_filter }}</span>{% endif %}{% if min_price %}<span class="rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">Min: USD {{ min_price }}</span>{% endif %}{% if max_price %}<span class="rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-700">Max: USD {{ max_price }}</span>{% endif %}</div>{% endif %}
+  </section>
+  {% endif %}
+  {% endif %}
+
+{% if show_search_diagnostics %}
+<div id="loading" class="mt-4 hidden rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-800" aria-live="polite"><span class="material-symbols-outlined mr-2 animate-spin align-middle text-lg">progress_activity</span><span id="loading-message">Searching eBay and Walmart…</span></div>
+{% else %}
+<div id="loading" class="mt-4 hidden rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-900" aria-live="polite" role="status">
+  <div class="flex items-start gap-3"><span class="material-symbols-outlined animate-spin text-xl" aria-hidden="true">progress_activity</span><div><p id="loading-message" class="text-sm font-bold">Searching marketplace sources&hellip;</p><p class="mt-1 text-sm text-blue-800">Collecting and preparing comparable listings. This may take a few seconds.</p></div></div>
+</div>
+{% endif %}
+{% for message in source_messages %}<div class="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{{ message }}</div>{% endfor %}
+{% if notice and items %}<div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{{ notice }}
+</div>{% endif %}
+{% if error %}<div class="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{{ error }}</div>{%
+endif %}
+
+{% if not query or (query and not items) %}
+<aside class="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" aria-label="Example product searches">
+  <span class="font-bold text-slate-800">Example searches:</span> iPhone 17, Sony WH-1000XM5, MacBook Air
+</aside>
+{% endif %}
+
+{% if summary and items %}
+{% if summary.mixed_storage %}<p class="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">Multiple storage capacities are included. Choose one capacity for a more reliable comparison.</p>{% endif %}
+{% if summary.accessories_excluded %}<p class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Accessory-like records were excluded from device-level price summary.</p>{% endif %}
+<section class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Comparable price summary">
+  {% for label,value,icon,accent,is_price in [('Lowest comparable price',summary.lowest_price,'south','emerald',true),('Average comparable price',summary.average_price,'equalizer','blue',true),('Highest comparable price',summary.highest_price,'north','violet',true),('Comparable price spread',summary.potential_saving,'swap_horiz','cyan',true),('Lowest-price platform',summary.best_platform,'storefront','indigo',false)] %}
+  <article class="app-card border-t-2 border-t-{{ accent }}-500 p-4">
+    <div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ label }}</p><p class="mt-2 font-display text-xl font-extrabold text-slate-950">{% if is_price and value is not none %}USD {{ '%.2f'|format(value) }}{% elif value %}{{ value }}{% else %}<span class="text-base text-slate-500">Not qualified</span>{% endif %}</p></div><span class="material-symbols-outlined grid h-8 w-8 place-items-center rounded-lg bg-{{ accent }}-50 text-[18px] text-{{ accent }}-700">{{ icon }}</span></div>
+    {% if loop.last and not value %}<p class="mt-2 text-xs leading-5 text-slate-500">Choose one storage capacity to compare platforms.</p>{% endif %}
+  </article>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if comparison_enabled and search_record_id and (insight or stale_ai_insight) %}<section id="ai-panel" class="mt-5 rounded-xl border border-blue-200 bg-blue-50/60 p-5 shadow-sm">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="flex items-center gap-3"><span class="material-symbols-outlined grid h-10 w-10 place-items-center rounded-lg bg-blue-600 text-xl text-white">auto_awesome</span><div>
+      <p class="text-[11px] font-bold uppercase tracking-wider text-blue-700">Interpretation</p>
+      <h2 class="mt-0.5 font-display text-xl font-bold text-slate-950">AI Price Insight</h2>
+    </div></div><span id="ai-source" class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-100" title="{{ 'Generated with Gemini from the displayed records.' if ai_insight and ai_insight.summary_source == 'Gemini API' else 'Generated locally from the displayed record statistics.' }}"><span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>{{ 'AI-generated' if ai_insight and ai_insight.summary_source == 'Gemini API' else 'Rule-based' }}</span>
+  </div>
+  <p id="ai-summary" class="mt-4 whitespace-pre-line text-sm leading-7 text-slate-700">{{ 'Search again to generate an insight for the updated query.' if stale_ai_insight else ((insight or '')|replace('*', '')) }}</p>
+  <div class="mt-4 flex flex-col gap-2 border-t border-blue-100 pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between"><p id="ai-scope" class="font-semibold">{% if ai_insight %}Based on {{ ai_insight.result_ids|length }} current comparable listings for {{ canonical_model.product_family }} {{ canonical_model.generation }}{% if canonical_model.edition != 'Base' %} {{ canonical_model.edition }}{% endif %}{% endif %}</p><p class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">info</span>AI output may be inaccurate. Verify price, condition, and availability.</p></div>
+</section>
+{% endif %}
+
+{% if items %}
+<form action="{{ url_for('compare') }}" method="post" id="results-form">
+  <input type="hidden" name="search_record_id" value="{{ search_record_id }}">
+  <input type="hidden" name="next" value="{{ request.full_path }}">
+  <div class="mt-8">
+    <div>
+      <p class="text-xs font-bold uppercase tracking-widest text-primary">Collected results · {{
+        role_names[current_user.role] }}</p>
+      <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="mt-1 font-display text-2xl font-bold">{{ 'Price comparison records' if comparison_enabled else 'Search results' }}</h2>
+      {% if comparison_enabled and can_access(current_user, 'analytics_dashboard') %}<button id="analytics-button" type="submit" formaction="{{ url_for('create_search_analysis') }}" formmethod="post" title="Analyzes all analytics-eligible records from this search." class="rounded-xl bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100">Analyze all comparable results</button>{% endif %}</div>
+      <p class="mt-2 text-sm text-slate-500">{% if comparison_enabled %}Results are normalized for comparison. Review product fit, condition, and variant before saving or analyzing.{% else %}Browse all matched listings, then choose one {{ 'product type' if category_mode == 'multi_product_type' else 'category' }} above to create a reliable comparison scope.{% endif %}</p>
+      {% if search_scope == 'both' and result_platform_counts.get('Walmart', 0) == 0 and result_platform_counts.get('eBay', 0) > 0 %}
+      <p class="mt-2 text-sm font-medium text-amber-700">Only eBay has visible matched records. Cross-platform comparison is limited.</p>
+      {% endif %}
+    </div>
+  <div class="mt-4 flex flex-wrap items-center gap-2">
+  <label class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Platform <select id="result-platform-filter" class="ml-2 border-0 bg-transparent text-xs font-bold"><option value="All">All platforms</option>{% for platform in result_platforms %}<option value="{{ platform }}">{{ platform }}</option>{% endfor %}</select></label>
+  <div class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">
+    <span>Quick selection:</span>
+    <button type="button" class="bulk-select-action text-blue-700 hover:underline" data-select-mode="visible">Select visible</button>
+    <button type="button" class="bulk-select-action text-blue-700 hover:underline" data-select-mode="filtered">Select filtered</button>
+    <button type="button" id="clear-selection" class="text-slate-500 hover:underline">Clear</button>
+  </div>
+  <div id="bulk-action-bar" class="sticky top-3 z-20 hidden flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-lg">
+    <strong id="bulk-selected-label" class="text-sm text-slate-900">0 listings selected</strong>
+    <span class="flex-1"></span>
+    {% if comparison_enabled %}<button id="compare-button" type="submit" class="bulk-compare-action rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white" disabled>Compare selected</button>{% endif %}
+    {% if can_access(current_user, 'save_evidence') %}<button id="save-button" type="submit" formaction="{{ url_for('save_result_evidence') }}" formmethod="post" class="bulk-save-action rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white" disabled>Save as evidence</button>{% endif %}
+    <button type="button" class="bulk-action-clear rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600">Clear selection</button>
+  </div>
+</div>
+  </div>
+  <div class="mt-4 overflow-x-auto app-table-wrap">
+    {% if current_user.role == 'consumer' %}
+    <table class="app-table w-full min-w-[960px] text-left text-sm">
+      <thead class="sticky top-0 z-10 bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
+        <tr>
+          <th class="p-3"><input type="checkbox" class="select-all-visible rounded border-slate-300 text-primary" aria-label="Select all visible listings"></th>
+          <th class="p-3">Platform</th>
+          <th class="p-3">Product title</th>
+          <th class="p-3">Price</th>
+          <th class="p-3">Condition</th><th class="p-3">Market position</th>
+          <th class="p-3">Source link</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}<tr class="result-row border-t border-slate-100 transition hover:bg-slate-50/60" data-platform="{{ item.platform }}" data-source-type="{{ item.source_type }}" data-token="{{ item._selection_token }}" data-match-type="{{ item.match_type }}" data-analytics-eligible="{{ 'true' if item.analytics_eligible and (item.match_type == 'exact_match' or (include_related_variants and item.match_type == 'related_variant')) else 'false' }}">
+          <td class="p-3"><input class="record-select result-checkbox" type="checkbox" name="selected_records" {{ 'disabled' if not comparison_enabled }}
+              value="{{ item._selection_token }}" data-record-id="{{ item._selection_token }}"></td>
+          <td class="p-3 align-top"><span class="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">{{ item.platform }}</span></td>
+          <td class="p-3 align-top"><p class="line-clamp-2 max-w-lg font-semibold leading-5 text-slate-900" title="{{ item.title|e }}">{{ item.title }}</p></td>
+          <td class="p-3 font-bold">{{ item.raw_price_text }}</td>
+          <td class="p-3"><span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ item.condition_display }}</span></td><td class="p-3 text-slate-600">{{ item.market_position }}</td>
+          <td class="p-3">{% if is_safe_url(item.source_url) %}<a href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-bold text-primary hover:bg-blue-50">Open listing <span class="material-symbols-outlined text-[15px]">open_in_new</span></a>{% else %}<span class="text-xs text-slate-400">Unavailable</span>{% endif %}</td>
+        </tr>{% endfor %}
+      </tbody>
+    </table>
+    {% elif current_user.role == 'retailer' %}
+    <table class="app-table w-full min-w-[960px] text-left text-sm">
+      <thead class="sticky top-0 z-10 bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
+        <tr>
+          <th class="p-3"><input type="checkbox" class="select-all-visible rounded border-slate-300 text-primary" aria-label="Select all visible listings"></th>
+          <th class="p-3">Platform</th>
+          <th class="p-3">Product title</th>
+          <th class="p-3">Price</th>
+          <th class="p-3">Condition</th>
+          <th class="p-3">Market position</th>
+          <th class="p-3">Source link</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}<tr class="result-row border-t border-slate-100 transition hover:bg-slate-50/60" data-platform="{{ item.platform }}" data-source-type="{{ item.source_type }}" data-token="{{ item._selection_token }}" data-match-type="{{ item.match_type }}" data-analytics-eligible="{{ 'true' if item.analytics_eligible and (item.match_type == 'exact_match' or (include_related_variants and item.match_type == 'related_variant')) else 'false' }}">
+          <td class="p-3"><input class="record-select result-checkbox" type="checkbox" name="selected_records" {{ 'disabled' if not comparison_enabled }}
+              value="{{ item._selection_token }}" data-record-id="{{ item._selection_token }}"></td>
+          <td class="p-3 align-top"><span class="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">{{ item.platform }}</span></td>
+          <td class="p-3 align-top"><p class="line-clamp-2 max-w-lg font-semibold leading-5 text-slate-900" title="{{ item.title|e }}">{{ item.title }}</p></td>
+          <td class="p-3 font-bold">{{ item.raw_price_text }}</td>
+          <td class="p-3"><span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ item.condition_display }}</span></td>
+          <td class="p-3 text-slate-600">{{ item.market_position }}</td>
+          <td class="p-3">{% if is_safe_url(item.source_url) %}<a href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-bold text-primary hover:bg-blue-50">Open listing <span class="material-symbols-outlined text-[15px]">open_in_new</span></a>{% else %}<span class="text-xs text-slate-400">Unavailable</span>{% endif %}</td>
+        </tr>{% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="mb-3 text-sm text-slate-500">Showing core fields only. Technical metadata is available in Source Audit.</p>
+    <table class="app-table w-full min-w-[960px] text-left text-sm">
+      <thead class="sticky top-0 z-10 bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
+        <tr>
+          <th class="p-3"><input type="checkbox" class="select-all-visible rounded border-slate-300 text-primary" aria-label="Select all visible listings"></th>
+          <th class="p-3">Platform</th>
+          <th class="p-3">Product title</th>
+          <th class="p-3">Price</th>
+          <th class="p-3">Condition</th>
+          <th class="p-3">Market position</th>
+          <th class="p-3">Source link</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}<tr class="result-row border-t border-slate-100 transition hover:bg-slate-50/60" data-platform="{{ item.platform }}" data-source-type="{{ item.source_type }}" data-token="{{ item._selection_token }}" data-match-type="{{ item.match_type }}" data-analytics-eligible="{{ 'true' if item.analytics_eligible and (item.match_type == 'exact_match' or (include_related_variants and item.match_type == 'related_variant')) else 'false' }}">
+          <td class="p-3"><input class="record-select result-checkbox" type="checkbox" name="selected_records" {{ 'disabled' if not comparison_enabled }}
+              value="{{ item._selection_token }}" data-record-id="{{ item._selection_token }}"></td>
+          <td class="p-3 align-top"><span class="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">{{ item.platform }}</span></td>
+          <td class="p-3 align-top"><p class="line-clamp-2 max-w-lg font-semibold leading-5 text-slate-900" title="{{ item.title|e }}">{{ item.title }}</p></td>
+          <td class="p-3 font-bold">{{ item.raw_price_text }}</td>
+          <td class="p-3"><span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ item.condition_display }}</span></td>
+          <td class="p-3 text-slate-600">{{ item.market_position }}</td>
+          <td class="p-3">
+            {% if is_safe_url(item.source_url) %}
+            <a href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-bold text-primary hover:bg-blue-50">Open listing <span class="material-symbols-outlined text-[15px]">open_in_new</span></a>
+            {% else %}
+            <span class="text-xs text-slate-400">Unavailable</span>
+            {% endif %}
+          </td>
+        </tr>{% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  <div class="flex flex-wrap items-center justify-between gap-2 border-x border-b border-slate-200 bg-slate-50/70 px-4 py-3 text-xs text-slate-500"><span id="results-visible-summary">Showing {{ items|length }} of {{ items|length }} {{ 'comparable listings in the collected result set' if comparison_enabled else 'matched listings' }}</span><span>Scroll within the table to review all records.</span></div>
+</form>
+{% if excluded_items %}
+<details class="mt-6 rounded-2xl border border-amber-200 bg-amber-50/60 p-5" id="excluded-listings">
+  <summary class="cursor-pointer font-display text-lg font-bold text-slate-900">Excluded results ({{ excluded_items|length }})</summary>
+  <p class="mt-1 text-sm text-slate-600">These records are kept separate from comparable results and cannot be selected for comparison or analysis.</p>
+  <div class="mt-3 overflow-x-auto"><table class="app-table w-full min-w-[700px] text-left text-sm"><thead class="bg-white text-xs uppercase tracking-widest text-slate-500"><tr><th class="p-3">Platform</th><th class="p-3">Product title</th><th class="p-3">Price</th><th class="p-3">Exclusion reason</th><th class="p-3">Source link</th></tr></thead><tbody>{% for item in excluded_items %}<tr class="border-t border-amber-100"><td class="p-3 font-semibold">{{ item.platform }}</td><td class="p-3">{{ item.title }}</td><td class="p-3">{{ item.raw_price_text }}</td><td class="p-3 text-amber-800">{{ item.exclusion_reason or item.price_quality_status or 'Not comparable' }}</td><td class="p-3">{% if is_safe_url(item.source_url) %}<a href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer" class="font-bold text-primary hover:underline">Open listing â†—</a>{% else %}<span class="text-slate-400">Source unavailable</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+</details>
+{% endif %}
+{% else %}
+{% if query %}
+<div class="mt-5 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center shadow-sm">
+  <span class="material-symbols-outlined grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-2xl text-slate-400 mx-auto">search_off</span>
+  <p class="mt-4 font-bold text-slate-900">{% if selected_facets or condition_filter or min_price or max_price %}No comparable listings match the current filters.{% else %}No comparable listings were found for “{{ query }}”.{% endif %}</p>
+  <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-600">{% if not query_is_product_like %}Enter a recognizable product name, brand, or model.{% else %}Check the model spelling, try a shorter keyword, or broaden the search scope. Filters will appear after comparable listings are collected.{% endif %}</p>
+</div>
+{% endif %}
+{% endif %}
+
+<script>
+function beginSourceSearch(form) {
+  if (form.dataset.submitting === 'true') return false;
+  form.dataset.submitting = 'true';
+  form.setAttribute('aria-busy', 'true');
+  form.querySelectorAll('button[type="submit"], button[name="action"]').forEach((button) => {
+    button.disabled = true;
+    button.classList.add('cursor-wait', 'opacity-70');
+  });
+  const loading = document.getElementById('loading');
+  const message = document.getElementById('loading-message');
+  if (loading) loading.classList.remove('hidden');
+  const previous = document.getElementById('result-context');
+  if (previous) {
+    previous.classList.add('opacity-60');
+    previous.setAttribute('aria-label', 'Previous search results');
+  }
+  {% if show_search_diagnostics %}
+  const messages = ['Searching eBay and Walmart…', 'Collecting marketplace listings…', 'Preparing comparable results…'];
+  let index = 0;
+  window.setInterval(() => { index = (index + 1) % messages.length; if (message) message.textContent = messages[index]; }, 1400);
+  {% endif %}
+  return true;
+}
+  document.querySelectorAll('[data-facet-area] details').forEach((popover) => {
+    const panel = popover.querySelector('div');
+    const summaryValue = popover.querySelector('[data-facet-summary]');
+    const updateFacetSummary = () => {
+      const values = [...popover.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
+      if (summaryValue) {
+        summaryValue.textContent = values.length === 0 ? 'Any' : values.length === 1 ? values[0] : `${values.length} selected`;
+        summaryValue.title = values.join(', ');
+      }
+      popover.querySelector('summary')?.classList.toggle('text-blue-700', values.length > 0);
+    };
+    if (panel && !panel.querySelector('[data-facet-done]')) panel.insertAdjacentHTML('beforeend', '<div class="mt-3 flex justify-between border-t border-slate-100 pt-2"><button type="button" data-facet-clear class="text-xs font-bold text-slate-600 hover:text-primary">Clear</button><button type="button" data-facet-done class="rounded-lg bg-blue-600 px-2 py-1 text-xs font-bold text-white">Done</button></div>');
+    popover.addEventListener('toggle', () => {
+      if (popover.open) document.querySelectorAll('[data-facet-popover][open]').forEach((other) => { if (other !== popover) other.open = false; });
+    });
+    popover.querySelectorAll('input[type="checkbox"]').forEach((input) => input.addEventListener('change', updateFacetSummary));
+    popover.querySelector('[data-facet-done]')?.addEventListener('click', () => { updateFacetSummary(); popover.open = false; popover.querySelector('summary')?.focus(); });
+    popover.querySelector('[data-facet-clear]')?.addEventListener('click', () => { popover.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.checked = false; }); updateFacetSummary(); });
+    updateFacetSummary();
+  });
+  document.addEventListener('click', (event) => document.querySelectorAll('[data-facet-area] details[open]').forEach((popover) => { if (!popover.contains(event.target)) popover.open = false; }));
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') document.querySelectorAll('[data-facet-area] details[open]').forEach((popover) => { popover.open = false; popover.querySelector('summary')?.focus(); }); });
+  function resetSearchLoadingState() {
+    const loading = document.getElementById('loading');
+    const form = document.getElementById('source-search-form');
+    if (loading) loading.classList.add('hidden');
+    if (form) {
+      form.dataset.submitting = 'false';
+      form.removeAttribute('aria-busy');
+    }
+    form?.querySelectorAll('button[type="submit"]').forEach((button) => {
+      button.disabled = false;
+      button.classList.remove('cursor-wait', 'opacity-70');
+    });
+  }
+  window.addEventListener('pageshow', resetSearchLoadingState);
+  document.addEventListener('DOMContentLoaded', () => {
+    resetSearchLoadingState();
+    const form = document.getElementById('source-search-form');
+    form?.addEventListener('submit', () => {
+      const loading = document.getElementById('loading');
+      if (loading) loading.classList.remove('hidden');
+      window.setTimeout(() => {
+        form.querySelectorAll('button[type="submit"]').forEach((button) => {
+          button.disabled = true;
+          button.classList.add('cursor-wait', 'opacity-70');
+        });
+      }, 0);
+    });
+  });
+  const canSaveEvidence = {{ 'true' if can_save_evidence else 'false' }};
+  const canAnalytics = {{ 'true' if can_analytics else 'false' }};
+  const canAiDiscover = {{ 'true' if can_ai_discover else 'false' }};
+  const aiButtonDefaultLabel = 'Generate AI price insight';
+  const aiButtonLoadingLabel = 'Analyzing...';
+  const cleanInsightText = (value) => String(value || '').replace(/\*+/g, '').replace(/[ \t]+\n/g, '\n').trim();
+  const setAiSourceLabel = (node, rawSource) => {
+    if (!node) return;
+    const isGemini = rawSource === 'Gemini API';
+    const isRuleBased = String(rawSource || '').toLowerCase().includes('rule-based');
+    const label = isGemini ? 'AI-generated' : (isRuleBased ? 'Rule-based' : (rawSource || ''));
+    const dot = document.createElement('span');
+    dot.className = 'h-1.5 w-1.5 rounded-full bg-blue-500';
+    node.replaceChildren(dot, document.createTextNode(label));
+    node.title = isGemini ? 'Generated with Gemini from the displayed records.' : (isRuleBased ? 'Generated locally from the displayed record statistics.' : '');
+  };
+  let activeResultView = {{ result_view | tojson }};
+  const visibleRecords = () => [...document.querySelectorAll('.result-row')].filter((row) => !row.classList.contains('hidden'));
+  const selectedCountLabel = () => `${document.querySelectorAll('.record-select:checked').length} records selected`;
+  const visibleRecordCount = () => visibleRecords().length;
+  const selectedCount = () => document.querySelectorAll('.record-select:checked').length;
+  const canCompare = () => selectedCount() >= 2;
+  const canSave = () => canSaveEvidence && selectedCount() >= 1;
+  const canShowAnalytics = () => canAnalytics && visibleRecordCount() > 0;
+  const recordsForView = () => visibleRecords().map((row) => ({
+    platform: row.dataset.platform,
+    sourceType: row.dataset.sourceType,
+    token: row.dataset.token,
+    title: row.querySelector('td:nth-child(3)')?.textContent?.trim() || '',
+    price: row.querySelector('td:nth-child(4)')?.textContent?.trim() || '',
+  }));
+  const updateSourceStatusCopy = (view, count) => {
+    const note = document.getElementById('source-status-note');
+    if (!note) return;
+    if (view === 'eBay' || view === 'eBay live') note.textContent = 'Showing eBay records only.';
+    else if (view === 'Walmart' || view === 'Walmart SerpApi') note.textContent = 'Showing Walmart marketplace records.';
+    else note.textContent = 'Showing all comparable records from eBay and Walmart.';
+  };
+  const matchesActiveResultView = (row) => {
+    const sourceType = String(row.dataset.sourceType || '').toLowerCase();
+    if (activeResultView === 'All results' || activeResultView === 'All comparable records') return true;
+    if (activeResultView === 'eBay' || activeResultView === 'eBay live') return row.dataset.platform === 'eBay';
+    if (activeResultView === 'Walmart' || activeResultView === 'Walmart SerpApi') return row.dataset.platform === 'Walmart';
+    return true;
+  };
+  const filteredRows = () => [...document.querySelectorAll('.result-row')].filter((row) => !row.classList.contains('hidden') && matchesActiveResultView(row));
+  function syncActionButtons() {
+    const compareButton = document.getElementById('compare-button');
+    const saveButton = document.getElementById('save-button');
+    const analyticsLink = document.getElementById('analytics-link');
+    const hint = document.getElementById('selection-hint');
+    const countBadge = document.getElementById('selection-count');
+    const count = selectedCount();
+    if (compareButton) {
+      compareButton.disabled = !canCompare();
+      compareButton.title = canCompare() ? '' : 'Select at least 2 records to compare';
+    }
+    if (saveButton) {
+      saveButton.disabled = !canSave();
+      saveButton.title = canSaveEvidence ? (count >= 1 ? '' : 'Select at least 1 record to save') : 'Premium required';
+      if (canSaveEvidence) saveButton.textContent = count ? `Save selected evidence (${count})` : 'Save selected evidence';
+    }
+    if (analyticsLink) {
+      const analyticsEnabled = canShowAnalytics();
+      analyticsLink.classList.toggle('pointer-events-none', !analyticsEnabled);
+      analyticsLink.classList.toggle('opacity-50', !analyticsEnabled);
+      analyticsLink.setAttribute('aria-disabled', analyticsEnabled ? 'false' : 'true');
+      analyticsLink.title = analyticsEnabled ? '' : (canAnalytics ? 'No visible records available' : 'Premium required');
+      const tokens = visibleRecords().filter((row) => row.dataset.analyticsEligible === 'true').map((row) => row.dataset.token).filter(Boolean);
+      analyticsLink.href = analyticsEnabled ? analyticsLink.dataset.baseHref + tokens.map((token) => '&result_token=' + encodeURIComponent(token)).join('') : analyticsLink.dataset.baseHref;
+    }
+    if (hint) {
+      const showCompareHint = count === 1;
+      hint.classList.toggle('invisible', !showCompareHint);
+      hint.classList.toggle('visible', showCompareHint);
+      hint.textContent = count === 1 ? 'Select one more result to compare.' : '';
+    }
+    if (countBadge) {
+      countBadge.classList.toggle('invisible', count === 0);
+      countBadge.classList.toggle('visible', count > 0);
+      countBadge.textContent = count ? selectedCountLabel() : '';
+    }
+    const bulkBar = document.getElementById('bulk-action-bar');
+    if (bulkBar) {
+      bulkBar.classList.toggle('hidden', count === 0);
+      bulkBar.classList.toggle('flex', count > 0);
+      document.getElementById('bulk-selected-label').textContent = `${count} selected`;
+      document.querySelectorAll('.bulk-compare-action').forEach((button) => { button.disabled = count < 2; });
+      document.querySelectorAll('.bulk-save-action').forEach((button) => { button.disabled = count < 1; });
+    }
+    const visibleBoxes = visibleRecords().map((row) => row.querySelector('.record-select')).filter(Boolean);
+    const checkedVisible = visibleBoxes.filter((box) => box.checked).length;
+    document.querySelectorAll('.select-all-visible').forEach((box) => {
+      box.checked = visibleBoxes.length > 0 && checkedVisible === visibleBoxes.length;
+      box.indeterminate = checkedVisible > 0 && checkedVisible < visibleBoxes.length;
+    });
+  }
+  function updateSelectedActions() {
+    syncActionButtons();
+  }
+  document.addEventListener('change', (event) => {
+    if (event.target && event.target.matches('.record-select')) {
+      updateSelectedActions();
+    }
+  });
+  function updateAnalyticsLink() {
+    const link = document.getElementById('analytics-link');
+    if (!link) return;
+    const tokens = visibleRecords()
+      .filter((row) => row.dataset.analyticsEligible === 'true')
+      .map((row) => row.dataset.token)
+      .filter(Boolean);
+    if (!tokens.length) {
+      link.classList.add('pointer-events-none', 'opacity-50');
+      link.setAttribute('aria-disabled', 'true');
+      return;
+    }
+    link.classList.remove('pointer-events-none', 'opacity-50');
+    link.removeAttribute('aria-disabled');
+    link.href = link.dataset.baseHref + tokens.map((token) => '&result_token=' + encodeURIComponent(token)).join('');
+  }
+  function applyResultView(view) {
+    activeResultView = view;
+    const rows = [...document.querySelectorAll('.result-row')];
+    let visibleCount = 0;
+    rows.forEach((row) => {
+      const sourceType = (row.dataset.sourceType || '').toLowerCase();
+      const visible = view === 'All results' || view === 'All comparable records'
+        || ((view === 'eBay' || view === 'eBay live') && row.dataset.platform === 'eBay')
+        || ((view === 'Walmart' || view === 'Walmart SerpApi') && row.dataset.platform === 'Walmart');
+      row.classList.toggle('hidden', !visible);
+      if (visible) visibleCount += 1;
+    });
+    document.querySelectorAll('.result-chip').forEach((chip) => {
+      const active = chip.dataset.resultView === view;
+      chip.classList.toggle('border-blue-500', active);
+      chip.classList.toggle('bg-blue-50', active);
+      chip.classList.toggle('text-blue-700', active);
+      chip.classList.toggle('border-slate-200', !active);
+      chip.classList.toggle('bg-white', !active);
+      chip.classList.toggle('text-slate-600', !active);
+    });
+    const emptyState = document.getElementById('platform-empty-state');
+    const emptyMessage = document.getElementById('platform-empty-message');
+    if (emptyState) {
+      emptyState.classList.toggle('hidden', visibleCount > 0);
+      if (emptyMessage && visibleCount === 0) emptyMessage.textContent = view.includes('Walmart') ? 'No Walmart records in the current result view.' : (view.includes('eBay') ? 'No eBay records in the current result view.' : 'No records found for this result view.');
+    }
+    const visibleSummary = document.getElementById('results-visible-summary');
+    if (visibleSummary) visibleSummary.textContent = `Showing ${visibleCount} of ${rows.length} {{ 'comparable listings in the collected result set' if comparison_enabled else 'matched listings' }}`;
+    updateSourceStatusCopy(view, visibleCount);
+    updateSelectedActions();
+    updateAnalyticsLink();
+  }
+  document.querySelectorAll('.result-chip').forEach((chip) => chip.addEventListener('click', () => applyResultView(chip.dataset.resultView)));
+  document.getElementById('result-platform-filter')?.addEventListener('change', (event) => {
+    const value = event.target.value;
+    applyResultView(value === 'All' ? 'All results' : value);
+  });
+  const setSelection = (predicate) => {
+    document.querySelectorAll('.record-select').forEach((box) => {
+      const row = box.closest('.result-row');
+      if (predicate(row)) box.checked = true;
+    });
+    updateSelectedActions();
+  };
+  document.querySelectorAll('.bulk-select-action').forEach((button) => button.addEventListener('click', () => {
+    const mode = button.dataset.selectMode;
+    setSelection((row) => mode === 'ebay' ? row.dataset.platform === 'eBay' : mode === 'walmart' ? row.dataset.platform === 'Walmart' : !row.classList.contains('hidden'));
+  }));
+  document.querySelectorAll('.select-all-visible').forEach((box) => box.addEventListener('change', () => {
+    visibleRecords().forEach((row) => {
+      const checkbox = row.querySelector('.record-select');
+      if (checkbox) checkbox.checked = box.checked;
+    });
+    updateSelectedActions();
+  }));
+  const clearSelection = () => { document.querySelectorAll('.record-select').forEach((box) => { box.checked = false; }); updateSelectedActions(); };
+  document.getElementById('clear-selection')?.addEventListener('click', clearSelection);
+  document.querySelectorAll('.bulk-action-clear').forEach((button) => button.addEventListener('click', clearSelection));
+  applyResultView({{ result_view | tojson }});
+  updateSelectedActions();
+  const aiButton = document.getElementById('ai-button');
+  const originalSearchQuery = {{ query|tojson }};
+  {% if search_record_id %}
+  document.getElementById('query-input')?.addEventListener('input', (event) => {
+    if (event.target.value.trim() === originalSearchQuery.trim()) return;
+    const panel = document.getElementById('ai-panel');
+    if (panel) panel.classList.remove('hidden');
+    const summary = document.getElementById('ai-summary');
+    if (summary) summary.textContent = 'Search again to generate an insight for the updated query.';
+    const source = document.getElementById('ai-source');
+    if (source) source.textContent = '';
+  });
+  {% endif %}
+  if (aiButton) aiButton.addEventListener('click', async (event) => {
+    event.preventDefault();
+    const selected = [...document.querySelectorAll('.record-select:checked')].map((box) => box.value).filter(Boolean);
+    const panel = document.getElementById('ai-panel');
+    const summary = document.getElementById('ai-summary');
+    const source = document.getElementById('ai-source');
+    const scope = document.getElementById('ai-scope');
+    const label = aiButton.querySelector('span:last-child') || aiButton;
+    const setLoading = (loading) => {
+      aiButton.disabled = loading || !canAiDiscover || !visibleRecordCount();
+      aiButton.classList.toggle('cursor-wait', loading);
+      aiButton.classList.toggle('opacity-70', loading);
+      label.textContent = loading ? aiButtonLoadingLabel : aiButtonDefaultLabel;
+    };
+    panel.classList.remove('hidden');
+    if (!canAiDiscover) {
+      summary.textContent = 'AI Discover requires Premium membership.';
+      setAiSourceLabel(source, 'Locked');
+      return;
+    }
+    if (!visibleRecordCount()) {
+      summary.textContent = 'Search results are required before AI Discover.';
+      setAiSourceLabel(source, 'No results');
+      return;
+    }
+    {% if not items %}
+    summary.textContent = 'Please search sources first before using AI Discover.';
+    setAiSourceLabel(source, 'No results');
+    return;
+    {% endif %}
+    setLoading(true);
+    summary.textContent = 'Analysing the currently displayed results...';
+    setAiSourceLabel(source, 'Loading');
+    try {
+      const response = await window.csrfFetch('{{ url_for("ai_discover") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ search_record_id: '{{ search_record_id or "" }}' })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'AI Discover is unavailable.');
+      }
+      summary.textContent = cleanInsightText(data.summary || 'No summary returned.');
+      setAiSourceLabel(source, data.summary_source || 'Rule-based fallback');
+      scope.textContent = `Based on ${data.comparable_result_count || 0} comparable records from this search · ${(data.platforms || []).join(', ') || 'No platform'} · Generated ${data.generated_at || '—'}`;
+    } catch (error) {
+      summary.textContent = error.message || 'AI Discover is currently unavailable. Try again later or use the visible analytics.';
+      setAiSourceLabel(source, 'Error');
+    } finally {
+      setLoading(false);
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,32 @@
+﻿{% extends "product_base.html" %}
+{% block title %}Sign in · Precision Curator{% endblock %}
+{% block public_content %}
+<section class="min-h-[calc(100vh-73px)] bg-gradient-to-br from-blue-50 via-indigo-50 to-white px-5 py-14">
+<div class="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2">
+  <div class="rounded-[2rem] border border-blue-100 bg-blue-50/70 p-8 shadow-sm">
+    <p class="text-sm font-semibold text-blue-700">Your market intelligence workspace</p>
+    <h1 class="mt-4 font-display text-5xl font-extrabold text-slate-950">Sign in to your workspace</h1>
+    <p class="mt-5 max-w-xl text-lg leading-8 text-slate-600">Use your email and password to continue.</p>
+  </div>
+  <form method="post" class="rounded-[2rem] border border-white/80 bg-white/95 p-7 shadow-soft backdrop-blur md:p-10">
+    <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+    <div class="space-y-5">
+      <div>
+        <label for="email" class="text-sm font-bold text-slate-700">Email</label>
+        <input id="email" name="email" type="email" required autocomplete="email" placeholder="name@example.com" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 invalid:border-red-300 invalid:focus:ring-red-100">
+        <p class="mt-2 text-xs text-slate-500">Use a valid email address.</p>
+      </div>
+      <div>
+        <label for="password" class="text-sm font-bold text-slate-700">Password</label>
+        <input id="password" name="password" type="password" required minlength="8" autocomplete="current-password" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 invalid:border-red-300 invalid:focus:ring-red-100">
+        <p class="mt-2 text-xs text-slate-500">Password must be at least 8 characters.</p>
+      </div>
+      <button class="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4 font-bold text-white shadow-lg shadow-blue-500/25 transition hover:from-blue-700 hover:to-indigo-700 hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-blue-300">Enter workspace</button>
+    </div>
+    <div class="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm font-semibold">
+      <a href="{{ url_for('register') }}" class="text-primary hover:text-blue-700">Create account</a>
+      <a href="{{ url_for('forgot_password') }}" class="text-slate-500 hover:text-slate-700">Forgot password?</a>
+    </div>
+  </form>
+</div></section>
+{% endblock %}

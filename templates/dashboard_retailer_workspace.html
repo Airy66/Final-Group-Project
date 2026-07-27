@@ -1,0 +1,129 @@
+﻿{% extends "product_base.html" %}
+{% block title %}Retailer dashboard{% endblock %}
+{% block content %}
+<section class="flex flex-wrap items-end justify-between gap-6 rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-blue-50/40 to-slate-50 p-8 shadow-sm">
+  <div class="max-w-3xl">
+    <p class="text-xs font-bold uppercase tracking-widest text-primary">Retailer / reseller workspace</p>
+    <h1 class="mt-2 font-display text-4xl font-extrabold text-slate-950">Market overview</h1>
+    <p class="mt-3 text-slate-600">Monitor pricing, brands, platforms, and category coverage from your current saved and collected records.</p>
+    <div class="mt-4 flex flex-wrap items-center gap-3">
+      <span class="rounded-full {{ 'border border-emerald-100 bg-emerald-50 text-emerald-700' if not synthetic else 'border border-amber-100 bg-amber-50 text-amber-700' }} px-3 py-1 text-xs font-bold uppercase tracking-wider">{{ market_badge }}</span>
+      <p class="text-sm text-slate-600">{{ market_message }}</p>
+    </div>
+  </div>
+  <a href="{{ url_for('search') }}" class="rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white shadow-sm hover:bg-blue-700">Search Sources</a>
+</section>
+
+<section class="mt-7 grid grid-cols-2 gap-4 xl:grid-cols-5">
+  <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Total records</p>
+    <p class="mt-3 font-display text-3xl font-extrabold text-slate-950">{{ prices.listings }}</p>
+    <p class="mt-2 text-sm text-slate-500">Saved evidence or latest collected results.</p>
+  </article>
+  <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Average price</p>
+    <p class="mt-3 font-display text-3xl font-extrabold text-slate-950">{{ prices.average if prices.average is not none else '—' }}</p>
+    <p class="mt-2 text-sm text-slate-500">Based on the visible dataset.</p>
+  </article>
+  <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Platform count</p>
+    <p class="mt-3 font-display text-3xl font-extrabold text-slate-950">{{ platforms|length }}</p>
+    <p class="mt-2 text-sm text-slate-500">eBay and Walmart appear when available.</p>
+  </article>
+  <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Category count</p>
+    <p class="mt-3 font-display text-3xl font-extrabold text-slate-950">{{ categories|length }}</p>
+    <p class="mt-2 text-sm text-slate-500">Coverage across product categories.</p>
+  </article>
+  <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Demo records</p>
+    <p class="mt-3 font-display text-3xl font-extrabold text-slate-950">{{ demo_records }}</p>
+    <p class="mt-2 text-sm text-slate-500">Only used when no live records exist.</p>
+  </article>
+</section>
+
+<section class="mt-8 grid gap-6 xl:grid-cols-2">
+  <article class="rounded-3xl border border-slate-200 bg-slate-50/70 p-6 shadow-sm">
+    <div class="mb-5">
+      <h2 class="font-display text-2xl font-bold text-slate-950">Platform monitoring</h2>
+      <p class="mt-1 text-sm text-slate-500">Distribution from the same dataset used in the summary cards.</p>
+    </div>
+    <div class="space-y-3">
+      {% for platform,count in distribution.items() %}
+      <div class="rounded-2xl border border-slate-100 bg-white px-5 py-4">
+        <div class="flex justify-between text-sm">
+          <span class="font-semibold text-slate-700">{{ platform }}</span>
+          <strong class="text-slate-950">{{ count }}</strong>
+        </div>
+        <div class="mt-3 h-2 rounded-full bg-slate-100">
+          <div class="h-2 rounded-full bg-blue-500" style="width:{{ [count * 10, 100] | min }}%"></div>
+        </div>
+      </div>
+      {% else %}
+      <p class="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">Platform monitoring will populate after source collection or saving evidence.</p>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="rounded-3xl border border-blue-100 bg-blue-50/60 p-6 shadow-sm">
+    <span class="grid h-11 w-11 place-items-center rounded-xl border border-blue-100 bg-white text-primary"><span class="material-symbols-outlined">auto_awesome</span></span>
+    <h2 class="mt-4 font-display text-2xl font-bold text-slate-950">Rule-based market snapshot</h2>
+    <p class="mt-3 text-sm leading-7 text-slate-600">{{ 'Observed prices range from ' ~ prices.lowest ~ ' to ' ~ prices.highest ~ ', averaging ' ~ prices.average ~ ' across ' ~ prices.listings ~ ' records. Coverage spans ' ~ platforms|length ~ ' platforms and ' ~ categories|length ~ ' categories.' if prices.listings else 'No records are available yet.' }}</p>
+    <p class="mt-4 inline-flex rounded-full border {{ 'border-emerald-100 bg-emerald-50 text-emerald-700' if not synthetic else 'border-amber-100 bg-amber-50 text-amber-700' }} px-3 py-1 text-xs font-bold uppercase tracking-wider">{{ 'Live dataset' if not synthetic else 'Demo records' }}</p>
+    <p class="mt-4 text-sm text-slate-600">Use Gemini AI Discover after collecting a result set for an AI analysis.</p>
+  </article>
+</section>
+
+<section id="market-records" class="mt-8 rounded-3xl bg-white p-6 shadow-soft">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h2 class="font-display text-xl font-bold">Market records</h2>
+      <p class="text-sm text-slate-500">Filter category, platform, and price range.</p>
+    </div>
+    <div class="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <select id="market-platform" class="rounded-xl border-slate-200 text-sm">
+        <option value="">All platforms</option>
+        {% for value in platforms %}<option>{{ value }}</option>{% endfor %}
+      </select>
+      <select id="market-category" class="rounded-xl border-slate-200 text-sm">
+        <option value="">All categories</option>
+        {% for value in categories %}<option>{{ value }}</option>{% endfor %}
+      </select>
+      <input id="market-min" type="number" placeholder="Min price" class="rounded-xl border-slate-200 text-sm">
+      <input id="market-max" type="number" placeholder="Max price" class="rounded-xl border-slate-200 text-sm">
+    </div>
+  </div>
+  <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+    <table class="w-full table-fixed text-left text-sm">
+      <colgroup>
+        <col class="w-[28%]">
+        <col class="w-[18%]">
+        <col class="w-[16%]">
+        <col class="w-[12%]">
+        <col class="w-[14%]">
+        <col class="w-[12%]">
+      </colgroup>
+      <thead class="bg-slate-50"><tr><th class="p-3">Product / brand</th><th class="p-3">Category</th><th class="p-3">Platform</th><th class="p-3">Price</th><th class="p-3">Source</th><th class="p-3">Confidence</th></tr></thead>
+      <tbody id="market-body">
+        {% for item in products %}
+        <tr data-platform="{{ item.platform }}" data-category="{{ item.category or 'Other' }}" data-price="{{ item.total_price if item.total_price is not none else (item.normalized_price if item.normalized_price is not none else (item.price or 0)) }}" class="border-t border-slate-100">
+          <td class="p-3"><strong>{{ item.title }}</strong><small class="block text-slate-400">{{ item.seller }}</small></td>
+          <td class="p-3">{{ item.category or 'Other' }}</td>
+          <td class="p-3">{{ item.platform }}</td>
+          <td class="p-3 font-bold">{{ item.currency }} {{ item.total_price if item.total_price is not none else (item.normalized_price if item.normalized_price is not none else (item.price or 0)) }}</td>
+          <td class="p-3">{{ item.source_type }}</td>
+          <td class="p-3">{{ item.confidence_level }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p id="market-empty" class="hidden p-8 text-center text-sm text-slate-400">No records match these filters.</p>
+  </div>
+</section>
+{% include "partials/search_history.html" %}
+<script>
+  const inputs=['market-platform','market-category','market-min','market-max'].map(id=>document.getElementById(id));
+  function filterMarket(){let shown=0;document.querySelectorAll('#market-body tr').forEach(row=>{const [platform,category,min,max]=inputs.map(x=>x.value);const price=Number(row.dataset.price);const visible=(!platform||row.dataset.platform===platform)&&(!category||row.dataset.category===category)&&(!min||price>=Number(min))&&(!max||price<=Number(max));row.classList.toggle('hidden',!visible);shown+=visible?1:0});document.getElementById('market-empty').classList.toggle('hidden',shown>0)}
+  inputs.forEach(input=>input.addEventListener('input',filterMarket));
+</script>
+{% endblock %}
