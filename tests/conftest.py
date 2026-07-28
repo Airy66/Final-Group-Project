@@ -10,6 +10,7 @@ TEST_SERPAPI_API_KEY = "test-serpapi-key-not-real"
 # These values are established before test modules import precision_app, so
 # application startup never reads the developer's real .env during pytest.
 os.environ["APP_ENV"] = "testing"
+os.environ["PRECISION_TESTING"] = "true"
 os.environ["SERPAPI_API_KEY"] = TEST_SERPAPI_API_KEY
 
 

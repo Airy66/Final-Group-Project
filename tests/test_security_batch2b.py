@@ -176,12 +176,12 @@ def test_relative_internal_redirect_and_login_next_behavior():
 
 def test_environment_aware_secret_and_cookie_configuration(caplog):
     with pytest.raises(ProductionConfigurationError):
-        validate_production_configuration({"APP_ENV": "production", "ALLOW_MEMORY_FALLBACK": "false"})
+        validate_production_configuration({"APP_ENV": "production", "DEMO_MODE": "false"})
     stable_secret = "stable-production-secret-key-1234567890"
     production = web_security_configuration({
         "APP_ENV": "production",
         "APP_BASE_URL": "https://precision-curator.example.com",
-        "ALLOW_MEMORY_FALLBACK": "false",
+        "DEMO_MODE": "false",
         "FLASK_SECRET_KEY": stable_secret,
         "SESSION_LIFETIME_HOURS": "12",
     })

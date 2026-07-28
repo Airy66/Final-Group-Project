@@ -7,13 +7,13 @@ from pymongo import MongoClient
 
 load_dotenv()
 
-MONGODB_URI = os.getenv("MONGODB_URI")
-MONGO_DB_NAME = os.getenv("MONGODB_DATABASE") or os.getenv("MONGODB_DB_NAME", "precision_curator")
+MONGO_URI = os.getenv("MONGO_URI")
+MONGO_DB_NAME = os.getenv("MONGO_DATABASE", "precision_curator_production")
 
-if not MONGODB_URI:
-    raise RuntimeError("MONGODB_URI is not set in .env")
+if not MONGO_URI:
+    raise RuntimeError("MONGO_URI is not set in .env")
 
-client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
+client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
 client.admin.command("ping")
 
 db = client[MONGO_DB_NAME]

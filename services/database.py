@@ -1,9 +1,4 @@
-"""MongoDB persistence with a small in-memory development fallback.
-
-MongoDB is the production data store.  The fallback keeps the UI and automated
-tests usable when a local MongoDB server has not yet been configured; the UI
-always exposes which storage mode is active.
-"""
+"""MongoDB persistence with an explicitly enabled in-memory demo mode."""
 
 from collections import Counter
 from copy import deepcopy
@@ -20,9 +15,11 @@ try:
     from bson import ObjectId
     from pymongo import ASCENDING, DESCENDING, MongoClient
     from pymongo.errors import DuplicateKeyError
+    from pymongo.uri_parser import parse_uri
 except ImportError:  # pragma: no cover - exercised on minimal installations
     ObjectId = None
     MongoClient = None
+    parse_uri = None
     ASCENDING, DESCENDING = 1, -1
     class DuplicateKeyError(Exception):
         pass
@@ -65,15 +62,18 @@ class MongoRepository:
     )
 
     def __init__(self, uri=None, database_name=None, allow_memory_fallback=None):
-        self.uri = os.getenv("MONGODB_URI") if uri is None else uri
+        self.uri = os.getenv("MONGO_URI") if uri is None else uri
         self.database_name = (
             database_name
-            or os.getenv("MONGODB_DATABASE")
-            or os.getenv("MONGODB_DB_NAME", "precision_curator")
+            or os.getenv("MONGO_DATABASE")
+            or "precision_curator_production"
         )
         if is_production_environment() and allow_memory_fallback:
             raise ProductionConfigurationError("Memory fallback cannot be enabled in production.")
-        self.allow_memory_fallback = memory_fallback_allowed() if allow_memory_fallback is None else bool(allow_memory_fallback)
+        demo_mode = memory_fallback_allowed()
+        if allow_memory_fallback and not demo_mode:
+            raise ProductionConfigurationError("In-memory storage requires DEMO_MODE=true.")
+        self.allow_memory_fallback = demo_mode if allow_memory_fallback is None else bool(allow_memory_fallback)
         self.client = None
         self.db = None
         self.error = None
@@ -82,10 +82,14 @@ class MongoRepository:
         self._price_alert_lock = threading.Lock()
         if self.uri and MongoClient:
             try:
-                self.client = MongoClient(self.uri, serverSelectionTimeoutMS=1200)
+                self.client = MongoClient(self.uri, serverSelectionTimeoutMS=5000)
                 self.client.admin.command("ping")
                 self.db = self.client[self.database_name]
                 self._create_indexes()
+                parsed = parse_uri(self.uri) if parse_uri else {}
+                nodes = parsed.get("nodelist") or []
+                host = nodes[0][0] if nodes else "unknown"
+                print(f"MongoDB connected: host={host}, database={self.database_name}", flush=True)
             except Exception as exc:  # Never leak a URI through an error string.
                 self.client = None
                 self.db = None
@@ -93,9 +97,9 @@ class MongoRepository:
                 if not self.allow_memory_fallback:
                     raise RuntimeError("MongoDB is unavailable and memory fallback is disabled.") from exc
         elif not self.uri:
-            self.error = "MONGODB_URI is not configured"
+            self.error = "MONGO_URI is not configured"
             if not self.allow_memory_fallback:
-                raise RuntimeError("MONGODB_URI is required when memory fallback is disabled.")
+                raise RuntimeError("MONGO_URI is required unless DEMO_MODE=true.")
         else:
             self.error = "PyMongo is not installed"
             if not self.allow_memory_fallback:

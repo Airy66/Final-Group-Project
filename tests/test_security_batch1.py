@@ -240,11 +240,12 @@ def test_demo_get_routes_do_not_seed_and_demo_mutations_require_approved_operato
 
 def test_production_rejects_missing_mongodb_and_memory_fallback(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
-    monkeypatch.setenv("ALLOW_MEMORY_FALLBACK", "false")
-    with pytest.raises(RuntimeError, match="MONGODB_URI is required"):
+    monkeypatch.setenv("DEMO_MODE", "false")
+    with pytest.raises(RuntimeError, match="MONGO_URI is required"):
         MongoRepository(uri="")
     with pytest.raises(ProductionConfigurationError, match="cannot be enabled"):
         MongoRepository(uri="", allow_memory_fallback=True)
+    monkeypatch.setenv("DEMO_MODE", "true")
     monkeypatch.setenv("APP_ENV", "test")
     repository = MongoRepository(uri="", allow_memory_fallback=True)
     assert repository.mode == "memory_fallback"
@@ -258,7 +259,7 @@ def test_production_startup_validation_rejects_unsafe_flags_and_missing_secret()
             "DEMO_LOGIN_ENABLED": "true",
             "DEMO_TOOLS_ENABLED": "true",
             "DEMO_MEMBERSHIP_UPGRADE_ENABLED": "true",
-            "ALLOW_MEMORY_FALLBACK": "true",
+            "DEMO_MODE": "true",
             "PRECISION_ADMIN_PASSWORD": "Admin123!",
         })
     message = str(error.value)
@@ -266,5 +267,5 @@ def test_production_startup_validation_rejects_unsafe_flags_and_missing_secret()
     assert "DEMO_LOGIN_ENABLED" in message
     assert "DEMO_TOOLS_ENABLED" in message
     assert "DEMO_MEMBERSHIP_UPGRADE_ENABLED" in message
-    assert "ALLOW_MEMORY_FALLBACK" in message
+    assert "DEMO_MODE" in message
     assert "default administrator password" in message

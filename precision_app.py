@@ -14,17 +14,29 @@ import logging
 import os
 from pathlib import Path
 import secrets
+import sys
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from bson import ObjectId
 from dotenv import load_dotenv
+
+# Environment-backed services must not be imported before the application's
+# .env file has been loaded. ``override=True`` also prevents a stale shell
+# value from silently selecting a different database than the project config.
+_test_environment = os.getenv("PRECISION_TESTING") == "true" and "pytest" in sys.modules
+load_dotenv(override=True)
+if _test_environment:
+    os.environ.update(APP_ENV="testing", DEMO_MODE="true")
+    os.environ.pop("MONGO_URI", None)
+
+from bson import ObjectId
 from flask import Flask, Response, abort, flash, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 from flask.testing import FlaskClient
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
+from pymongo.errors import DuplicateKeyError, PyMongoError
 import requests
 import re
 from openpyxl import Workbook
@@ -44,8 +56,6 @@ from services.platforms import canonical_marketplace_platform
 from src.ecommerce_price_monitor.collectors.walmart_collector import WalmartCollector
 from src.ecommerce_price_monitor.utils.exceptions import CollectorError
 
-if (os.getenv("APP_ENV") or os.getenv("FLASK_ENV") or "").strip().lower() not in {"test", "testing"}:
-    load_dotenv()
 validate_production_configuration()
 
 
@@ -66,6 +76,21 @@ logging.getLogger("werkzeug").addFilter(_ResetTokenLogFilter())
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 _runtime_environment = (os.getenv("APP_ENV") or os.getenv("FLASK_ENV") or "development").strip().lower()
+
+
+@app.errorhandler(PyMongoError)
+def database_operation_unavailable(error):
+    """Fail closed when an established MongoDB connection cannot serve a request."""
+    app.logger.error(
+        "MongoDB operation failed (%s)",
+        error.__class__.__name__,
+        exc_info=(type(error), error, error.__traceback__),
+    )
+    return Response(
+        "Database temporarily unavailable. Please try again later.",
+        status=503,
+        mimetype="text/plain",
+    )
 
 
 def _env_int(name, default, minimum=None, maximum=None):

@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from pymongo.errors import AutoReconnect
 from bs4 import BeautifulSoup
 from werkzeug.security import check_password_hash
 
@@ -137,10 +138,11 @@ def test_database_creation_failure_sends_no_welcome(monkeypatch):
     monkeypatch.setattr(
         precision_app.repository,
         "create_user",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("database unavailable")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AutoReconnect("database unavailable")),
     )
-    with pytest.raises(RuntimeError, match="database unavailable"):
-        _post_registration(client)
+    response = _post_registration(client)
+    assert response.status_code == 503
+    assert b"Database temporarily unavailable" in response.data
     assert calls == []
 
 
