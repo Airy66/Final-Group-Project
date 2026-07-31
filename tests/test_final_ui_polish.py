@@ -126,6 +126,31 @@ def test_export_menus_exclude_lifecycle_actions():
     assert ">Archive</button>" in watchlist and ">Delete</button>" in watchlist
 
 
+def test_export_triggers_share_one_visual_contract():
+    for name in ("saved_packages.html", "audit.html", "analytics_dashboard.html", "watchlist.html", "logs_complete.html"):
+        source = _template(name)
+        assert "app-export-summary" in source
+        assert "download" in source
+        assert "expand_more" in source
+    base = _template("product_base.html")
+    assert ".app-export-button,.app-export-summary" in base
+    assert "background:#2563eb" in base
+    assert ".app-export-button,.app-export-summary" in base
+
+
+def test_account_and_more_menus_are_isolated_from_export_styles():
+    base = _template("product_base.html")
+    analyses = _template("analytics_index.html")
+    watchlist = _template("watchlist.html")
+    assert ".app-dropdown > summary:not(.app-export-summary)" not in base
+    assert ".app-dropdown>.user-menu-summary" in base
+    assert ".app-dropdown>.app-overflow-summary" in base
+    assert 'class="app-overflow-summary"' in analyses
+    assert 'id="analysis-list" class="mt-5 overflow-visible' in analyses
+    assert "app-compact-action" in watchlist
+    assert "data-view-alert-history" in watchlist
+
+
 def test_dashboard_zero_listing_monitor_has_honest_state():
     source = _template("dashboard_retailer_saas.html")
     assert "{% if listing_count %}" in source

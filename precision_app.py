@@ -3743,6 +3743,8 @@ def build_activity_records(user_id):
             "status": status,
             "time": _log_time_value(row),
             "raw_time": row.get("created_at") or row.get("timestamp"),
+            "record_id": str(row.get("_id") or ""),
+            "record_collection": "audit_logs",
         })
     records.sort(key=_record_sort_key, reverse=True)
     return records[:50]
@@ -3796,6 +3798,8 @@ def build_audit_records(user_id):
             "status": overall_status,
             "detail": f"Listings returned and retained for this search: {result_count}; comparable complete products: {comparable_count}.{walmart_trace}",
             "raw_time": row.get("created_at") or row.get("timestamp"),
+            "record_id": str(row.get("_id") or ""),
+            "record_collection": "search_records",
         })
     for row in safe_call(lambda: repository.list_evidence(user_id=user_id, limit=50), []):
         records.append({
@@ -3817,6 +3821,8 @@ def build_audit_records(user_id):
             "status": "Recorded",
             "detail": f"Evidence status: {row.get('evidence_status') or 'saved'}; confidence: {row.get('confidence_level') or 'not stated'}.",
             "raw_time": row.get("created_at") or row.get("saved_at") or row.get("timestamp"),
+            "record_id": str(row.get("_id") or ""),
+            "record_collection": "evidence_records",
         })
     for row in safe_call(lambda: repository.list_ai_logs(user_id=user_id, limit=50), []):
         records.append({
@@ -3838,6 +3844,8 @@ def build_audit_records(user_id):
             "status": "Recorded",
             "detail": row.get("raw_response_summary") or row.get("prompt_summary") or "Read only",
             "raw_time": row.get("created_at") or row.get("timestamp"),
+            "record_id": str(row.get("_id") or ""),
+            "record_collection": "ai_search_logs",
         })
     for row in safe_call(lambda: repository.list_audit_logs(user_id=user_id, limit=50), []):
         action = row.get("event_type") or row.get("action") or "audit"
@@ -3865,6 +3873,8 @@ def build_audit_records(user_id):
             "status": event_status,
             "detail": _audit_details_text(details or row.get("message") or row.get("label")),
             "raw_time": row.get("created_at") or row.get("timestamp"),
+            "record_id": str(row.get("_id") or ""),
+            "record_collection": "audit_logs",
         })
     records.sort(key=_record_sort_key, reverse=True)
     return records[:200]
@@ -6620,13 +6630,37 @@ def audit():
 @app.post("/audit/archive")
 @role_required("administrator")
 def archive_audit_logs():
-    ids = [value for value in request.form.getlist("audit_id") if value]
-    if not ids:
+    references = [value for value in request.form.getlist("record_ref") if value]
+    legacy_ids = [value for value in request.form.getlist("audit_id") if value]
+    references.extend(f"audit_logs:{value}" for value in legacy_ids)
+    if not references:
         flash("Select at least one audit record.", "error")
         return redirect(url_for("audit"))
-    archived = repository.archive_many_audit_logs(ids, archived_by=session.get("user_id"), reason="audit_archive_selected")
-    repository.log_event(session["user_id"], "audit_log_archived", session.get("role"), session.get("username"), {"archived_count": archived})
-    flash(f"Archived {archived} audit record(s).", "success")
+    known_ids = {
+        "search_records": {str(row.get("_id")) for row in repository.list_searches(limit=0)},
+        "evidence_records": {str(row.get("_id")) for row in repository.list_evidence(limit=0)},
+        "ai_search_logs": {str(row.get("_id")) for row in repository.list_ai_logs(limit=0)},
+        "audit_logs": {str(row.get("_id")) for row in repository.list_audit_logs(limit=0)},
+    }
+    archived = 0
+    for reference in references:
+        collection, separator, record_id = str(reference).partition(":")
+        if not separator or record_id not in known_ids.get(collection, set()):
+            continue
+        if collection == "search_records":
+            repository.delete_search(record_id, deleted_by=session.get("user_id"), reason="administrator_audit_cleanup")
+        elif collection == "evidence_records":
+            repository.delete_evidence(record_id, deleted_by=session.get("user_id"), reason="administrator_audit_cleanup")
+        elif collection == "ai_search_logs":
+            repository.archive_ai_log(record_id, archived_by=session.get("user_id"), reason="administrator_audit_cleanup")
+        else:
+            repository.archive_audit_log(record_id, archived_by=session.get("user_id"), reason="administrator_audit_cleanup")
+        archived += 1
+    repository.log_event(session["user_id"], "audit_log_archived", session.get("role"), session.get("username"), {"archived_count": archived, "selected_count": len(references), "mode": "administrator_audit_cleanup"})
+    if archived:
+        flash(f"Archived {archived} selected record(s) from active views.", "success")
+    else:
+        flash("No eligible records were archived.", "info")
     return redirect(url_for("audit"))
 
 

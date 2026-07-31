@@ -7,7 +7,12 @@
     <h1 class="app-page-header__title">Activity logs</h1>
     <p class="app-page-header__subtitle">Review user actions, workflow events, AI activity, and service issues.</p>
   </div>
-  <div class="app-page-header__actions"><a href="{{ url_for('export_activity_log_csv') }}" class="app-export-summary"><span>Export</span><span class="sr-only">Export activity logs CSV</span><span class="material-symbols-outlined text-[18px]">download</span></a></div>
+  <div class="app-page-header__actions">
+    <details class="app-dropdown">
+      <summary class="app-export-summary"><span class="material-symbols-outlined text-[18px]">download</span><span>Export</span><span class="material-symbols-outlined text-[18px]">expand_more</span></summary>
+      <div class="app-dropdown-panel" role="menu"><a href="{{ url_for('export_activity_log_csv') }}" class="app-dropdown-item" role="menuitem">Activity records (CSV)</a></div>
+    </details>
+  </div>
 </section>
 
 <section class="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -16,6 +21,12 @@
       <h2 class="font-display text-xl font-bold">Activity review</h2>
       <p class="mt-1 text-sm text-slate-500">Filter the latest recorded events by category, user, role, and date.</p>
     </div>
+    {% if current_user.role == 'administrator' %}
+    <form id="log-archive-form" method="post" action="{{ url_for('archive_activity_logs') }}" data-confirm-form data-confirm-message="Archive the selected activity records? They will be removed from the active log view.">
+      <input type="hidden" name="collection" value="audit_logs">
+      <button id="log-archive-selected" type="submit" disabled class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Archive selected</button>
+    </form>
+    {% endif %}
   </div>
 
   <div id="audit-tabs" class="mt-5 flex flex-wrap gap-2 border-b border-slate-200 pb-3">
@@ -68,6 +79,7 @@
     <table class="app-table w-full min-w-[880px] text-left text-sm">
       <thead class="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-widest text-slate-500">
         <tr>
+          {% if current_user.role == 'administrator' %}<th class="w-12 p-3"><input id="log-select-visible" type="checkbox" class="rounded border-slate-300 text-primary" aria-label="Select all records on this page"></th>{% endif %}
           <th class="p-3">Action</th>
           <th class="p-3">User</th>
           <th class="p-3">Role</th>
@@ -83,6 +95,7 @@
         {% set status_text = (row.status or '')|lower %}
         {% set badge_class = 'bg-blue-50 text-blue-700' if 'search' in category_text else ('bg-cyan-50 text-cyan-700' if 'workflow' in category_text else ('bg-emerald-50 text-emerald-700' if 'evidence' in category_text else ('bg-violet-50 text-violet-700' if 'ai' in category_text else ('bg-indigo-50 text-indigo-700' if 'admin' in category_text else ('bg-amber-50 text-amber-700' if 'error' in category_text else 'bg-slate-100 text-slate-700'))))) %}
         <tr class="log-row border-t border-slate-100 hover:bg-slate-50/70" data-log-item data-category="{{ category_text }}" data-action="{{ action_text }}" data-role="{{ (row.role or '')|lower }}" data-user="{{ (row.user or '')|lower }}" data-detail="{{ (row.detail or '')|lower }}" data-time="{{ row.time.isoformat()[:10] if row.time and row.time.isoformat is defined else '' }}">
+          {% if current_user.role == 'administrator' %}<td class="p-3"><input form="log-archive-form" type="checkbox" name="log_id" value="{{ row.record_id }}" class="log-record-select rounded border-slate-300 text-primary" aria-label="Select {{ row.action|e }} record"></td>{% endif %}
           <td class="p-3">
             <span class="block whitespace-nowrap font-semibold text-slate-800">{{ row.action or 'Event' }}</span><span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold {{ badge_class }}">{{ row.category }}</span>
           </td>
@@ -93,7 +106,7 @@
           <td class="p-3 text-xs"><span class="inline-flex rounded-full px-2.5 py-1 font-semibold {{ 'bg-emerald-50 text-emerald-700' if status_text == 'completed' else ('bg-red-50 text-red-700' if status_text == 'failed' else ('bg-amber-50 text-amber-700' if status_text == 'no results' else 'bg-slate-100 text-slate-600')) }}">{{ row.status }}</span></td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="p-8 text-center text-slate-400">No activity records available.</td></tr>
+        <tr><td colspan="{{ 7 if current_user.role == 'administrator' else 6 }}" class="p-8 text-center text-slate-400">No activity records available.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -123,6 +136,9 @@
     const pageLabel = document.getElementById('log-page');
     const prevButton = document.getElementById('log-prev');
     const nextButton = document.getElementById('log-next');
+    const selectVisible = document.getElementById('log-select-visible');
+    const recordSelects = Array.from(document.querySelectorAll('.log-record-select'));
+    const archiveSelected = document.getElementById('log-archive-selected');
     const pageSize = 10;
     let page = 1;
     let activeTab = 'all';
@@ -173,6 +189,16 @@
       if (pageLabel) pageLabel.textContent = `Page ${total ? page : 1} of ${totalPages}`;
       if (prevButton) prevButton.disabled = page <= 1 || total === 0;
       if (nextButton) nextButton.disabled = page >= totalPages || total === 0;
+      const selectedCount = recordSelects.filter((checkbox) => checkbox.checked).length;
+      if (archiveSelected) {
+        archiveSelected.disabled = selectedCount === 0;
+        archiveSelected.textContent = selectedCount ? `Archive selected (${selectedCount})` : 'Archive selected';
+      }
+      if (selectVisible) {
+        const visibleSelects = recordSelects.filter((checkbox) => !checkbox.closest('[data-log-item]')?.classList.contains('hidden'));
+        selectVisible.checked = visibleSelects.length > 0 && visibleSelects.every((checkbox) => checkbox.checked);
+        selectVisible.indeterminate = visibleSelects.some((checkbox) => checkbox.checked) && !selectVisible.checked;
+      }
     };
 
     tabButtons.forEach((button) => button.addEventListener('click', () => setTab(button.dataset.tab || 'all')));
@@ -189,6 +215,13 @@
       const total = visibleRows().length;
       const totalPages = Math.max(1, Math.ceil(total / pageSize));
       if (page < totalPages) { page += 1; render(); }
+    });
+    recordSelects.forEach((checkbox) => checkbox.addEventListener('change', render));
+    selectVisible?.addEventListener('change', () => {
+      recordSelects.forEach((checkbox) => {
+        if (!checkbox.closest('[data-log-item]')?.classList.contains('hidden')) checkbox.checked = selectVisible.checked;
+      });
+      render();
     });
     setTab('all');
   })();

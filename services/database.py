@@ -237,7 +237,7 @@ class MongoRepository:
         query = query or {}
         if collection in {"search_records", "evidence_records", "research_records", "testing_records"} and "is_deleted" not in query:
             query = {**query, "is_deleted": {"$ne": True}}
-        if collection in {"audit_logs", "activity_logs"} and "is_archived" not in query:
+        if collection in {"audit_logs", "activity_logs", "ai_search_logs"} and "is_archived" not in query:
             query = {**query, "is_archived": {"$ne": True}}
         if self.db is not None:
             cursor = self.db[collection].find(query).sort("created_at", DESCENDING if descending else ASCENDING)
@@ -1351,6 +1351,15 @@ class MongoRepository:
     def archive_activity_log(self, log_id, archived_by=None, reason=None):
         now = utcnow()
         return self._soft_update("activity_logs", log_id, {
+            "is_archived": True,
+            "archived_at": now,
+            "archived_by": self._id(archived_by) if archived_by else None,
+            "archive_reason": reason or "archive_selected",
+        })
+
+    def archive_ai_log(self, log_id, archived_by=None, reason=None):
+        now = utcnow()
+        return self._soft_update("ai_search_logs", log_id, {
             "is_archived": True,
             "archived_at": now,
             "archived_by": self._id(archived_by) if archived_by else None,

@@ -21,7 +21,7 @@
       </div>
       <div class="flex flex-wrap items-center gap-3 xl:pt-1">
         <details class="app-dropdown relative z-30">
-          <summary class="app-export-summary">Export <span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span></summary>
+          <summary class="app-export-summary"><span class="material-symbols-outlined text-[18px]">download</span><span>Export</span><span class="material-symbols-outlined text-[18px]">expand_more</span></summary>
           <div class="app-dropdown-panel">
             {% if current_user and membership_rank(current_user.membership_tier or current_user.plan) >= membership_rank('premium') %}
             <a class="app-dropdown-item" href="{{ url_for('analytics_export_results_csv', search_record_id=export_id) }}"><span>Analysis records (CSV)</span><span class="app-dropdown-badge app-dropdown-badge-premium">Premium</span></a>

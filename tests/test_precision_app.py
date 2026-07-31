@@ -389,6 +389,39 @@ def test_admin_accounts_do_not_show_membership_controls():
     assert membership_page.status_code == 302
     assert "/dashboard/administrator" in membership_page.headers["Location"]
 
+    profile_page = test_client.get("/profile")
+    profile_body = profile_page.get_data(as_text=True)
+    assert "System access" in profile_body
+    assert "Administrator account" in profile_body
+    assert "System administrator" in profile_body
+    assert "Membership summary" not in profile_body
+    assert "Professional Plan" not in profile_body
+    assert "Upgrade / manage plan" not in profile_body
+
+
+def test_administrator_can_archive_mixed_evidence_history_records():
+    test_client = client()
+    login(test_client, username="ArchiveAdmin", role="administrator", membership_tier="basic")
+    user = precision_app.repository.get_user_by_display_name("ArchiveAdmin")
+    search_id = precision_app.repository.create_search(user["_id"], "archive-this-search", "ebay", status="completed")
+    ai_id = precision_app.repository.log_ai_activity(user["_id"], "archive-this-ai-log", "test-model", "records", 1)
+    audit_id = precision_app.repository.log_event(user["_id"], "search_started", "administrator", "ArchiveAdmin", {"query": "archive-this-event"})
+
+    audit_page = test_client.get("/audit").get_data(as_text=True)
+    logs_page = test_client.get("/logs").get_data(as_text=True)
+    assert 'id="audit-archive-form"' in audit_page and 'name="record_ref"' in audit_page
+    assert 'id="log-archive-form"' in logs_page and 'name="log_id"' in logs_page
+
+    response = test_client.post(
+        "/audit/archive",
+        data={"record_ref": [f"search_records:{search_id}", f"ai_search_logs:{ai_id}", f"audit_logs:{audit_id}"]},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert all(row.get("keyword") != "archive-this-search" for row in precision_app.repository.list_searches(limit=0))
+    assert all(row.get("keyword") != "archive-this-ai-log" for row in precision_app.repository.list_ai_logs(limit=0))
+    assert all(str(row.get("_id")) != str(audit_id) for row in precision_app.repository.list_audit_logs(limit=0))
+
 
 def test_logs_membership_access():
     test_client = client()
@@ -410,13 +443,15 @@ def test_logs_membership_access():
     login(test_client, username="ResearcherProLogs", role="researcher", membership_tier="professional")
     professional = test_client.get("/logs")
     assert professional.status_code == 200
-    assert b"Export activity logs CSV" in professional.data
+    assert b'href="/audit/export/activity-log.csv"' in professional.data
+    assert b'<span>Export</span>' in professional.data
 
     test_client.post("/logout")
     login(test_client, username="AdminLogs", role="administrator", membership_tier="basic")
     admin = test_client.get("/logs")
     assert admin.status_code == 200
-    assert b"Export activity logs CSV" in admin.data
+    assert b'href="/audit/export/activity-log.csv"' in admin.data
+    assert b'<span>Export</span>' in admin.data
 
 
 def test_activity_log_categories_match_event_semantics():

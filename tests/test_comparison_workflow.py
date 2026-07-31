@@ -925,7 +925,7 @@ def test_export_menus_use_clean_labels_and_saved_evidence_hides_empty_actions():
     for label in ("Export Monitor report", "Export Snapshot history CSV", "Export Forecast validation CSV", "Export Trend chart PNG"):
         assert label in watchlist
     saved = client.get("/saved").get_data(as_text=True)
-    assert saved.count('<button type="button" class="app-export-button"') == 1
+    assert saved.count('<button type="button" class="app-export-summary"') == 1
     assert "Saved status" not in saved and "Return to search results" not in saved
     assert 'id="delete-selected-evidence" class="hidden' in saved
     assert 'data-saved-panel="evidence"' in saved and 'data-saved-panel="comparisons"' in saved
