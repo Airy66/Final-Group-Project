@@ -606,7 +606,7 @@ def test_final_templates_expose_one_monitor_action_and_no_technical_status():
     assert '<th class="p-3">Product fit</th>' not in search_template
     assert "Refresh snapshot" not in watchlist_template
     assert "AI unavailable" not in watchlist_template
-    for label in ("Collect latest snapshot", "Daily Refresh", "Forecast pending", "Generate forecast"):
+    for label in ("Collect first snapshot", "Collect now and validate", "Daily Refresh", "Generate forecast"):
         assert label in watchlist_template
 
 

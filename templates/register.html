@@ -78,7 +78,7 @@
             {% for plan_id,name,price,period,description in [
               ('basic','Basic','Free','','For simple product discovery and essential price comparison.'),
               ('premium','Premium','$9.90','/ month','For saved workflows, watchlist tracking, analytics, and AI-assisted forecasting.'),
-              ('professional','Professional','$19.90','/ month','For advanced research, forecast validation, source audit, and exportable reports.')
+              ('professional','Professional','$19.90','/ month','For advanced research, source audit, provenance, activity logs, and exportable reports.')
             ] %}
             <label class="app-choice-card {{ 'is-selected' if selected_plan == plan_id else '' }} group flex w-full min-w-0 cursor-pointer gap-4 p-5 sm:items-start" data-choice-card data-plan-row {% if plan_id == 'professional' %}data-feature="Source Audit"{% endif %}>
               <input id="membership-{{ plan_id }}" type="radio" name="membership_tier" value="{{ plan_id }}" class="app-choice-input" {% if selected_plan == plan_id %}checked{% endif %}>

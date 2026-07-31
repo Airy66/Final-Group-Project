@@ -116,6 +116,7 @@ app.config.update(
     MONITOR_SCHEDULED_RUN_LIMIT=_env_int("MONITOR_SCHEDULED_RUN_LIMIT", 5, 1),
     MONITOR_REFRESH_TIMEZONE=os.getenv("MONITOR_REFRESH_TIMEZONE", "Asia/Singapore"),
     MONITOR_DAILY_REFRESH_HOUR=_env_int("MONITOR_DAILY_REFRESH_HOUR", 8, 0, 23),
+    MONITOR_MANUAL_REFRESH_COOLDOWN_SECONDS=_env_int("MONITOR_MANUAL_REFRESH_COOLDOWN_SECONDS", 180, 0, 900),
     MONITOR_TEST_PROVIDER_CALLS=False,
     PRICE_ALERTS_ENABLED=env_flag("PRICE_ALERTS_ENABLED", True),
     PRICE_ALERT_DEFAULT_THRESHOLD_PERCENT=os.getenv("PRICE_ALERT_DEFAULT_THRESHOLD_PERCENT", "5"),
@@ -283,7 +284,7 @@ FEATURE_REQUIRED_TIERS = {
     "advanced_analytics": "professional",
     "prediction": "premium",
     "standard_export": "premium",
-    "prediction_validation": "professional",
+    "prediction_validation": "premium",
     "source_audit": "professional",
     "logs": "professional",
     "export_report": "professional",
@@ -316,6 +317,7 @@ MEMBERSHIP_PLANS = [
             "Analytics dashboard and interactive charts",
             "AI-supported market summary",
             "AI price forecast in Watchlist",
+            "Forecast validation against later eligible snapshots",
             "Standard CSV, chart and report exports from unlocked pages",
         ],
     },
@@ -326,7 +328,6 @@ MEMBERSHIP_PLANS = [
         "description": "For research and audit workflows requiring validation, provenance, activity records, and advanced research exports.",
         "features": [
             "All search, evidence, Watchlist, Analytics and AI forecasting capabilities",
-            "Forecast validation workflow",
             "Source Audit",
             "Activity Logs",
             "Validation evidence summary",
@@ -490,16 +491,16 @@ def tier_label(tier):
 def locked_message(feature):
     if feature == "watchlist":
         return "Premium unlocks evidence saving, watchlists, analytics dashboards, and AI-assisted price forecasting."
-    if feature == "prediction":
-        return "AI price forecasting is available on Premium and Professional plans."
+    if feature in {"prediction", "prediction_validation"}:
+        return "AI price forecasting and validation are available on Premium and Professional plans."
     if feature == "source_audit":
         return "Source audit requires Professional membership."
     if feature == "logs":
         return "Activity logs are part of the Professional audit workflow because they support traceability and advanced review."
     if feature in {"saved_research", "save_evidence", "analytics_dashboard", "basic_analytics", "standard_export"}:
         return "Premium unlocks evidence saving, watchlists, analytics dashboards, and AI-assisted price forecasting."
-    if feature in {"advanced_analytics", "prediction", "prediction_validation", "export_report", "research_package"}:
-        return "Professional adds forecast validation, source audit, activity logs, and exportable research reports."
+    if feature in {"advanced_analytics", "export_report", "research_package"}:
+        return "Professional adds source audit, activity logs, advanced provenance, and exportable research reports."
     return f"This feature requires {tier_label(required_tier(feature))} membership."
 
 
@@ -1777,6 +1778,7 @@ def _serpapi_cache_params(query, platform, *, category="", min_price=None, max_p
         "currency": os.getenv("SERPAPI_CURRENCY", "USD"),
         "store_id": os.getenv("SERPAPI_WALMART_STORE_ID", "") if engine == "walmart" else "",
         "limit": limit,
+        "normalization_version": "2",
     }
     params["cache_key"] = build_serpapi_cache_key(params)
     return params
@@ -2871,6 +2873,14 @@ def _forecast_cycle_view(prediction, snapshots):
         "benchmark_predicted_price": benchmark_prediction,
         "ai_method": prediction.get("ai_method") or prediction.get("ai_provider") or ("gemini" if ai_value is not None else None),
         "ai_predicted_price": ai_value,
+        "ai_availability_label": {
+            "missing_key": "AI service is not configured",
+            "model_unavailable": "AI model is temporarily unavailable",
+            "quota_exceeded": "AI service capacity is temporarily unavailable",
+            "timeout": "AI service timed out",
+            "service_unavailable": "AI service is temporarily unavailable",
+            "invalid_response": "AI response could not be validated",
+        }.get(prediction.get("ai_failure_reason"), "AI service is temporarily unavailable") if ai_value is None else "Available",
         "predicted_average_price": predicted,
         "forecast_method": prediction.get("forecast_method") or ("Gemini" if ai_value is not None else (prediction.get("baseline_method") or "Not available in this legacy forecast record")),
         "forecast_provider": prediction.get("forecast_provider") or (prediction.get("ai_provider") if ai_value is not None else "Deterministic baseline"),
@@ -2897,24 +2907,47 @@ def _forecast_cycle_view(prediction, snapshots):
 def _forecast_cycle_chart_data(cycle):
     if not cycle:
         return {"available": False, "pending": False, "labels": [], "values": [], "tooltip_rows": [], "status_text": "No forecast has been generated for the latest snapshot.", "reason": "no_forecast"}
-    labels = ["Benchmark prediction", "AI-assisted forecast"]
-    values = [cycle.get("benchmark_predicted_price"), cycle.get("ai_predicted_price")]
-    rows = [{"label": label, "value": value, "abs_error": None, "pct_error": None} for label, value in zip(labels, values)]
-    validated = cycle.get("visible_status") == "validated" and cycle.get("observed_average_price") is not None
+    benchmark_value = cycle.get("benchmark_predicted_price")
+    ai_value = cycle.get("ai_predicted_price")
+    observed_value = cycle.get("validation_observed_price")
+    labels = []
+    values = []
+    rows = []
+    for label, value in (
+        ("Benchmark prediction", benchmark_value),
+        ("AI-assisted forecast", ai_value),
+    ):
+        if value is not None:
+            labels.append(label)
+            values.append(value)
+            rows.append({"label": label, "value": value, "abs_error": None, "pct_error": None})
+    validated = cycle.get("visible_status") == "validated" and observed_value is not None
     if validated:
         labels.append("Observed market average")
-        values.append(cycle.get("validation_observed_price"))
-        rows.append({"label": "Observed market average", "value": cycle.get("validation_observed_price"), "abs_error": None, "pct_error": None})
-    available = all(value is not None for value in values)
+        values.append(observed_value)
+        rows.append({"label": "Observed market average", "value": observed_value, "abs_error": None, "pct_error": None})
+    available = validated and benchmark_value is not None
+    if benchmark_value is None:
+        reason = "benchmark_missing"
+    elif cycle.get("visible_status") == "validated" and observed_value is None:
+        reason = "actual_missing"
+    else:
+        reason = None
+    if validated and ai_value is not None:
+        status_text = "Benchmark prediction, AI-assisted forecast and observed market average for the selected Forecast Cycle."
+    elif validated:
+        status_text = "Benchmark prediction and observed market average for the selected Forecast Cycle."
+    else:
+        status_text = "Observation pending until a later eligible snapshot is collected."
     return {
-        "available": available and validated,
-        "pending": cycle.get("visible_status") == "pending",
+        "available": available,
+        "pending": cycle.get("visible_status") == "pending" and benchmark_value is not None,
         "labels": labels,
         "values": values,
         "tooltip_rows": rows,
-        "status_text": "Benchmark prediction, AI-assisted forecast and observed market average for the selected Forecast Cycle." if validated else "Observation pending until a later eligible snapshot is collected.",
+        "status_text": status_text,
         "error_level": "pending" if not validated else "validated",
-        "reason": None if available else "legacy_metadata_missing",
+        "reason": reason,
         "cycle_id": cycle.get("short_id"),
     }
 
@@ -5979,7 +6012,7 @@ def _evaluate_pending_monitor_forecast(monitor, snapshot):
     return pending.get("_id")
 
 
-def refresh_monitor(monitor_id, owner_id=None, trigger="manual", force=False, scheduled_date=None, now=None):
+def refresh_monitor(monitor_id, owner_id=None, trigger="manual", force=False, scheduled_date=None, now=None, request_id=None):
     """Shared manual/scheduled refresh path with safe status and daily idempotency."""
     now_utc = _normalized_utc_datetime(now) or utcnow()
     trigger = "scheduled" if trigger == "scheduled" else "manual"
@@ -5988,6 +6021,18 @@ def refresh_monitor(monitor_id, owner_id=None, trigger="manual", force=False, sc
         return {"status": "skipped", "error_code": "monitor_ineligible", "snapshot_id": None}
     owner_id = monitor.get("user_id")
     run_date = scheduled_date or monitor_scheduled_date(now_utc)
+    if trigger == "manual" and not force:
+        cooldown_seconds = int(app.config.get("MONITOR_MANUAL_REFRESH_COOLDOWN_SECONDS", 180))
+        claimed, retry_after = repository.claim_manual_monitor_refresh(
+            monitor["_id"], owner_id, now_utc, cooldown_seconds, request_id=request_id,
+        )
+        if not claimed:
+            return {
+                "status": "skipped",
+                "error_code": "manual_refresh_cooldown",
+                "snapshot_id": None,
+                "retry_after_seconds": retry_after,
+            }
     if trigger == "scheduled":
         if not force and not app.config.get("MONITOR_DAILY_REFRESH_ENABLED", False):
             return {"status": "skipped", "error_code": "scheduled_refresh_disabled", "snapshot_id": None}
@@ -6041,6 +6086,8 @@ def refresh_monitor(monitor_id, owner_id=None, trigger="manual", force=False, sc
             ), None)
     else:
         error_code = "no_valid_comparable_data" if succeeded_count else "all_sources_unavailable"
+        if trigger == "manual":
+            repository.release_manual_monitor_refresh(monitor["_id"], owner_id, now_utc)
 
     updates = {
         "last_refreshed_at": now_utc,
@@ -6085,9 +6132,17 @@ def refresh_watchlist_snapshot(watchlist_id):
         return blocked
     if not is_valid_object_id(watchlist_id):
         abort(404)
-    result = refresh_monitor(watchlist_id, session["user_id"], trigger="manual")
+    result = refresh_monitor(
+        watchlist_id,
+        session["user_id"],
+        trigger="manual",
+        request_id=request.form.get("refresh_request_id"),
+    )
     if result["status"] == "failed":
         flash("No valid comparable records found for this snapshot.", "error")
+    elif result["status"] == "skipped" and result.get("error_code") == "manual_refresh_cooldown":
+        retry_after = max(1, int(result.get("retry_after_seconds") or 1))
+        flash(f"Prices were collected recently. Try again in {retry_after} seconds.", "info")
     elif result["status"] == "skipped":
         flash("This Monitor is not eligible for refresh.", "warning")
     else:
@@ -6334,10 +6389,16 @@ def watchlist():
     prediction_has_actual = actual_snapshot_used is not None
     if current_forecast_cycle and current_forecast_cycle.get("visible_status") == "validated":
         forecast_workflow_status = "Forecast validated"
+        forecast_workflow_state = "validated"
     elif current_forecast_cycle:
-        forecast_workflow_status = "Waiting for validation snapshot"
+        forecast_workflow_status = "Forecast awaiting validation"
+        forecast_workflow_state = "pending"
+    elif snapshots:
+        forecast_workflow_status = "Ready to forecast"
+        forecast_workflow_state = "ready"
     else:
-        forecast_workflow_status = "No forecast generated"
+        forecast_workflow_status = "Start monitoring"
+        forecast_workflow_state = "empty"
     snapshots_total = len(snapshots)
     snapshots_after_prediction_count = len([row for row in snapshots if selected_forecast_cycle and is_snapshot_after_prediction(row, selected_forecast_cycle)])
     pending_prediction = next((row for row in predictions if row.get("status") in {"pending_actual", "ai_unavailable"}), None)
@@ -6346,7 +6407,7 @@ def watchlist():
     reason_validation_not_available = prediction_chart.get("reason")
     env_loaded = Path(".env").exists()
     gemini_api_key_present = bool(os.getenv("GEMINI_API_KEY"))
-    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     gemini_call_reason = None
     if selected_forecast_cycle:
         gemini_call_reason = selected_forecast_cycle.get("ai_failure_reason") or selected_forecast_cycle.get("ai_reason") or selected_forecast_cycle.get("ai_provider")
@@ -6357,6 +6418,11 @@ def watchlist():
         else:
             gemini_call_reason = "record_has_no_gemini_output"
     plotted_snapshot_count = len([value for value in trend_chart.get("average", []) if value is not None]) if trend_chart else 0
+    manual_refresh_cooldown_remaining = 0
+    if selected_item:
+        manual_refresh_locked_until = _normalized_utc_datetime(selected_item.get("manual_refresh_locked_until"))
+        if manual_refresh_locked_until:
+            manual_refresh_cooldown_remaining = max(0, int((manual_refresh_locked_until - utcnow()).total_seconds()) + 1)
     validation_error = None
     if selected_forecast_cycle and prediction_has_actual:
         validation_error = {
@@ -6390,6 +6456,9 @@ def watchlist():
         prediction_error=make_json_safe(validation_error),
         prediction_has_actual=prediction_has_actual,
         forecast_workflow_status=forecast_workflow_status,
+        forecast_workflow_state=forecast_workflow_state,
+        refresh_request_id=secrets.token_urlsafe(18),
+        manual_refresh_cooldown_remaining=manual_refresh_cooldown_remaining,
         actual_snapshot_used=actual_snapshot_used,
         selected_forecast_cycle_safe=make_json_safe(selected_forecast_cycle),
         debug_charts=debug_charts,
@@ -6451,7 +6520,7 @@ def export_watchlist_snapshots_csv():
 @login_required
 def export_watchlist_validation_csv():
     if not can_access(current_user(), "prediction_validation"):
-        return export_forbidden_response("Prediction validation exports require Professional membership.")
+        return export_forbidden_response("Prediction validation exports require Premium membership.")
     monitor_id = request.args.get("monitor_id", "").strip()
     if not monitor_id:
         abort(404)
@@ -7743,7 +7812,7 @@ def ai_discover():
         return jsonify({"error": "Please search sources first before using AI Discover.", "summary_source": None, "record_count": 0}), 400
     query = record.get("keyword", "current market") if record else "current market"
     summary, mode, fallback_reason = summarize_market(query, items)
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     summary_source = "Gemini API" if mode == "gemini_api" else "Rule-based fallback"
     repository.log_ai_search(session["user_id"], query, model, "Gemini market summary grounded in current normalized records.", summary)
     repository.log_ai_activity(session["user_id"], query, model, summary_source, len(items), fallback_reason)

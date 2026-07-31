@@ -2,7 +2,7 @@
 
 from collections import Counter
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 import threading
 import uuid
@@ -1149,6 +1149,52 @@ class MongoRepository:
             "auto_refresh_enabled": False,
             "next_refresh_at": None,
         }, user_id=user_id)
+
+    def claim_manual_monitor_refresh(self, monitor_id, owner_id, now, cooldown_seconds, request_id=None):
+        """Atomically reserve a short manual-refresh window across web workers."""
+        now = now if getattr(now, "tzinfo", None) else now.replace(tzinfo=timezone.utc)
+        locked_until = now + timedelta(seconds=max(0, int(cooldown_seconds or 0)))
+        query = {
+            "_id": self._id(monitor_id),
+            "user_id": self._id(owner_id),
+            "status": "active",
+            "$or": [
+                {"manual_refresh_locked_until": {"$exists": False}},
+                {"manual_refresh_locked_until": None},
+                {"manual_refresh_locked_until": {"$lte": now}},
+            ],
+        }
+        updates = {"$set": {
+            "manual_refresh_started_at": now,
+            "manual_refresh_locked_until": locked_until,
+            "manual_refresh_request_id": str(request_id or uuid.uuid4().hex),
+            "updated_at": utcnow(),
+        }}
+        if self.db is not None:
+            result = self.db.watchlist_items.update_one(query, updates)
+            if result.matched_count:
+                return True, 0
+            current = self.get_watchlist_item(monitor_id, owner_id) or {}
+            current_until = current.get("manual_refresh_locked_until")
+            retry_after = max(1, int((current_until - now).total_seconds())) if isinstance(current_until, datetime) and current_until > now else 1
+            return False, retry_after
+        with self._monitor_refresh_lock:
+            monitor = next((row for row in self._memory["watchlist_items"] if str(row.get("_id")) == str(monitor_id) and str(row.get("user_id")) == str(owner_id) and row.get("status") == "active"), None)
+            if not monitor:
+                return False, 1
+            current_until = monitor.get("manual_refresh_locked_until")
+            if isinstance(current_until, datetime) and current_until > now:
+                return False, max(1, int((current_until - now).total_seconds()))
+            monitor.update(updates["$set"])
+            return True, 0
+
+    def release_manual_monitor_refresh(self, monitor_id, owner_id, now=None):
+        """Allow an immediate retry when a manual run produced no valid snapshot."""
+        return self.update_watchlist_item(
+            monitor_id,
+            {"manual_refresh_locked_until": now or utcnow()},
+            user_id=owner_id,
+        )
 
     def archive_watchlist_item(self, watchlist_id, user_id=None):
         return self.update_watchlist_item(watchlist_id, {"status": "archived", "auto_refresh_enabled": False, "next_refresh_at": None}, user_id=user_id)

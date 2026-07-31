@@ -85,6 +85,7 @@ def test_membership_access_matrix_and_locked_controls():
     assert not precision_app.can_access(consumer_basic, "watchlist")
     assert precision_app.can_access(consumer_premium, "watchlist")
     assert precision_app.can_access(consumer_premium, "prediction")
+    assert precision_app.can_access(consumer_premium, "prediction_validation")
     assert precision_app.can_access(consumer_professional, "prediction_validation")
     assert not precision_app.can_access(retailer_basic, "export_report")
     assert precision_app.can_access(retailer_premium, "analytics_dashboard")
@@ -284,7 +285,7 @@ def test_homepage_and_register_show_three_membership_plans():
     assert "one account-wide membership tier" in register_body
     assert "For simple product discovery and essential price comparison." in register_body
     assert "For saved workflows, watchlist tracking, analytics, and AI-assisted forecasting." in register_body
-    assert "For advanced research, forecast validation, source audit, and exportable reports." in register_body
+    assert "For advanced research, source audit, provenance, activity logs, and exportable reports." in register_body
     assert "data-membership-plan-list" in register_body
     assert "data-plan-row" in register_body
     assert "[grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]" not in register_body
@@ -596,7 +597,7 @@ def test_missing_ai_key_is_readable(monkeypatch):
     assert "headphones" in payload["summary"]
     activity = precision_app.repository.list_activity_logs(limit=1)[0]
     assert activity["summary_source"] == "Rule-based fallback"
-    assert activity["model"] == "gemini-2.5-flash-lite"
+    assert activity["model"] == "gemini-3.1-flash-lite"
 
 
 def test_gemini_success_and_failure_modes(monkeypatch):
@@ -615,12 +616,13 @@ def test_gemini_success_and_failure_modes(monkeypatch):
     summary, mode, reason = ai_search.summarize_market_gemini("phone", items)
     assert summary == "Gemini generated market summary."
     assert mode == "gemini_api" and reason is None
-    assert captured["model"] == "gemini-2.5-flash-lite" and captured["timeout_ms"] == 15000
+    assert captured["model"] == "gemini-2.5-flash-lite" and captured["timeout_ms"] == 45000
 
     failures = [
         (RuntimeError("503 UNAVAILABLE"), "service_unavailable"),
         (TimeoutError("request timed out"), "timeout"),
         (RuntimeError("429 quota exceeded"), "quota_exceeded"),
+        (RuntimeError("404 model no longer available"), "model_unavailable"),
         (RuntimeError("unexpected API failure"), "api_error"),
     ]
     for error, expected_reason in failures:
@@ -631,6 +633,27 @@ def test_gemini_success_and_failure_modes(monkeypatch):
         assert mode == "rule_based_fallback" and reason == expected_reason
         for expected in ("3 records", "100.00", "160.00", "133.33", "60.00", "3 platform"):
             assert expected in summary
+
+
+def test_gemini_prediction_uses_the_most_recent_twenty_snapshots(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-not-real")
+    captured = {}
+
+    def success(_api_key, _model, prompt, _timeout_ms):
+        captured["prompt"] = prompt
+        return '{"predicted_average_price": 125, "predicted_direction": "increase", "confidence_level": "medium", "reason": "Recent observations"}'
+
+    monkeypatch.setattr(ai_search, "_call_gemini", success)
+    snapshots = [
+        {"collected_at": f"2026-07-{index:02d}", "average_price": index, "lowest_price": index, "highest_price": index, "record_count": 3, "data_quality": "good"}
+        for index in range(1, 26)
+    ]
+
+    payload, mode, reason = ai_search.predict_price_gemini("Phone", "search_scope", "all", "live", snapshots)
+
+    assert mode == "gemini_api" and reason is None and payload["predicted_average_price"] == 125
+    prompt_snapshots = json.loads(captured["prompt"].split("snapshots: ", 1)[1])
+    assert [row["average_price"] for row in prompt_snapshots] == list(range(6, 26))
 
 
 def test_gemini_condition_claim_is_checked_against_visible_records(monkeypatch):
@@ -1144,7 +1167,7 @@ def test_prediction_evaluates_with_future_snapshot_and_metrics(monkeypatch):
     precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 100.0, "lowest_price": 90.0, "highest_price": 110.0, "record_count": 3, "source_label": "live", "data_quality": "good", "collected_at": precision_app.datetime(2026, 7, 1, tzinfo=precision_app.timezone.utc)})
     test_client.post(f"/watchlist/{item['_id']}/prediction")
     prediction = precision_app.repository.list_predictions(user_id=item["user_id"], watchlist_id=item["_id"], limit=1)[0]
-    precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 130.0, "lowest_price": 125.0, "highest_price": 135.0, "record_count": 3, "source_label": "live", "data_quality": "good", "collected_at": prediction["prediction_created_at"] + precision_app.timedelta(hours=1)})
+    precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 130.0, "lowest_price": 125.0, "highest_price": 135.0, "record_count": 3, "source_label": "live", "data_quality": "good", "collected_at": prediction["prediction_created_at"] + precision_app.timedelta(hours=13)})
     response = test_client.post(f"/watchlist/{item['_id']}/prediction/evaluate")
     assert response.status_code == 302
     prediction = precision_app.repository.list_predictions(user_id=item["user_id"], watchlist_id=item["_id"], limit=1)[0]
@@ -1182,7 +1205,7 @@ def test_prediction_evaluation_update_payload_strips_id(monkeypatch):
     precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 90.0, "lowest_price": 85.0, "highest_price": 95.0, "record_count": 2, "source_label": "live", "data_quality": "good", "collected_at": precision_app.datetime(2026, 7, 1, tzinfo=precision_app.timezone.utc)})
     test_client.post(f"/watchlist/{item['_id']}/prediction")
     prediction = precision_app.repository.list_predictions(user_id=item["user_id"], watchlist_id=item["_id"], limit=1)[0]
-    precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 95.0, "lowest_price": 90.0, "highest_price": 100.0, "record_count": 2, "source_label": "live", "data_quality": "good", "collected_at": prediction["prediction_created_at"] + precision_app.timedelta(hours=1)})
+    precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 95.0, "lowest_price": 90.0, "highest_price": 100.0, "record_count": 2, "source_label": "live", "data_quality": "good", "collected_at": prediction["prediction_created_at"] + precision_app.timedelta(hours=13)})
     captured = {}
     original_update = precision_app.repository.update_prediction
     def capture_update(prediction_id, updates):
@@ -1217,7 +1240,8 @@ def test_watchlist_chart_states_and_serializable_data(monkeypatch):
     assert "watchlist-trend-echart" in body
     assert "watchlist-validation-echart" in body
     assert "static/vendor/echarts.min.js" in body
-    assert "Track → Refresh → Review" in body
+    assert "Forecast awaiting validation" in body
+    assert "Collect now and validate" in body
 
 
 def test_watchlist_hides_debug_marker_and_renders_chart_metadata(monkeypatch):
@@ -1436,13 +1460,13 @@ def test_consumer_watchlist_uses_refresh_first_workflow(monkeypatch):
     item = precision_app.repository.list_watchlist_items(user_id=record["user_id"], limit=1)[0]
     page = test_client.get("/watchlist", query_string={"item_id": item["_id"]})
     body = page.data.decode("utf-8", errors="ignore")
-    assert "Collect latest snapshot" in body
+    assert "Collect latest prices" in body
     assert "Enable daily refresh" in body
     assert "Generate AI prediction" not in body
     assert "Evaluate with latest snapshot" not in body
 
 
-def test_refresh_snapshot_uses_success_message_and_preserves_selection(monkeypatch):
+def test_refresh_snapshot_validates_pending_forecast_and_preserves_selection(monkeypatch):
     test_client = client()
     login(test_client, username="RefreshUX", role="consumer", membership_tier="professional")
     monkeypatch.setattr(precision_app, "predict_price_gemini", lambda *args, **kwargs: ({"predicted_average_price": 100.0, "predicted_direction": "stable", "confidence_level": "medium", "reason": "mocked"}, "gemini_api", None))

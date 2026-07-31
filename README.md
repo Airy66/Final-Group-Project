@@ -25,13 +25,13 @@ The application demonstrates a traceable price-intelligence workflow rather than
 - **Researcher**: research records, advanced analytics, audit views, and research exports.
 - **Administrator**: account, role, membership, test-data, and audit administration.
 
-Accounts may hold multiple assigned roles but operate through one active workspace at a time.
+Each account has exactly one assigned workspace role. An administrator may replace that role when the user's responsibilities change.
 
 ## 4. Membership tiers
 
 - **Basic**: product search and comparison.
-- **Premium**: saved evidence/research, Watchlist, analytics, AI-assisted summaries and forecasts, and standard exports.
-- **Professional**: advanced analytics, prediction validation, audit/log access, and research/report packages.
+- **Premium**: saved evidence/research, Watchlist, analytics, AI-assisted summaries, forecasts, later-snapshot validation, and standard exports.
+- **Professional**: everything in Premium plus advanced analytics, audit/log access, provenance workflows, and research/report packages.
 
 Membership upgrades in this repository are demonstration controls, not payment processing. They must remain disabled in production.
 
@@ -44,6 +44,8 @@ Membership upgrades in this repository are demonstration controls, not payment p
 - **AI**: optional assistance and explanation. AI output is not an authoritative marketplace source and does not replace stored source records.
 
 Coverage depends on provider availability, configured credentials, query quality, and returned listings. It is not complete global market coverage.
+
+Watchlist snapshots exclude source records identified as instalments, subscriptions, deposits, contracts, or other non-comparable price types. New Forecast Cycles use a deterministic benchmark plus optional Gemini assistance. The next successful manual or scheduled snapshot collected after forecast creation validates the pending cycle automatically.
 
 ## 6. Architecture summary
 

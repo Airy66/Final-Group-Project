@@ -201,6 +201,8 @@ def _call_gemini(api_key, model, prompt, timeout_ms):
 def _gemini_fallback_reason(exc):
     text = f"{exc.__class__.__name__} {exc}".lower()
     status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    if status == 404 or "404" in text or ("model" in text and ("not found" in text or "no longer available" in text)):
+        return "model_unavailable"
     if status == 503 or "503" in text or "unavailable" in text:
         return "service_unavailable"
     if status == 429 or "429" in text or "quota" in text or "resource_exhausted" in text:
@@ -222,7 +224,7 @@ def summarize_market_gemini(keyword, items):
     """Generate through Gemini on the backend, with a deterministic local fallback."""
     fallback = rule_based_market_summary(keyword, items)
     api_key = os.getenv("GEMINI_API_KEY")
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     if not api_key:
         return fallback, "rule_based_fallback", "missing_key"
     condition_count, record_count = _condition_coverage(items)
@@ -234,7 +236,7 @@ def summarize_market_gemini(keyword, items):
               "Do not invent prices or expose system configuration.\n"
               f"Query: {keyword}\nCondition coverage: {condition_count} of {record_count} records.\nRule-based statistics: {fallback}\nRecords: {json.dumps(compact, ensure_ascii=False, default=str)}")
     try:
-        text = _call_gemini(api_key, model, prompt, int(os.getenv("GEMINI_TIMEOUT_MS", "15000")))
+        text = _call_gemini(api_key, model, prompt, int(os.getenv("GEMINI_TIMEOUT_MS", "45000")))
         if not text:
             return fallback, "rule_based_fallback", "empty_response"
         grounded, replaced = ground_market_summary(keyword, text, items)
@@ -254,12 +256,14 @@ def predict_price_gemini(product_label, tracking_scope, platform_scope, source_l
         "reason": "Gemini prediction is unavailable.",
     }
     api_key = os.getenv("GEMINI_API_KEY")
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     if not api_key:
         return fallback, "ai_unavailable", "missing_key"
 
     compact = []
-    for row in snapshots[:20]:
+    # Forecasting should be grounded in the most recent observations. The
+    # caller supplies chronological history, so retain the newest window.
+    for row in snapshots[-20:]:
         compact.append({
             "date": str(row.get("collected_at") or row.get("created_at") or ""),
             "average_price": row.get("average_price"),
@@ -281,7 +285,7 @@ def predict_price_gemini(product_label, tracking_scope, platform_scope, source_l
         f"snapshots: {json.dumps(compact, ensure_ascii=False, default=str)}"
     )
     try:
-        text = _call_gemini(api_key, model, prompt, int(os.getenv("GEMINI_TIMEOUT_MS", "15000")))
+        text = _call_gemini(api_key, model, prompt, int(os.getenv("GEMINI_TIMEOUT_MS", "45000")))
         payload = _extract_json_object(text)
         predicted_average_price = float(payload.get("predicted_average_price"))
         predicted_direction = payload.get("predicted_direction")

@@ -57,7 +57,7 @@ def test_cycles_are_distinct_immutable_and_latest_valid_snapshot_is_new_baseline
     assert first_cycle["benchmark_predicted_price"] == 100
     assert first_cycle["forecast_id"] and first_cycle["owner_user_id"] == user["_id"]
 
-    validation = _snapshot(repository, monitor, 108, utcnow() + timedelta(minutes=1))
+    validation = _snapshot(repository, monitor, 108, utcnow() + timedelta(hours=13))
     precision_app._evaluate_pending_monitor_forecast(monitor, validation)
     validated_before = repository.list_predictions(user["_id"], monitor["_id"], limit=10)[0]
     assert validated_before["cycle_status"] == "validated"
@@ -65,7 +65,7 @@ def test_cycles_are_distinct_immutable_and_latest_valid_snapshot_is_new_baseline
     validated_page = client.get("/watchlist", query_string={"item_id": monitor["_id"]}).get_data(as_text=True)
     assert "Generate next forecast" in validated_page
 
-    latest = _snapshot(repository, monitor, 120, utcnow() + timedelta(minutes=2))
+    latest = _snapshot(repository, monitor, 120, utcnow() + timedelta(hours=14))
     client.get("/watchlist", query_string={"item_id": monitor["_id"], "forecast_id": first_cycle["forecast_id"]})
     client.post(f"/watchlist/{monitor['_id']}/prediction")
     cycles = repository.list_predictions(user["_id"], monitor["_id"], limit=10)
@@ -108,7 +108,9 @@ def test_pending_cycle_cannot_be_replaced_by_repeated_generation(monkeypatch):
     }, "mocked", None))
     _snapshot(repository, monitor, 100, utcnow() - timedelta(hours=1))
     client.post(f"/watchlist/{monitor['_id']}/prediction")
-    assert "Forecast pending" in client.get("/watchlist", query_string={"item_id": monitor["_id"]}).get_data(as_text=True)
+    pending_page = client.get("/watchlist", query_string={"item_id": monitor["_id"]}).get_data(as_text=True)
+    assert "Forecast awaiting validation" in pending_page
+    assert "Collect now and validate" in pending_page
     repeated = client.post(f"/watchlist/{monitor['_id']}/prediction", follow_redirects=True)
     assert len(repository.list_predictions(user["_id"], monitor["_id"], limit=10)) == 1
     assert "already waiting for validation" in repeated.get_data(as_text=True)
@@ -228,7 +230,7 @@ def test_pending_chart_has_no_observed_value_and_legacy_fields_are_safe(monkeypa
         "baseline_predicted_average_price": 95, "prediction_created_at": utcnow() - timedelta(hours=1),
     }, [baseline])
     chart = precision_app._forecast_cycle_chart_data(pending)
-    assert chart["labels"] == ["Benchmark prediction", "AI-assisted forecast"]
+    assert chart["labels"] == ["Benchmark prediction"]
     assert "Observed market average" not in chart["labels"]
     assert "Observation pending" in chart["status_text"]
     legacy = precision_app._forecast_cycle_view({"_id": "legacy", "user_id": user["_id"], "status": "evaluated"}, [])
@@ -236,12 +238,28 @@ def test_pending_chart_has_no_observed_value_and_legacy_fields_are_safe(monkeypa
     assert legacy["baseline_snapshot_at_display"] is None
 
 
+def test_validated_chart_remains_available_when_optional_ai_forecast_is_missing():
+    chart = precision_app._forecast_cycle_chart_data({
+        "short_id": "benchmark-only",
+        "visible_status": "validated",
+        "benchmark_predicted_price": 525.0,
+        "ai_predicted_price": None,
+        "validation_observed_price": 510.0,
+    })
+
+    assert chart["available"] is True
+    assert chart["reason"] is None
+    assert chart["labels"] == ["Benchmark prediction", "Observed market average"]
+    assert chart["values"] == [525.0, 510.0]
+    assert "Benchmark prediction and observed market average" in chart["status_text"]
+
+
 def test_action_hierarchy_alert_compaction_responsive_and_security(monkeypatch):
     client, repository, user, monitor = _setup(monkeypatch)
     page = client.get("/watchlist", query_string={"item_id": monitor["_id"]})
     soup = BeautifulSoup(page.data, "html.parser")
     body = page.get_data(as_text=True)
-    for label in ("Collect latest snapshot", "Generate forecast", "View snapshots", "Export Monitor report", "Export Snapshot history CSV", "Export Forecast validation CSV", "Export Trend chart PNG"):
+    for label in ("Collect first snapshot", "Generate forecast", "View snapshots", "Export Monitor report", "Export Snapshot history CSV", "Export Forecast validation CSV", "Export Trend chart PNG"):
         assert label in body
     export_menu = soup.select_one("[data-export-menu]")
     assert "Archive" not in export_menu.get_text() and "Delete" not in export_menu.get_text()

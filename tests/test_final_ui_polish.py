@@ -201,7 +201,7 @@ def test_watchlist_status_cards_editor_and_action_hierarchy():
     assert 'data-status-card="price-alert"' in source
     assert "<dialog id=\"price-alert-modal\"" in source
     assert "<details id=\"price-alert-modal\"" not in source
-    assert "Collect latest snapshot" in source
+    assert "Collect first snapshot" in source and "Collect now and validate" in source
     assert "Generate next forecast" in source and "Generate forecast" in source
     assert "View snapshots" in source and ">Export " in source
     assert "Average Price Trend" in source and "Snapshot history over time." in source
