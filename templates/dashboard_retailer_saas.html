@@ -9,243 +9,246 @@
   <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
     <div class="min-w-0 max-w-4xl">
       <p class="text-xs font-bold uppercase tracking-widest text-orange-700">Retailer / reseller workspace</p>
-      <h1 class="mt-2 font-display text-3xl font-extrabold leading-tight text-slate-950 lg:text-4xl">Monitor marketplace prices.</h1>
-      <p class="mt-2 max-w-3xl text-slate-600">Review the latest comparable listings collected by your active Watchlist monitors.</p>
-      <p class="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500"><span>{{ 'Portfolio overview' if portfolio_scope else 'Monitor overview' }}</span><span aria-hidden="true">·</span><span>{{ scope_label }}</span>{% if latest_snapshot_time %}<span aria-hidden="true">·</span><span>Updated {{ display_sgt_datetime(latest_snapshot_time) }}</span>{% endif %}</p>
+      <h1 class="mt-2 font-display text-3xl font-extrabold leading-tight text-slate-950 lg:text-4xl">
+        {{ selected_monitor.product_label if selected_monitor else 'Monitor marketplace prices.' }}
+      </h1>
+      <p class="mt-2 max-w-3xl text-slate-600">
+        {% if selected_monitor %}See how comparable market prices move and identify the strongest current sourcing option.{% else %}See which monitored products changed, need attention, or present a sourcing opportunity.{% endif %}
+      </p>
+      <p class="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <span>{{ 'Portfolio overview' if portfolio_scope else 'Monitor overview' }}</span>
+        <span aria-hidden="true">·</span><span>{{ scope_label }}</span>
+        {% if latest_snapshot_time %}<span aria-hidden="true">·</span><span>Updated {{ display_sgt_datetime(latest_snapshot_time) }}</span>{% endif %}
+      </p>
     </div>
     <div class="w-full rounded-xl border border-orange-100 bg-white/90 p-4 shadow-sm lg:w-[21rem]">
-      <form method="get"><label class="block text-xs font-bold uppercase tracking-wider text-slate-500">Monitoring scope<select name="monitor_id" onchange="this.form.submit()" class="app-select mt-2 w-full text-sm"><option value="">All active monitors</option>{% for monitor in monitors %}<option value="{{ monitor._id }}" {{ 'selected' if selected_monitor_id == monitor._id|string }}>{{ monitor.product_label }} · {{ monitor.selected_record_ids|length or monitor.latest_snapshot.listing_count or 0 }} listings</option>{% endfor %}</select></label></form>
-      <a href="{{ url_for('watchlist') }}" class="app-button-secondary mt-3 w-full py-2 text-sm">Manage watchlist <span class="material-symbols-outlined text-[17px]">arrow_forward</span></a>
+      <form method="get">
+        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500">Monitoring scope
+          <select name="monitor_id" onchange="this.form.submit()" class="app-select mt-2 w-full text-sm">
+            <option value="">All active monitors</option>
+            {% for monitor in monitors %}
+            <option value="{{ monitor._id }}" {{ 'selected' if selected_monitor_id == monitor._id|string }}>
+              {{ monitor.product_label }} · {{ monitor.dashboard.latest_listing_count or 0 }} listings
+            </option>
+            {% endfor %}
+          </select>
+        </label>
+      </form>
+      <a href="{{ url_for('watchlist', item_id=selected_monitor_id) if selected_monitor_id else url_for('watchlist') }}" class="app-button-secondary mt-3 w-full py-2 text-sm">
+        {{ 'Open monitor details' if selected_monitor else 'Manage watchlist' }}
+        <span class="material-symbols-outlined text-[17px]">arrow_forward</span>
+      </a>
     </div>
   </div>
-  {% if not active_monitor_count %}<div class="mt-5 flex flex-wrap items-center gap-3"><span class="text-sm font-semibold text-slate-700">Create a monitor from a selected comparison to begin tracking prices. Market overview and Sourcing insight will appear after the first snapshot.</span><a href="{{ url_for('search') }}" class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">Create monitor</a></div>{% endif %}
+  {% if not active_monitor_count %}
+  <div class="mt-5 flex flex-wrap items-center gap-3">
+    <span class="text-sm font-semibold text-slate-700">Create a monitor from a selected comparison to begin tracking prices.</span>
+    <a href="{{ url_for('search') }}" class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">Create monitor</a>
+  </div>
+  {% endif %}
 </section>
 
 {% if portfolio_scope %}
 <section class="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Portfolio summary">
-  <p class="sr-only">Tracked listings. Lowest competitor price.</p>
-  {% for label,value,icon,accent in [('Active monitors', monitors|length,'visibility','blue'),('Unique tracked listings', prices.listings,'inventory_2','indigo'),('Platforms covered', platforms|length,'storefront','violet'),('Last updated', display_sgt_datetime(latest_snapshot_time) if latest_snapshot_time else '—','schedule','slate')] %}<article class="app-card border-t-2 border-t-{{ accent }}-500 p-5"><div class="flex items-start justify-between gap-3"><div><p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ label }}</p><p class="mt-3 font-display {{ 'text-lg' if loop.last else 'text-2xl' }} font-extrabold text-slate-950">{{ value }}</p></div><span class="material-symbols-outlined grid h-9 w-9 place-items-center rounded-lg bg-{{ accent }}-50 text-[20px] text-{{ accent }}-700">{{ icon }}</span></div></article>{% endfor %}
-</section>
-<section class="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div><h2 class="font-display text-xl font-bold">Active monitors</h2><p class="mt-1 text-sm text-slate-500">Watchlist monitors contributing to this portfolio view.</p></div><div class="flex items-center gap-3"><span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{{ monitors|length }} active</span><a href="{{ url_for('watchlist') }}" class="text-sm font-bold text-primary hover:underline">Manage watchlist</a></div></div>
-  <div class="overflow-x-auto"><table class="app-table w-full min-w-[780px] text-left text-sm"><thead><tr><th scope="col" class="p-4">Monitor</th><th scope="col" class="p-4">Listings</th><th scope="col" class="p-4">Platform</th><th scope="col" class="p-4">Latest update</th><th scope="col" class="p-4">Status</th><th scope="col" class="p-4 text-right">Action</th></tr></thead><tbody>{% for monitor in monitors %}{% set listing_count = monitor.latest_snapshot.listing_count or monitor.selected_record_ids|length or 0 %}<tr><td class="p-4 font-bold text-slate-900">{{ monitor.product_label }}</td><td class="p-4"><span class="font-semibold {{ 'text-amber-700' if not listing_count else 'text-slate-700' }}">{{ listing_count }}</span></td><td class="p-4">{{ monitor.platform_scope }}</td><td class="p-4 text-xs text-slate-500">{{ display_sgt_datetime(monitor.latest_snapshot.collected_at if monitor.latest_snapshot else None) }}</td><td class="p-4">{% if listing_count %}<span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true"></span>{{ monitor.status|capitalize }}</span>{% else %}<span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800"><span class="material-symbols-outlined text-[14px]" aria-hidden="true">refresh</span>Needs refresh</span>{% endif %}</td><td class="p-4 text-right"><a class="app-button-secondary py-2 text-sm" href="{{ url_for('retailer_dashboard', monitor_id=monitor._id) }}">Open monitor <span class="material-symbols-outlined text-[17px]">arrow_forward</span></a></td></tr>{% else %}<tr><td colspan="6" class="p-8 text-center text-slate-500">No active monitors yet.</td></tr>{% endfor %}</tbody></table></div>
-</section>
-{% else %}
-<section class="mt-9 grid grid-cols-2 gap-5 xl:grid-cols-4">
-  {% for label,value,helper in [
-    ('Tracked listings', prices.listings, 'Unique comparable listings in the latest active monitor snapshots.'),
-    ('Lowest competitor price', prices.lowest, 'Lowest observed normalized listing price.'),
-    ('Average observed price', prices.average, 'Mean price across monitored listings.'),
-    ('Highest observed price', prices.highest, 'Highest observed normalized listing price.')
+  {% for label,value,helper,icon,accent in [
+    ('Active monitors', portfolio_metrics.active_monitors, 'Products currently tracked.', 'visibility', 'blue'),
+    ('Price drops', portfolio_metrics.price_drops, 'Lower than the previous snapshot.', 'south_east', 'emerald'),
+    ('Needs attention', portfolio_metrics.needs_attention, 'Missing or incomplete refreshes.', 'warning', 'amber'),
+    ('New baselines', portfolio_metrics.baselines, 'Waiting for another snapshot.', 'timeline', 'violet')
   ] %}
-  <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
-    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">{{ label }}</p>
-    <p class="mt-3 font-display text-3xl font-extrabold text-slate-950">{% if value is not none %}{% if loop.first %}{{ value }}{% else %}USD {{ '%.2f'|format(value) }}{% endif %}{% else %}-{% endif %}</p>
-    <p class="mt-2 text-sm leading-6 text-slate-600">{{ helper }}</p>
+  <article class="app-card border-t-2 border-t-{{ accent }}-500 p-5">
+    <div class="flex items-start justify-between gap-3">
+      <div><p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ label }}</p><p class="mt-3 font-display text-2xl font-extrabold text-slate-950">{{ value }}</p></div>
+      <span class="material-symbols-outlined grid h-9 w-9 place-items-center rounded-lg bg-{{ accent }}-50 text-[20px] text-{{ accent }}-700">{{ icon }}</span>
+    </div>
+    <p class="mt-2 text-xs text-slate-500">{{ helper }}</p>
   </article>
   {% endfor %}
 </section>
 
-<section class="mt-8 rounded-3xl bg-white p-6 shadow-soft">
-  <div class="flex flex-wrap items-end justify-between gap-4">
-    <div>
-      <h2 class="font-display text-xl font-bold">Market overview</h2>
-      <!-- Sourcing insight -->
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">A public-sample style summary that keeps platform coverage, record share, and price range in one visual language.</p>
+<section class="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+    <div><h2 class="font-display text-xl font-bold">Price monitoring portfolio</h2><p class="mt-1 text-sm text-slate-500">Prioritized by price movement, sourcing position, and refresh health.</p></div>
+    <a href="{{ url_for('watchlist') }}" class="text-sm font-bold text-primary hover:underline">Manage watchlist</a>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="app-table w-full min-w-[1080px] text-left text-sm">
+      <thead><tr><th class="p-4">Monitor</th><th class="p-4">Current low</th><th class="p-4">Change</th><th class="p-4">Recent trend</th><th class="p-4">Best source</th><th class="p-4">Last update</th><th class="p-4">Status</th><th class="p-4 text-right">Action</th></tr></thead>
+      <tbody>
+        {% for monitor in monitors %}
+        {% set metrics = monitor.dashboard %}
+        {% set listing_count = metrics.latest_listing_count or 0 %}
+        <tr>
+          <td class="p-4"><p class="font-bold text-slate-900">{{ monitor.product_label }}</p><p class="mt-1 text-xs text-slate-500">{{ listing_count }} comparable listings · {{ monitor.platform_scope }}</p></td>
+          <td class="p-4 font-bold text-slate-900">{% if metrics.current_low is not none %}USD {{ '%.2f'|format(metrics.current_low) }}{% else %}—{% endif %}</td>
+          <td class="p-4">
+            {% if metrics.change_percentage is not none %}
+            <span class="font-bold {{ 'text-emerald-700' if metrics.change_percentage < 0 else ('text-red-700' if metrics.change_percentage > 0 else 'text-slate-600') }}">{{ '%+.2f'|format(metrics.change_percentage) }}%</span>
+            {% else %}<span class="text-xs font-semibold text-slate-500">Awaiting comparison</span>{% endif %}
+          </td>
+          <td class="p-4"><div class="retailer-sparkline h-9 w-28" data-values='{{ metrics.sparkline | tojson }}' data-state="{{ metrics.trend_state }}"></div><p class="mt-1 text-[11px] font-semibold text-slate-500">{{ metrics.trend_label }}</p></td>
+          <td class="p-4"><p class="font-semibold text-slate-800">{{ metrics.best_platform or '—' }}</p>{% if metrics.best_price is not none %}<p class="mt-1 text-xs text-slate-500">USD {{ '%.2f'|format(metrics.best_price) }}</p>{% endif %}</td>
+          <td class="p-4 text-xs text-slate-500">{{ display_sgt_datetime(metrics.latest_collected_at) if metrics.latest_collected_at else '—' }}</td>
+          <td class="p-4">
+            {% if listing_count %}
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>{{ monitor.status|capitalize }}</span>
+            {% else %}
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800"><span class="material-symbols-outlined text-[14px]">refresh</span>Needs refresh</span>
+            {% endif %}
+          </td>
+          <td class="p-4 text-right"><a class="app-button-secondary py-2 text-sm" href="{{ url_for('retailer_dashboard', monitor_id=monitor._id) }}">Open monitor <span class="material-symbols-outlined text-[17px]">arrow_forward</span></a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="p-10 text-center text-slate-500">No active monitors yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<section class="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Selected monitor price summary">
+  {% for label,value,helper,icon,accent in [
+    ('Current lowest price', selected_metrics.current_low, 'Lowest comparable listing now.', 'sell', 'emerald'),
+    ('Observed market average', selected_metrics.current_average, 'Mean price in the latest snapshot.', 'monitoring', 'blue'),
+    ('Change vs previous', selected_metrics.change_percentage, selected_metrics.trend_label, 'trending_up', 'violet'),
+    ('Best-priced platform', selected_metrics.best_platform, 'Platform carrying the current low.', 'storefront', 'orange')
+  ] %}
+  <article class="app-card border-t-2 border-t-{{ accent }}-500 p-5">
+    <div class="flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ label }}</p>
+        <p class="mt-3 truncate font-display text-2xl font-extrabold text-slate-950">
+          {% if loop.index in [1,2] %}{% if value is not none %}USD {{ '%.2f'|format(value) }}{% else %}—{% endif %}
+          {% elif loop.index == 3 %}{% if value is not none %}{{ '%+.2f'|format(value) }}%{% else %}Baseline{% endif %}
+          {% else %}{{ value or '—' }}{% endif %}
+        </p>
+      </div>
+      <span class="material-symbols-outlined grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-{{ accent }}-50 text-[20px] text-{{ accent }}-700">{{ icon }}</span>
     </div>
-    <div class="rounded-full bg-slate-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.24em] text-slate-500">Visual preview</div>
-  </div>
+    <p class="mt-2 text-xs text-slate-500">{{ helper }}</p>
+  </article>
+  {% endfor %}
+</section>
 
-  <div class="mt-6 grid gap-5 xl:grid-cols-3">
-    <article class="rounded-[1.75rem] border border-slate-100 bg-[#fbfcff] p-5 shadow-[0_10px_26px_rgba(15,23,42,0.045)]">
-      <div class="flex items-center justify-between gap-3">
-        <div>
-          <h3 class="text-base font-extrabold text-slate-900">Platform record share</h3>
-          <p class="mt-1 text-sm leading-6 text-slate-500">Share of monitored records by platform.</p>
-        </div>
-        <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-600 ring-1 ring-indigo-100">Coverage</span>
+<section class="mt-6 grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
+  <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-6 py-5">
+      <div><h2 class="font-display text-xl font-bold text-slate-950">Price trend</h2><p class="mt-1 text-sm text-slate-500">Observed average with the low-to-high market range across monitor snapshots.</p></div>
+      <div class="text-right"><p class="text-xs font-bold uppercase tracking-wider text-slate-400">{{ selected_metrics.snapshot_count }} snapshot{{ 's' if selected_metrics.snapshot_count != 1 }}</p><p class="mt-1 text-xs font-semibold text-slate-500">Up to 90 recent snapshots</p></div>
+    </div>
+    {% if trend_chart.available %}
+    <div id="retailer-price-trend" class="h-[410px] w-full px-2 py-3" role="img" aria-label="Low, average, and high observed prices over time"></div>
+    {% else %}
+    <div class="flex min-h-[410px] flex-col items-center justify-center px-6 py-12 text-center">
+      <span class="material-symbols-outlined grid h-14 w-14 place-items-center rounded-full bg-blue-50 text-3xl text-blue-600">timeline</span>
+      <h3 class="mt-5 text-lg font-extrabold text-slate-900">{{ 'Baseline collected' if selected_metrics.snapshot_count == 1 else 'Waiting for the first snapshot' }}</h3>
+      <p class="mt-2 max-w-md text-sm leading-6 text-slate-500">
+        {% if selected_metrics.snapshot_count == 1 %}A price trend will appear after the next successful monitor refresh. The current snapshot remains the baseline for comparison.{% else %}Refresh this monitor to collect the first comparable price baseline.{% endif %}
+      </p>
+      {% if selected_metrics.snapshot_count == 1 %}
+      <div class="mt-7 grid w-full max-w-xl grid-cols-3 gap-3">
+        {% for label,value in [('Low', selected_metrics.current_low),('Average', selected_metrics.current_average),('High', selected_metrics.current_high)] %}
+        <div class="rounded-xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase tracking-wider text-slate-400">{{ label }}</p><p class="mt-2 font-extrabold text-slate-900">{% if value is not none %}USD {{ '%.2f'|format(value) }}{% else %}—{% endif %}</p></div>
+        {% endfor %}
       </div>
-      <div class="mt-4 flex items-center justify-between rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-100">
-        <span class="text-sm font-semibold text-slate-600">Tracked listings</span>
-        <span class="text-sm font-extrabold text-slate-900">{{ prices.listings }}</span>
-      </div>
-      <div id="retailer-platform-chart" class="mt-4 h-[240px]"></div>
-      <div id="retailer-platform-empty" class="mt-4 hidden rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-center text-sm text-slate-500">
-        Create a Watchlist monitor and collect a snapshot to populate platform coverage.
-      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </article>
+
+  <div class="grid gap-5">
+    <article class="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm">
+      <div class="flex items-center justify-between gap-3"><h2 class="font-display text-lg font-bold text-slate-950">Sourcing opportunity</h2><span class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">Actionable</span></div>
+      {% if selected_metrics.best_platform and selected_metrics.best_price is not none %}
+      <p class="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">Current best visible option</p>
+      <p class="mt-2 text-2xl font-extrabold text-slate-950">{{ selected_metrics.best_platform }} · USD {{ '%.2f'|format(selected_metrics.best_price) }}</p>
+      <p class="mt-3 text-sm leading-6 text-slate-600">{% if selected_metrics.below_average_percent is not none %}This listing is {{ '%.1f'|format(selected_metrics.below_average_percent) }}% below the observed market average.{% else %}{{ sourcing_insight }}{% endif %}</p>
+      {% else %}<p class="mt-4 text-sm leading-6 text-slate-600">Refresh the monitor to identify the lowest comparable sourcing option.</p>{% endif %}
     </article>
 
-    <article class="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
-      <div class="flex items-center justify-between gap-3">
-        <div>
-          <h3 class="text-base font-extrabold text-slate-900">Sourcing signal</h3>
-          <p class="mt-1 text-sm leading-6 text-slate-500">Which platform is carrying the clearest opportunity right now.</p>
+    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 class="font-display text-lg font-bold text-slate-950">Latest price position</h2>
+      <p class="mt-1 text-sm text-slate-500">Values are positioned proportionally within the observed range.</p>
+      {% if selected_metrics.current_low is not none and selected_metrics.current_high is not none %}
+      <div class="mt-7 px-2">
+        <div class="relative h-2 rounded-full bg-gradient-to-r from-emerald-400 via-blue-500 to-violet-500">
+          <span class="absolute left-0 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-white bg-emerald-500 shadow"></span>
+          <span class="absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-white bg-blue-600 shadow" style="left: {{ selected_metrics.average_position }}%"></span>
+          <span class="absolute right-0 top-1/2 h-5 w-5 translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-white bg-violet-600 shadow"></span>
         </div>
-        <span class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-bold text-cyan-700 ring-1 ring-cyan-100">Insight</span>
-      </div>
-      <div class="mt-4 rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
-        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Best visible option</p>
-        <p class="mt-2 text-2xl font-extrabold text-slate-950">
-          {% if distribution_rows %}
-            {{ distribution_rows[0].platform }}
-          {% else %}
-            No data
-          {% endif %}
-        </p>
-        <p class="mt-2 text-sm leading-6 text-slate-600">
-          {% if distribution_rows %}
-            {{ distribution_rows[0].platform }} leads the current visible coverage.
-          {% else %}
-            Refresh an active monitor to surface the strongest visible option.
-          {% endif %}
-        </p>
-      </div>
-      <div class="mt-4 grid gap-3 sm:grid-cols-2">
-        <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-          <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Average observed</p>
-          <p class="mt-2 text-2xl font-extrabold text-slate-950">{% if prices.average is not none %}USD {{ '%.2f'|format(prices.average) }}{% else %}-{% endif %}</p>
-        </div>
-        <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-          <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Observed range</p>
-          <p class="mt-2 text-2xl font-extrabold text-slate-950">{% if prices.range is not none %}USD {{ '%.2f'|format(prices.range) }}{% else %}-{% endif %}</p>
+        <div class="mt-5 grid grid-cols-3 gap-2 text-xs">
+          <div><p class="font-bold text-slate-400">LOW</p><p class="mt-1 font-extrabold text-slate-900">{{ '%.2f'|format(selected_metrics.current_low) }}</p></div>
+          <div class="text-center"><p class="font-bold text-slate-400">AVG · {{ selected_metrics.average_position }}%</p><p class="mt-1 font-extrabold text-slate-900">{{ '%.2f'|format(selected_metrics.current_average) }}</p></div>
+          <div class="text-right"><p class="font-bold text-slate-400">HIGH</p><p class="mt-1 font-extrabold text-slate-900">{{ '%.2f'|format(selected_metrics.current_high) }}</p></div>
         </div>
       </div>
+      {% else %}<p class="mt-4 text-sm text-slate-500">No valid price range is available.</p>{% endif %}
     </article>
 
-    <article class="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-[0_14px_36px_rgba(15,23,42,0.05)]">
-      <div class="flex items-center justify-between gap-3">
-        <div>
-          <h3 class="text-base font-extrabold text-slate-900">Price range preview</h3>
-          <p class="mt-1 text-sm leading-6 text-slate-500">Low, average, and high values in one view.</p>
-        </div>
-        <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-100">Range</span>
-      </div>
-      <div class="mt-5 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
-        <div class="flex items-center justify-between gap-3">
-          <span class="text-sm font-bold text-slate-700">Low</span>
-          <span class="text-sm font-bold text-slate-700">Avg</span>
-          <span class="text-sm font-bold text-slate-700">High</span>
-        </div>
-        <div class="relative mt-4 h-3 rounded-full bg-gradient-to-r from-emerald-500 via-sky-500 to-violet-600">
-          <span class="absolute left-0 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500 text-center text-[0.65rem] font-black leading-7 text-white shadow-lg">L</span>
-          <span class="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-600 text-center text-[0.65rem] font-black leading-7 text-white shadow-lg">A</span>
-          <span class="absolute right-0 top-1/2 h-7 w-7 translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-600 text-center text-[0.65rem] font-black leading-7 text-white shadow-lg">H</span>
-        </div>
-        {% if prices.lowest is not none or prices.average is not none or prices.highest is not none %}
-        <div class="mt-5 grid grid-cols-3 gap-3 text-center text-sm text-slate-600">
-          <div>
-            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Low</p>
-            <p class="mt-2 font-extrabold text-slate-950">{% if prices.lowest is not none %}USD {{ '%.2f'|format(prices.lowest) }}{% else %}-{% endif %}</p>
-          </div>
-          <div>
-            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Avg</p>
-            <p class="mt-2 font-extrabold text-slate-950">{% if prices.average is not none %}USD {{ '%.2f'|format(prices.average) }}{% else %}-{% endif %}</p>
-          </div>
-          <div>
-            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">High</p>
-            <p class="mt-2 font-extrabold text-slate-950">{% if prices.highest is not none %}USD {{ '%.2f'|format(prices.highest) }}{% else %}-{% endif %}</p>
-          </div>
-        </div>
-        {% endif %}
+    <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="flex items-center justify-between gap-3"><h2 class="font-display text-lg font-bold text-slate-950">Source coverage</h2><span class="text-xs font-bold text-slate-400">{{ prices.listings }} listings</span></div>
+      <div class="mt-4 space-y-3">
+        {% for row in distribution_rows %}
+        <div><div class="flex items-center justify-between text-xs"><span class="font-bold text-slate-700">{{ row.platform }}</span><span class="text-slate-500">{{ row.count }} · {{ row.percent }}%</span></div><div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-indigo-500" style="width: {{ row.percent }}%"></div></div></div>
+        {% else %}<p class="text-sm text-slate-500">No source coverage yet.</p>{% endfor %}
       </div>
     </article>
   </div>
-
-  <div class="mt-5 flex justify-end">
-    <a href="{{ url_for('search') }}" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-primary transition hover:border-blue-200 hover:bg-blue-50">Create monitor -></a>
-  </div>
-
 </section>
 {% endif %}
-{% include "partials/search_history.html" %}
+
+<div class="mt-7">{% include "partials/search_history.html" %}</div>
+
 <script>
-  (function () {
-    const rows = {{ distribution_rows | default([], true) | tojson }};
-    const chartEl = document.getElementById('retailer-platform-chart');
-    const emptyEl = document.getElementById('retailer-platform-empty');
-
-    if (!chartEl) return;
-
-    if (!window.echarts || !Array.isArray(rows) || rows.length === 0) {
-      chartEl.classList.add('hidden');
-      if (emptyEl) emptyEl.classList.remove('hidden');
+(function () {
+  document.querySelectorAll('.retailer-sparkline').forEach(function (element) {
+    let values = [];
+    try { values = JSON.parse(element.dataset.values || '[]').map(Number).filter(Number.isFinite); } catch (error) { values = []; }
+    if (values.length < 2) {
+      element.innerHTML = '<div class="flex h-full items-center"><span class="h-2 w-2 rounded-full bg-blue-500"></span><span class="ml-2 text-[11px] font-bold text-slate-400">BASELINE</span></div>';
       return;
     }
+    const width = 112, height = 34, pad = 3;
+    const min = Math.min.apply(null, values), max = Math.max.apply(null, values), span = max - min || 1;
+    const points = values.map(function (value, index) {
+      const x = pad + index * ((width - pad * 2) / Math.max(values.length - 1, 1));
+      const y = height - pad - ((value - min) / span) * (height - pad * 2);
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    const color = element.dataset.state === 'falling' ? '#059669' : (element.dataset.state === 'rising' ? '#dc2626' : '#4f46e5');
+    element.innerHTML = '<svg viewBox="0 0 '+width+' '+height+'" class="h-full w-full" aria-hidden="true"><polyline points="'+points+'" fill="none" stroke="'+color+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+points.split(' ').pop().split(',')[0]+'" cy="'+points.split(' ').pop().split(',')[1]+'" r="3" fill="'+color+'"/></svg>';
+  });
 
-    const labels = rows.map((row) => row.platform || 'Unknown');
-    const counts = rows.map((row) => Number(row.count || 0));
-    const percentages = rows.map((row) => Number(row.percent || 0));
-    const palette = ['#7c8cf6', '#75c6d8', '#9f8af8', '#9ed5f4', '#f2a36d'];
-    const chart = echarts.init(chartEl, null, { renderer: 'canvas' });
-
-    chart.setOption({
-      animationDuration: 750,
-      animationEasing: 'cubicOut',
-      color: palette,
-      grid: { left: 6, right: 64, top: 10, bottom: 10, containLabel: true },
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(124,140,246,0.08)' } },
-        backgroundColor: 'rgba(15, 23, 42, 0.95)',
-        borderWidth: 0,
-        padding: [10, 12],
-        textStyle: { color: '#fff', fontSize: 12 },
-        formatter: function (params) {
-          const point = params[0];
-          const index = point.dataIndex;
-          return [
-            '<strong>' + labels[index] + '</strong>',
-            counts[index] + ' listings',
-            percentages[index].toFixed(1) + '% of monitored coverage'
-          ].join('<br>');
-        }
-      },
-      xAxis: {
-        type: 'value',
-        max: 100,
-        axisLabel: { color: '#94a3b8', formatter: '{value}%' },
-        axisLine: { show: false },
-        axisTick: { show: false },
-        splitLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.16)', type: 'dashed' } }
-      },
-      yAxis: {
-        type: 'category',
-        data: labels,
-        axisLabel: { color: '#334155', fontWeight: 700 },
-        axisLine: { show: false },
-        axisTick: { show: false }
-      },
-      series: [{
-        name: 'Platform coverage',
-        type: 'bar',
-        barWidth: 18,
-        data: percentages.map((value, index) => ({
-          value,
-          itemStyle: {
-            borderRadius: [0, 999, 999, 0],
-            color: palette[index % palette.length]
-          }
-        })),
-        label: {
-          show: true,
-          position: 'right',
-          color: '#64748b',
-          fontWeight: 700,
-          fontSize: 11,
-          formatter: function (params) {
-            return counts[params.dataIndex] + ' items';
-          }
-        },
-        emphasis: {
-          focus: 'series',
-          itemStyle: { shadowBlur: 10, shadowColor: 'rgba(124, 140, 246, 0.16)' }
-        }
-      }]
-    }, { notMerge: true });
-
-    window.addEventListener('resize', function () {
-      chart.resize();
-    }, { passive: true });
-  })();
+  const chartElement = document.getElementById('retailer-price-trend');
+  const trend = {{ trend_chart | default({}, true) | tojson }};
+  if (!chartElement || !window.echarts || !trend.available) return;
+  const chart = echarts.init(chartElement, null, { renderer: 'canvas' });
+  const spread = trend.high.map(function (value, index) { return Number(value) - Number(trend.low[index]); });
+  chart.setOption({
+    animationDuration: 650,
+    color: ['#2563eb'],
+    grid: { left: 24, right: 30, top: 38, bottom: trend.labels.length > 10 ? 64 : 36, containLabel: true },
+    legend: { top: 4, right: 22, data: ['Observed average', 'Observed range'], textStyle: { color: '#64748b', fontSize: 11 } },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(15,23,42,.96)',
+      borderWidth: 0,
+      textStyle: { color: '#fff', fontSize: 12 },
+      formatter: function (params) {
+        const row = trend.tooltip_rows[params[0].dataIndex];
+        return '<strong>'+row.label+'</strong><br>Average: USD '+Number(row.average).toFixed(2)+'<br>Low–high: USD '+Number(row.low).toFixed(2)+' – '+Number(row.high).toFixed(2)+'<br>'+row.count+' comparable listings · '+row.source;
+      }
+    },
+    xAxis: { type: 'category', boundaryGap: false, data: trend.labels, axisLine: { lineStyle: { color: '#cbd5e1' } }, axisTick: { show: false }, axisLabel: { color: '#64748b', hideOverlap: true } },
+    yAxis: { type: 'value', min: trend.y_min, max: trend.y_max, axisLabel: { color: '#64748b', formatter: function (value) { return '$'+Number(value).toFixed(0); } }, axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: 'rgba(148,163,184,.18)', type: 'dashed' } } },
+    dataZoom: trend.labels.length > 10 ? [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 8 }] : [],
+    series: [
+      { name: '_range_floor', type: 'line', stack: 'range', data: trend.low, symbol: 'none', lineStyle: { opacity: 0 }, areaStyle: { opacity: 0 }, emphasis: { disabled: true } },
+      { name: 'Observed range', type: 'line', stack: 'range', data: spread, symbol: 'none', lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(59,130,246,.20)' }, emphasis: { disabled: true } },
+      { name: 'Observed average', type: 'line', data: trend.average, smooth: false, symbol: 'circle', symbolSize: 7, lineStyle: { width: 3, color: '#2563eb' }, itemStyle: { color: '#2563eb', borderColor: '#fff', borderWidth: 2 }, z: 4 }
+    ]
+  });
+  window.addEventListener('resize', function () { chart.resize(); }, { passive: true });
+})();
 </script>
 {% endblock %}

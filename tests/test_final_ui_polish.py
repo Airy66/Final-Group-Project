@@ -17,10 +17,46 @@ def test_sidebar_feature_badge_has_its_own_accessible_column():
     base = _template("product_base.html")
     assert "grid-template-columns:28px minmax(0,1fr) auto" in base
     assert ".app-nav-item .sidebar-link-text{min-width:0;overflow:hidden" in base
-    assert 'title="Source Audit">Source Audit</span>' in base
-    assert 'title="Professional feature" aria-label="Professional feature"' in base
-    assert '<span aria-hidden="true">Pro</span><span class="sr-only">Professional feature</span>' in base
+    assert 'title="Source Audit"' in base
+    assert '<span class="sidebar-link-text">Source Audit</span>' in base
+    assert 'title="Requires Professional plan" aria-label="Requires Professional plan">PRO</span>' in base
+    assert 'title="Requires Premium plan" aria-label="Requires Premium plan">PREM</span>' in base
+    assert ".sidebar-plan-marker--premium{" in base
+    assert ".sidebar-plan-marker--professional{" in base
+    assert "sidebar-access-lock" not in base
+    assert '<span class="sidebar-link-text">Activity Logs</span>' in base
+    assert 'aria-current="page"' in base
     assert 'body[data-sidebar-collapsed="true"] .sidebar-badge' in base
+
+
+def test_locked_feature_pages_have_distinct_value_previews_and_one_primary_upgrade_cta():
+    expected_features = {
+        "saved_research": ("bookmarks", "Evidence library"),
+        "watchlist": ("monitoring", "Price history"),
+        "analytics_dashboard": ("analytics", "Price distribution"),
+        "source_audit": ("policy", "Source provenance"),
+        "logs": ("receipt_long", "AI traceability"),
+    }
+    headlines = set()
+    for feature, (icon, capability) in expected_features.items():
+        view = precision_app.LOCKED_FEATURE_VIEWS[feature]
+        assert view["icon"] == icon
+        assert len(view["capabilities"]) == 3
+        assert capability in {item["title"] for item in view["capabilities"]}
+        headlines.add(view["headline"])
+    assert len(headlines) == len(expected_features)
+
+    template = _template("locked_feature.html")
+    assert template.count("{{ cta_label }}") == 1
+    assert "What this unlocks" in template
+    assert "Compare all plans" in template
+    assert "Continue with Product Search" in template
+
+
+def test_all_locked_feature_pages_use_the_same_dense_workspace_width():
+    base = _template("product_base.html")
+    assert "'analytics_compatibility','logs','administrator_dashboard'" in base
+    assert "or feature is defined" in base
 
 
 def test_responsive_shell_has_explicit_wide_and_mobile_policies():
@@ -73,7 +109,8 @@ def test_rendered_normal_search_hides_provider_stages(monkeypatch):
     assert "Searching marketplace sources" in body
     assert "Searching eBay and Walmart" not in body
     assert "Normalizing provider responses" not in body
-    assert 'title="Source Audit">Source Audit</span>' in body
+    assert 'title="Source Audit"' in body
+    assert '<span class="sidebar-link-text">Source Audit</span>' in body
 
 
 def test_export_menus_exclude_lifecycle_actions():
@@ -94,6 +131,11 @@ def test_dashboard_zero_listing_monitor_has_honest_state():
     assert "{% if listing_count %}" in source
     assert "Needs refresh" in source
     assert "display_sgt_datetime" in source
+    assert "Price trend" in source
+    assert "Baseline collected" in source
+    assert "Observed range" in source
+    assert "Sourcing opportunity" in source
+    assert "data-values=" in source
 
 
 def test_comparable_price_curve_uses_rank_not_time_and_sorts_prices():

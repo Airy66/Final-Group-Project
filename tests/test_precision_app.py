@@ -238,28 +238,36 @@ def test_homepage_and_register_show_three_membership_plans():
     assert "precision-curator-logo.png" in home_body
     assert 'href="/#membership"' in home_body
     assert 'id="features"' in home_body
+    assert 'href="/#features"' in home_body
     assert 'href="/#roles"' in home_body and 'href="/#faq"' in home_body
+    assert "Price evidence," in home_body and "curated with precision." in home_body
+    assert "Explore sample workspace" in home_body
     assert "What is Precision Curator?" in home_body
-    assert "Choose a workspace for your use case" in home_body
-    assert "Representative feedback from early product walkthroughs, presented as short product-style takeaways." in home_body
+    assert "Different market decisions need different starting points." in home_body
+    assert 'id="product-difference"' not in home_body
+    assert "Typical price search" not in home_body
+    assert "Evidence model" not in home_body
+    assert "Connected services" not in home_body
+    assert "MongoDB Atlas" not in home_body
+    assert "Everything needed to turn listings into a confident decision." not in home_body
+    assert "Illustrative monitored price trend" not in home_body
+    assert 'data-product-panel=' not in home_body
+    assert "Reliable by design" in home_body
+    assert "Saved across sessions" in home_body
+    assert "Built into the product" in home_body
     assert "Frequently asked questions" in home_body
     assert "app-button-primary" in home_body and "app-card-hover" in home_body
-    assert "Workflow overview" in home_body
-    assert "Search → Compare → Save → Validate" in home_body
-    assert "Normalized average price" not in home_body
-    assert "Watchlist snapshots" not in home_body
-    assert "Prediction error" not in home_body
-    assert "Evidence records" not in home_body
+    assert "From the first search to a decision you can revisit." in home_body
+    assert all(step in home_body for step in ("Search", "Compare", "Save", "Monitor", "Validate"))
     assert "Research package export" in home_body
-    assert "Can one account use multiple workspace roles?" in home_body
-    assert "each account uses one primary workspace role" in home_body
-    assert "Do users pay separately for each role?" in home_body
-    assert "Membership is account-wide" in home_body
-    assert "future commercial enhancement" in home_body
-    assert "request additional workspace roles for administrator approval" not in home_body
-    assert "Maya Chen" in home_body and "MC" in home_body and "Retailer workflow" in home_body
-    assert "Daniel Lim" in home_body and "DL" in home_body and "Researcher workflow" in home_body
-    assert "Aisha Tan" in home_body and "AT" in home_body and "Consumer workflow" in home_body
+    assert "Can I use multiple workspace roles on one account?" in home_body
+    assert "Each account has exactly one assigned role" in home_body
+    assert "Can my assigned role be changed later?" in home_body
+    assert "The new role replaces the existing role" in home_body
+    assert "Live workspace preview" not in home_body
+    assert "12 sources scanned" not in home_body
+    assert "Representative feedback" not in home_body
+    assert "Maya Chen" not in home_body and "Daniel Lim" not in home_body and "Aisha Tan" not in home_body
 
     register = test_client.get("/register?plan=premium")
     assert register.status_code == 200
@@ -387,13 +395,16 @@ def test_logs_membership_access():
     login(test_client, username="ResearcherBasicLogs", role="researcher", membership_tier="basic")
     basic = test_client.get("/logs")
     assert basic.status_code == 200
-    assert b"Activity logs are part of the Professional audit workflow" in basic.data
+    assert b"Keep a chronological record of research actions." in basic.data
+    assert b"AI traceability" in basic.data
+    assert b"Requires Professional" in basic.data
 
     test_client.post("/logout")
     login(test_client, username="ResearcherPremiumLogs", role="researcher", membership_tier="premium")
     premium = test_client.get("/logs")
     assert premium.status_code == 200
-    assert b"Activity logs are part of the Professional audit workflow" in premium.data
+    assert b"Keep a chronological record of research actions." in premium.data
+    assert b"Upgrade to Professional" in premium.data
 
     test_client.post("/logout")
     login(test_client, username="ResearcherProLogs", role="researcher", membership_tier="professional")
@@ -696,25 +707,29 @@ def test_production_role_menus_and_developer_preview():
     login(test_client, role="retailer")
     retailer = test_client.get("/dashboard/retailer").data
     assert b"Monitor marketplace prices." in retailer
-    assert b"Tracked listings" in retailer and b"Lowest competitor price" in retailer
+    assert b"Price monitoring portfolio" in retailer
+    assert b"Price drops" in retailer and b"Needs attention" in retailer
     assert b"Create monitor" in retailer
-    assert b"Market overview" in retailer and b"Sourcing insight" in retailer
+    assert b"Active monitors" in retailer and b"New baselines" in retailer
     test_client.post("/logout")
     login(test_client, role="researcher")
     admin = test_client.get("/dashboard/researcher").data
-    for label in (b"Observe the evidence pipeline.", b"Data source status", b"AI analysis logs", b"Product result database"):
+    for label in (b"Build traceable findings.", b"Research pipeline", b"Recent evidence", b"Source reliability", b"Recent AI analyses", b"Research activity"):
         assert label in admin
+    assert b"Product result database" not in admin
+    assert b"Testing records" not in admin
+    assert b"Activity Logs" in admin
     assert b"Users" not in admin
     assert b"Developer role preview" not in admin
     assert test_client.post("/role-switch", data={"role": "consumer"}).status_code == 302
 
 
-def test_multi_role_workspace_and_admin_controls():
+def test_single_role_workspace_policy_and_admin_role_replacement():
     test_client = client()
     login(test_client, username="Multi", role="consumer")
     user = precision_app.repository.get_user_by_display_name("Multi")
     precision_app.repository.update_user(user["_id"], {"roles": ["consumer", "researcher"], "active_role": "consumer", "role": "consumer", "plan": "basic"})
-    test_client.get("/logout")
+    test_client.post("/logout")
     login(test_client, username="Multi", role="consumer")
     dashboard = test_client.get("/dashboard/consumer")
     assert dashboard.status_code == 200
@@ -722,8 +737,8 @@ def test_multi_role_workspace_and_admin_controls():
     response = test_client.post("/role-switch", data={"role": "researcher"})
     assert response.status_code == 302
     updated = precision_app.repository.get_user_by_display_name("Multi")
-    assert updated["active_role"] == "researcher"
-    assert updated["roles"] == ["consumer", "researcher"]
+    assert updated["active_role"] == "consumer"
+    assert updated["roles"] == ["consumer"]
     assert updated["_id"] == user["_id"]
     assert test_client.post("/role-switch", data={"role": "administrator"}).status_code == 302
     test_client.post("/logout")
@@ -732,18 +747,20 @@ def test_multi_role_workspace_and_admin_controls():
     target = precision_app.repository.get_user_by_display_name("Multi")
     response = test_client.post(
         f"/dashboard/administrator/users/{target['_id']}",
-        data={"roles": ["consumer", "researcher"], "active_role": "researcher", "plan": "professional", "account_status": "active"},
+        data={"workspace_role": "researcher", "plan": "professional", "account_status": "active"},
     )
     assert response.status_code == 302
     updated = precision_app.repository.get_user_by_id(target["_id"])
-    assert updated["roles"] == ["consumer", "researcher"]
+    assert updated["roles"] == ["researcher"]
     assert updated["active_role"] == "researcher"
     assert updated["plan"] == "professional"
     admin_page = test_client.get("/dashboard/administrator").data.decode("utf-8", errors="ignore")
     assert "Membership plan" in admin_page
+    assert "Roles cannot be combined" in admin_page
+    assert 'type="checkbox" name="roles"' not in admin_page
     response = test_client.post(
         f"/dashboard/administrator/users/{target['_id']}",
-        data={"roles": ["consumer"], "active_role": "consumer", "plan": "basic", "account_status": "active"},
+        data={"workspace_role": "consumer", "plan": "basic", "account_status": "active"},
     )
     assert response.status_code == 302
     updated = precision_app.repository.get_user_by_id(target["_id"])
@@ -786,14 +803,17 @@ def test_watchlist_and_analytics_membership_gates(monkeypatch):
     record = precision_app.repository.list_searches(limit=1)[0]
     watchlist_locked = test_client.get("/watchlist")
     assert watchlist_locked.status_code == 200
-    assert b"Premium unlocks evidence saving, watchlists, analytics dashboards, and AI-assisted price forecasting." in watchlist_locked.data
+    assert b"See how a market moves after the first search." in watchlist_locked.data
+    assert b"Price history" in watchlist_locked.data
     assert b"Requires Premium" in watchlist_locked.data
     assert b"material-symbols-outlined" in watchlist_locked.data
-    assert b"View plans" in watchlist_locked.data
+    assert b"Upgrade to Premium" in watchlist_locked.data
+    assert watchlist_locked.data.count(b"Upgrade to Premium") == 1
     assert b"/membership" in watchlist_locked.data
     analytics_locked = test_client.get(f"/analytics/{record['_id']}")
     assert analytics_locked.status_code == 200
-    assert b"Premium unlocks evidence saving, watchlists, analytics dashboards, and AI-assisted price forecasting." in analytics_locked.data
+    assert b"Move from listings to a comparable market view." in analytics_locked.data
+    assert b"Price distribution" in analytics_locked.data
     save_blocked = test_client.post("/saved/results", data={"search_record_id": record["_id"], "result_token": record.get("result_tokens", [""])[0] if record.get("result_tokens") else ""})
     assert save_blocked.status_code == 302
 
@@ -809,9 +829,10 @@ def test_watchlist_and_analytics_membership_gates(monkeypatch):
     assert test_client.get(f"/analytics/{record['_id']}").status_code == 200
     audit_locked = test_client.get("/audit")
     assert audit_locked.status_code == 200
-    assert b"Source audit requires Professional membership." in audit_locked.data
+    assert b"Review collection outcomes, source coverage, evidence events, and failures" in audit_locked.data
     assert b"Requires Professional" in audit_locked.data
     assert b"Upgrade to Professional" in audit_locked.data
+    assert b"Source provenance" in audit_locked.data
     assert b"/membership" in audit_locked.data
 
     test_client.post("/logout")

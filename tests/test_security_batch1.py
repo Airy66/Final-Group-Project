@@ -161,6 +161,59 @@ def test_researcher_logs_are_owner_scoped_and_retailer_cannot_read_logs():
     assert "research-other-event" not in retailer_logs
 
 
+def test_researcher_dashboard_metrics_and_activity_are_owner_scoped():
+    client = _setup_client()
+    researcher = _create_user("Dashboard Research Owner", "researcher")
+    other = _create_user("Dashboard Research Other", "researcher")
+    owner_search = precision_app.repository.create_search(
+        researcher["_id"], "owner-dashboard-query", "ebay", role="researcher"
+    )
+    other_search = precision_app.repository.create_search(
+        other["_id"], "other-dashboard-query", "ebay", role="researcher"
+    )
+    precision_app.repository.save_evidence(
+        researcher["_id"],
+        owner_search,
+        {"title": "Owner evidence title", "platform": "eBay", "price": 499, "currency": "USD"},
+    )
+    precision_app.repository.save_evidence(
+        other["_id"],
+        other_search,
+        {"title": "Other evidence title", "platform": "Walmart", "price": 599, "currency": "USD"},
+    )
+    precision_app.repository.save_research(researcher["_id"], {"title": "Owner research package"})
+    precision_app.repository.save_research(other["_id"], {"title": "Other research package"})
+    precision_app.repository.log_ai_search(
+        researcher["_id"], "owner-ai-dashboard", "offline-model", "Owner summary", "Owner response"
+    )
+    precision_app.repository.log_ai_search(
+        other["_id"], "other-ai-dashboard", "offline-model", "Other summary", "Other response"
+    )
+    precision_app.repository.log_event(
+        researcher["_id"], "search_started", "researcher", researcher["display_name"], {"query": "owner-dashboard-event"}
+    )
+    precision_app.repository.log_event(
+        other["_id"], "api_call_failed", "researcher", other["display_name"], {"query": "other-dashboard-event"}
+    )
+
+    _login(client, researcher)
+    response = client.get("/dashboard/researcher")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Owner evidence title" in body
+    assert "owner-ai-dashboard" in body
+    assert "owner-dashboard-event" in body
+    assert "Other evidence title" not in body
+    assert "other-ai-dashboard" not in body
+    assert "other-dashboard-event" not in body
+    view = precision_app.build_researcher_dashboard_view(researcher["_id"])
+    assert view["snapshot"]["search_records"] == 1
+    assert view["snapshot"]["evidence_records"] == 1
+    assert view["snapshot"]["research_records"] == 1
+    assert view["source_warning_count"] == 0
+
+
 def test_administrator_audit_scope_is_global():
     client = _setup_client()
     administrator = _create_user("Global Admin", "administrator")

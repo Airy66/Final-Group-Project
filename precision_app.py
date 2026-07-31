@@ -337,6 +337,74 @@ MEMBERSHIP_PLANS = [
     },
 ]
 PLAN_BY_ID = {plan["id"]: plan for plan in MEMBERSHIP_PLANS}
+LOCKED_FEATURE_VIEWS = {
+    "saved_research": {
+        "icon": "bookmarks",
+        "eyebrow": "Evidence workspace",
+        "headline": "Turn useful listings into reusable evidence.",
+        "summary": "Save selected marketplace records with their source, observed price, confidence, and collection context intact.",
+        "capabilities": [
+            {"icon": "bookmark_added", "title": "Evidence library", "detail": "Keep deliberate observations separate from temporary search results."},
+            {"icon": "inventory_2", "title": "Research packages", "detail": "Group evidence into focused, reusable research collections."},
+            {"icon": "download", "title": "Portable records", "detail": "Export unlocked evidence workflows without losing provenance."},
+        ],
+    },
+    "watchlist": {
+        "icon": "monitoring",
+        "eyebrow": "Price monitoring",
+        "headline": "See how a market moves after the first search.",
+        "summary": "Create product monitors, collect comparable price snapshots, and review changes against an established baseline.",
+        "capabilities": [
+            {"icon": "show_chart", "title": "Price history", "detail": "Follow average, low, and high observed prices over time."},
+            {"icon": "notifications_active", "title": "Change signals", "detail": "Surface price movements and monitors that need attention."},
+            {"icon": "storefront", "title": "Source comparison", "detail": "Track comparable listings across available marketplaces."},
+        ],
+    },
+    "analytics_dashboard": {
+        "icon": "analytics",
+        "eyebrow": "Market analytics",
+        "headline": "Move from listings to a comparable market view.",
+        "summary": "Explore normalized price ranges, platform coverage, comparable records, and grounded analytical summaries.",
+        "capabilities": [
+            {"icon": "query_stats", "title": "Price distribution", "detail": "Understand range, average, outliers, and market position."},
+            {"icon": "compare_arrows", "title": "Comparable sets", "detail": "Keep analytical conclusions tied to included records."},
+            {"icon": "auto_awesome", "title": "Grounded summaries", "detail": "Use current normalized evidence as the basis for AI analysis."},
+        ],
+    },
+    "source_audit": {
+        "icon": "policy",
+        "eyebrow": "Provenance and audit",
+        "headline": "Verify where every research record came from.",
+        "summary": "Review collection outcomes, source coverage, evidence events, and failures in one traceable audit workflow.",
+        "capabilities": [
+            {"icon": "fact_check", "title": "Source provenance", "detail": "Connect searches and saved evidence to their originating source."},
+            {"icon": "warning", "title": "Failure visibility", "detail": "Distinguish no-result outcomes from provider and persistence errors."},
+            {"icon": "description", "title": "Audit reports", "detail": "Generate exportable records for advanced review and documentation."},
+        ],
+    },
+    "logs": {
+        "icon": "receipt_long",
+        "eyebrow": "Research activity",
+        "headline": "Keep a chronological record of research actions.",
+        "summary": "Review search, evidence, AI, and audit activity as an account-scoped timeline for reproducibility.",
+        "capabilities": [
+            {"icon": "timeline", "title": "Activity timeline", "detail": "Review important workflow events in chronological order."},
+            {"icon": "smart_toy", "title": "AI traceability", "detail": "See model activity and the evidence scope used for analysis."},
+            {"icon": "ios_share", "title": "Review exports", "detail": "Export activity records for professional research workflows."},
+        ],
+    },
+    "export": {
+        "icon": "download",
+        "eyebrow": "Research export",
+        "headline": "Take traceable research records outside the workspace.",
+        "summary": "Export supported evidence, monitoring, analysis, or audit records from the page where they were created.",
+        "capabilities": [
+            {"icon": "table_view", "title": "Structured data", "detail": "Download supported records in portable tabular formats."},
+            {"icon": "verified", "title": "Preserved context", "detail": "Keep source and workflow context attached to research outputs."},
+            {"icon": "share", "title": "External review", "detail": "Prepare unlocked records for collaboration and reporting."},
+        ],
+    },
+}
 SOURCES = {"ebay": "eBay API", "ai": "AI Web Search", "demo": "Demo Data"}
 ACCESSORY_KEYWORDS = {"case", "cover", "screen protector", "tempered glass", "film", "accessory", "charger", "cable", "adapter", "strap", "mount", "holder", "replacement", "repair", "housing", "frame", "parts", "lcd", "display", "digitizer", "lens"}
 SERPAPI_MARKETPLACE_ENABLED = os.getenv("SERPAPI_MARKETPLACE_ENABLED", "true").lower() in {"1", "true", "on", "yes"}
@@ -437,7 +505,14 @@ def locked_message(feature):
 
 def locked_feature_response(feature, title=None, status_code=200):
     required = required_tier(feature)
-    cta_label = "View plans" if required == "premium" else f"Upgrade to {tier_label(required)}"
+    cta_label = f"Upgrade to {tier_label(required)}"
+    locked_view = LOCKED_FEATURE_VIEWS.get(feature, {
+        "icon": "lock",
+        "eyebrow": "Workspace capability",
+        "headline": f"Unlock {title or 'this feature'} when your workflow needs it.",
+        "summary": locked_message(feature),
+        "capabilities": [],
+    })
     return render_template(
         "locked_feature.html",
         feature=feature,
@@ -446,6 +521,7 @@ def locked_feature_response(feature, title=None, status_code=200):
         cta_label=cta_label,
         title=title or "Feature locked",
         message=locked_message(feature),
+        locked_view=locked_view,
     ), status_code
 
 
@@ -663,7 +739,17 @@ def singapore_time_string(value):
 
 
 def export_forbidden_response(message):
-    return render_template("locked_feature.html", feature="export", required_tier="premium", required_label="Premium", cta_label="View plans", title="Export locked", message=message), 403
+    required = "professional" if "Professional" in message else "premium"
+    return render_template(
+        "locked_feature.html",
+        feature="export",
+        required_tier=required,
+        required_label=tier_label(required),
+        cta_label=f"Upgrade to {tier_label(required)}",
+        title="Export locked",
+        message=message,
+        locked_view=LOCKED_FEATURE_VIEWS["export"],
+    ), 403
 
 
 def export_allowed(member, required):
@@ -772,6 +858,12 @@ def user_active_role(user):
     roles = user_roles(user)
     active_role = user.get("active_role") or user.get("role") or roles[0]
     return active_role if active_role in roles else roles[0]
+
+
+def single_account_role(user):
+    """Return the one canonical workspace role assigned to an account."""
+    candidate = (user or {}).get("active_role") or (user or {}).get("role") or (user or {}).get("primary_role")
+    return candidate if candidate in ROLES else "consumer"
 
 
 def is_accessory(title):
@@ -1962,8 +2054,85 @@ def build_retailer_dashboard_view(user_id, monitor_id=None):
             insight = "Platform coverage is limited. Collect or save more marketplace records before making sourcing decisions."
         return distribution_rows, price_range, insight
 
+    def monitor_metrics(monitor):
+        snapshots = safe_call(lambda: repository.list_price_snapshots(monitor["_id"], limit=90), [])
+        normalized_snapshots = []
+        for snapshot in snapshots:
+            row = dict(snapshot)
+            listing_rows = normalize_price_items(row.get("listing_records") or [])
+            listing_prices = [_dashboard_price_value(item) for item in listing_rows]
+            listing_prices = [value for value in listing_prices if value is not None]
+            if _snapshot_float(row.get("average_price")) is None and listing_prices:
+                row["average_price"] = round(sum(listing_prices) / len(listing_prices), 2)
+                row["lowest_price"] = round(min(listing_prices), 2)
+                row["highest_price"] = round(max(listing_prices), 2)
+                row["record_count"] = len(listing_prices)
+            if _snapshot_float(row.get("average_price")) is not None:
+                normalized_snapshots.append(row)
+        normalized_snapshots.sort(
+            key=lambda row: _normalized_utc_datetime(row.get("collected_at") or row.get("created_at"))
+            or datetime.min.replace(tzinfo=timezone.utc)
+        )
+        latest = normalized_snapshots[-1] if normalized_snapshots else None
+        previous = normalized_snapshots[-2] if len(normalized_snapshots) > 1 else None
+        current_average = _snapshot_float((latest or {}).get("average_price"))
+        previous_average = _snapshot_float((previous or {}).get("average_price"))
+        current_low = _snapshot_float((latest or {}).get("lowest_price"))
+        current_high = _snapshot_float((latest or {}).get("highest_price"))
+        change_amount = round(current_average - previous_average, 2) if current_average is not None and previous_average is not None else None
+        change_percentage = round(change_amount / previous_average * 100, 2) if change_amount is not None and previous_average else None
+        latest_listings = normalize_price_items((latest or {}).get("listing_records") or [])
+        priced_listings = [
+            (item, _dashboard_price_value(item))
+            for item in latest_listings
+            if item.get("analytics_eligible")
+        ]
+        priced_listings = [(item, value) for item, value in priced_listings if value is not None]
+        best_listing, best_price = min(priced_listings, key=lambda pair: pair[1]) if priced_listings else (None, current_low)
+        best_platform = (best_listing or {}).get("platform") or (latest or {}).get("best_platform")
+        below_average_percent = (
+            round((current_average - best_price) / current_average * 100, 1)
+            if current_average and best_price is not None
+            else None
+        )
+        if not normalized_snapshots:
+            trend_state, trend_label = "empty", "Waiting for baseline"
+        elif len(normalized_snapshots) == 1:
+            trend_state, trend_label = "baseline", "Baseline collected"
+        elif change_amount is not None and change_amount < 0:
+            trend_state, trend_label = "falling", "Price falling"
+        elif change_amount is not None and change_amount > 0:
+            trend_state, trend_label = "rising", "Price rising"
+        else:
+            trend_state, trend_label = "stable", "Price stable"
+        average_position = 50.0
+        if current_low is not None and current_high is not None and current_high > current_low and current_average is not None:
+            average_position = round((current_average - current_low) / (current_high - current_low) * 100, 1)
+        return {
+            "snapshots": normalized_snapshots,
+            "snapshot_count": len(normalized_snapshots),
+            "trend_chart": _watchlist_trend_chart_data(normalized_snapshots),
+            "sparkline": [_snapshot_float(row.get("average_price")) for row in normalized_snapshots[-14:]],
+            "current_low": current_low,
+            "current_average": current_average,
+            "current_high": current_high,
+            "change_amount": change_amount,
+            "change_percentage": change_percentage,
+            "trend_state": trend_state,
+            "trend_label": trend_label,
+            "best_platform": best_platform,
+            "best_price": best_price,
+            "below_average_percent": below_average_percent,
+            "average_position": average_position,
+            "latest_listing_count": int((latest or {}).get("listing_count") or (latest or {}).get("record_count") or len(latest_listings)),
+            "latest_collected_at": (latest or {}).get("collected_at") or (latest or {}).get("created_at"),
+            "data_quality": (latest or {}).get("data_quality"),
+        }
+
     try:
         monitored = _watchlist_items_for_user(user_id, include_archived=False)
+        for monitor in monitored:
+            monitor["dashboard"] = monitor_metrics(monitor)
         selected_monitor = next((row for row in monitored if str(row.get("_id")) == str(monitor_id)), None) if monitor_id else None
         scoped_monitors = [selected_monitor] if selected_monitor else monitored
         records = []
@@ -2007,6 +2176,35 @@ def build_retailer_dashboard_view(user_id, monitor_id=None):
         # products. Price KPIs exist only for one explicitly selected monitor.
         if selected_monitor is None:
             summary.update(lowest=None, average=None, highest=None, range=None)
+        selected_metrics = selected_monitor.get("dashboard") if selected_monitor else None
+        if selected_metrics:
+            summary.update(
+                lowest=selected_metrics.get("current_low"),
+                average=selected_metrics.get("current_average"),
+                highest=selected_metrics.get("current_high"),
+                range=(
+                    round(selected_metrics["current_high"] - selected_metrics["current_low"], 2)
+                    if selected_metrics.get("current_high") is not None and selected_metrics.get("current_low") is not None
+                    else None
+                ),
+            )
+            if selected_metrics.get("best_platform") and selected_metrics.get("best_price") is not None:
+                gap = selected_metrics.get("below_average_percent")
+                sourcing_insight = (
+                    f"{selected_metrics['best_platform']} currently has the lowest comparable listing at "
+                    f"USD {selected_metrics['best_price']:.2f}"
+                    + (f", {gap:.1f}% below the observed market average." if gap is not None else ".")
+                )
+        portfolio_metrics = {
+            "active_monitors": len(monitored),
+            "price_drops": sum((monitor.get("dashboard") or {}).get("trend_state") == "falling" for monitor in monitored),
+            "needs_attention": sum(
+                not monitor.get("latest_snapshot")
+                or monitor.get("last_refresh_status") in {"failed", "partial"}
+                for monitor in monitored
+            ),
+            "baselines": sum((monitor.get("dashboard") or {}).get("trend_state") == "baseline" for monitor in monitored),
+        }
         return {
             "records": visible_records,
             "distribution": distribution,
@@ -2022,6 +2220,10 @@ def build_retailer_dashboard_view(user_id, monitor_id=None):
             "monitors": monitored,
             "selected_monitor_id": str(selected_monitor.get("_id")) if selected_monitor else "",
             "portfolio_scope": selected_monitor is None,
+            "selected_monitor": selected_monitor,
+            "selected_metrics": selected_metrics,
+            "trend_chart": (selected_metrics or {}).get("trend_chart") or _watchlist_trend_chart_data([]),
+            "portfolio_metrics": portfolio_metrics,
             "latest_snapshot_time": latest_snapshot_time,
             "scope_label": ((f"Based on {len(monitored)} active monitor{'s' if len(monitored) != 1 else ''} · {len(visible_records)} unique listings") if selected_monitor is None else f"{selected_monitor.get('product_label') or selected_monitor.get('keyword') or 'Selected monitor'} · {len(visible_records)} listings") if active_monitor_count else "No active monitoring data yet.",
             "sourcing_insight": sourcing_insight,
@@ -2048,6 +2250,13 @@ def build_retailer_dashboard_view(user_id, monitor_id=None):
             "source_kind": "empty",
             "demo_records": 0,
             "active_monitor_count": 0,
+            "monitors": [],
+            "selected_monitor_id": "",
+            "portfolio_scope": True,
+            "selected_monitor": None,
+            "selected_metrics": None,
+            "trend_chart": _watchlist_trend_chart_data([]),
+            "portfolio_metrics": {"active_monitors": 0, "price_drops": 0, "needs_attention": 0, "baselines": 0},
             "latest_snapshot_time": None,
             "scope_label": "No active monitoring data yet.",
             "sourcing_insight": sourcing_insight,
@@ -4567,6 +4776,15 @@ def login():
                 repository.record_login_failure(user["_id"])
             flash("Invalid email or password.", "error")
             return render_template("login.html"), 200
+        assigned_role = single_account_role(user)
+        if user_roles(user) != [assigned_role] or user.get("role") != assigned_role or user.get("active_role") != assigned_role:
+            repository.update_user(user["_id"], {
+                "roles": [assigned_role],
+                "primary_role": assigned_role,
+                "active_role": assigned_role,
+                "role": assigned_role,
+            })
+            user = repository.get_user_by_id(user["_id"])
         repository.record_login_success(user["_id"])
         session.clear()
         session.update(
@@ -4574,9 +4792,9 @@ def login():
             username=user.get("display_name") or user.get("username"),
             display_name=user.get("display_name") or user.get("username"),
             email=user.get("email"),
-            roles=user_roles(user),
-            active_role=user_active_role(user),
-            role=user_active_role(user),
+            roles=[assigned_role],
+            active_role=assigned_role,
+            role=assigned_role,
         )
         session.permanent = True
         repository.log_event(user["_id"], "login", session["active_role"], user.get("display_name") or user.get("username"), {"login_method": "password"})
@@ -4728,18 +4946,7 @@ def reset_password(token):
 @app.post("/role-switch")
 @login_required
 def role_switch():
-    role = request.form.get("role")
-    user = current_user()
-    if role not in (user.get("roles") or []):
-        flash("Please choose a valid workspace role.", "error")
-        return redirect(url_for("dashboard_redirect"))
-    if role == "administrator" and session.get("active_role") != "administrator" and "administrator" not in (user.get("roles") or []):
-        abort(403)
-    repository.update_user(session["user_id"], {"active_role": role, "role": role})
-    session["role"] = role
-    session["active_role"] = role
-    repository.log_event(session["user_id"], "role_switch", role, session["username"], {"new_active_role": role, "assigned_roles": user.get("roles"), "user_id": session["user_id"]})
-    flash(f"Workspace changed to {ROLES[role]}.", "info")
+    flash("Each account has one assigned workspace role. Contact an administrator if your role needs to change.", "info")
     return redirect(url_for("dashboard_redirect"))
 
 
@@ -4822,27 +5029,70 @@ def retailer_dashboard():
         categories=dashboard["categories"],
         monitors=dashboard.get("monitors", []),
         selected_monitor_id=dashboard.get("selected_monitor_id", ""),
+        selected_monitor=dashboard.get("selected_monitor"),
+        selected_metrics=dashboard.get("selected_metrics"),
+        trend_chart=dashboard.get("trend_chart", {}),
+        portfolio_metrics=dashboard.get("portfolio_metrics", {}),
         portfolio_scope=dashboard.get("portfolio_scope", True),
         synthetic=dashboard["source_kind"] == "demo",
     )
 
 
+def build_researcher_dashboard_view(user_id):
+    """Build an owner-scoped research workflow view; never expose global records."""
+    health = get_service_health()
+    searches = safe_call(lambda: repository.list_searches(user_id, limit=20), [])
+    products = safe_call(lambda: repository.list_products(user_id, limit=20), [])
+    evidence = safe_call(lambda: repository.list_evidence(user_id, limit=20), [])
+    research_packages = safe_call(lambda: repository.list_research(user_id, limit=20), [])
+    analyses = safe_call(lambda: repository.list_analysis_records(user_id, limit=20), [])
+    ai_logs = safe_call(lambda: repository.list_ai_logs(user_id, limit=12), [])
+    audit_logs = present_audit_logs(safe_call(lambda: repository.list_audit_logs(user_id, limit=20), []))
+    source_warning_count = sum(
+        row.get("event_type") in {"api_call_failed", "mongodb_save_failed"}
+        for row in audit_logs
+    )
+    snapshot = {
+        "search_records": len(safe_call(lambda: repository.list_searches(user_id, limit=0), [])),
+        "product_results": len(safe_call(lambda: repository.list_products(user_id, limit=0), [])),
+        "evidence_records": len(safe_call(lambda: repository.list_evidence(user_id, limit=0), [])),
+        "research_records": len(safe_call(lambda: repository.list_research(user_id, limit=0), [])),
+        "ai_search_logs": len(safe_call(lambda: repository.list_ai_logs(user_id, limit=0), [])),
+        "analytics_reports": len(safe_call(lambda: repository.list_analysis_records(user_id, limit=0), [])),
+    }
+    sources = [
+        {"name": "Atlas evidence store", "status": health[0]["status"], "type": "Persistent research and evidence storage", "detail": health[0]["detail"]},
+        {"name": "eBay marketplace source", "status": health[1]["status"], "type": "Comparable marketplace listing collection", "detail": health[1]["detail"]},
+        {"name": "Walmart marketplace source", "status": health[2]["status"], "type": "Comparable marketplace listing collection", "detail": health[2]["detail"]},
+        {"name": "Gemini analysis service", "status": health[3]["status"], "type": "Grounded analysis support, not a marketplace source", "detail": health[3]["detail"]},
+    ]
+    return {
+        "searches": searches,
+        "products": products,
+        "evidence": normalize_price_items(evidence),
+        "research_packages": research_packages,
+        "analyses": analyses,
+        "ai_logs": ai_logs,
+        "audit_logs": audit_logs,
+        "source_warning_count": source_warning_count,
+        "snapshot": snapshot,
+        "pipeline": [
+            {"label": "Search runs", "count": snapshot["search_records"], "endpoint": "search"},
+            {"label": "Saved evidence", "count": snapshot["evidence_records"], "endpoint": "saved"},
+            {"label": "Research packages", "count": snapshot["research_records"], "endpoint": "saved"},
+            {"label": "Analysis reports", "count": snapshot["analytics_reports"], "endpoint": "analytics_compatibility"},
+        ],
+        "sources": sources,
+    }
+
+
 @app.route("/dashboard/researcher")
 @role_required("researcher")
 def researcher_dashboard():
-    health = get_service_health()
+    dashboard = build_researcher_dashboard_view(session["user_id"])
     return render_template(
         "dashboard_researcher_role.html",
-        searches=safe_call(lambda: repository.list_searches(limit=20), []),
-        ai_logs=safe_call(lambda: repository.list_ai_logs(limit=20), []),
-        products=safe_call(lambda: repository.list_products(limit=20), []),
-        snapshot=safe_call(repository.admin_snapshot, {}),
-        audit_logs=present_audit_logs(safe_call(lambda: repository.list_audit_logs(limit=12), [])),
-        sources=[
-            {"name": "MongoDB market_records", "status": health[0]["status"], "type": "Demo-data collection service", "detail": health[0]["detail"]},
-            {"name": "eBay Browse API", "status": health[1]["status"], "type": "Live marketplace collection service", "detail": health[1]["detail"]},
-            {"name": "Gemini AI Discover", "status": health[3]["status"], "type": "Analysis service (not a marketplace source)", "detail": health[3]["detail"]},
-        ],
+        **dashboard,
     )
 
 
@@ -4921,45 +5171,35 @@ def administrator_update_user(user_id):
     if str(target.get("_id")) == str(session.get("user_id")):
         flash("Your own administrator account cannot be changed from this screen.", "error")
         return redirect(url_for("administrator_dashboard") + "#user-management")
-    requested_roles = normalize_roles(request.form.getlist("roles"))
-    if not requested_roles:
-        requested_roles = user_roles(target)
-    if "administrator" in requested_roles and session.get("user_id") != target.get("_id"):
-        requested_roles = [role for role in requested_roles if role != "administrator"] or user_roles(target)
-    active_role = request.form.get("active_role") or target.get("active_role") or target.get("role", "consumer")
     target_roles = user_roles(target)
     target_is_administrator = "administrator" in target_roles or target.get("active_role") == "administrator" or target.get("role") == "administrator"
+    legacy_roles = normalize_roles(request.form.getlist("roles")) if request.form.getlist("roles") else []
+    requested_role = (
+        request.form.get("workspace_role")
+        or request.form.get("active_role")
+        or (legacy_roles[0] if len(legacy_roles) == 1 else None)
+        or single_account_role(target)
+    )
+    if target_is_administrator:
+        requested_role = "administrator"
     submitted_tier = request.form.get("membership_tier") or request.form.get("plan") or target.get("membership_tier") or target.get("plan") or "basic"
     plan = normalize_membership_tier(submitted_tier)
     membership_tier = plan
     account_status = request.form.get("account_status", target.get("account_status", "active"))
-    if any(role not in ROLES for role in requested_roles):
-        flash("Please choose valid assigned roles.", "error")
-        return redirect(url_for("administrator_dashboard") + "#user-management")
-    if active_role not in requested_roles:
-        flash("Please choose an active workspace from the assigned roles.", "error")
+    if requested_role not in ROLES or (requested_role == "administrator" and not target_is_administrator):
+        flash("Please choose a valid single workspace role.", "error")
         return redirect(url_for("administrator_dashboard") + "#user-management")
     if account_status not in {"active", "inactive"}:
         flash("Please choose a valid account status.", "error")
         return redirect(url_for("administrator_dashboard") + "#user-management")
-    if not requested_roles:
-        flash("Each user must keep at least one assigned role.", "error")
-        return redirect(url_for("administrator_dashboard") + "#user-management")
-    if len(user_roles(target)) == 1 and len(requested_roles) == 0:
-        flash("Do not remove the final role from a user.", "error")
-        return redirect(url_for("administrator_dashboard") + "#user-management")
-    if session.get("user_id") == target.get("_id") and "administrator" not in requested_roles and "administrator" in user_roles(target):
-        flash("Your own administrator role cannot be removed from this screen.", "error")
-        return redirect(url_for("administrator_dashboard") + "#user-management")
-    if "administrator" in requested_roles and session.get("user_id") != target.get("_id"):
-        flash("Normal users cannot be assigned administrator role.", "error")
-        return redirect(url_for("administrator_dashboard") + "#user-management")
     updates = {}
-    if set(requested_roles) != set(target_roles):
-        updates["roles"] = requested_roles
-    if active_role != target.get("active_role", target.get("role")):
-        updates["active_role"] = active_role
-        updates["role"] = active_role
+    if target_roles != [requested_role] or single_account_role(target) != requested_role:
+        updates.update(
+            roles=[requested_role],
+            primary_role=requested_role,
+            active_role=requested_role,
+            role=requested_role,
+        )
     if not target_is_administrator:
         if plan != normalize_membership_tier(target.get("plan")):
             updates["plan"] = plan

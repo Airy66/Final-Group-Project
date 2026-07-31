@@ -45,7 +45,7 @@
     <div>
       <p class="text-xs font-bold uppercase tracking-widest text-primary">Administrator</p>
       <h2 class="mt-1 font-display text-2xl font-bold text-slate-950">User management</h2>
-      <p class="mt-1 text-sm text-slate-500">Assigned roles, active workspace, plan, and activation state for this workspace.</p>
+      <p class="mt-1 text-sm text-slate-500">Single assigned workspace role, membership plan, and account activation state.</p>
     </div>
   </div>
   <div class="w-full overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -177,23 +177,17 @@
                     </dl>
                   </div>
                   <form method="post" action="{{ url_for('administrator_update_user', user_id=user._id) }}" class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Assigned roles</p>
-                    <div class="mt-3 space-y-2 text-sm text-slate-700">
-                      {% for value,label in role_names.items() %}
-                      <label class="flex items-center gap-3">
-                        <input type="checkbox" name="roles" value="{{ value }}" class="rounded border-slate-300 text-blue-600" {% if value in (user.roles or [user.role]) %}checked{% endif %} {% if is_self and value == 'administrator' %}disabled{% endif %}>
-                        <span>{{ label }}</span>
-                      </label>
-                      {% endfor %}
-                    </div>
-                    <label class="mt-4 block text-sm font-semibold text-slate-700">
-                      Active workspace
-                      <select name="active_role" class="app-select mt-2 w-full text-sm" {% if is_self %}disabled{% endif %}>
-                        {% for value in user.roles or [user.role] %}
-                        <option value="{{ value }}" {{ 'selected' if (user.active_role or user.role) == value }}>{{ role_names.get(value, value) }}</option>
+                    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Workspace role</p>
+                    <label class="mt-3 block text-sm font-semibold text-slate-700">
+                      Assigned role
+                      <select name="workspace_role" class="app-select mt-2 w-full text-sm" {% if is_self or row_is_admin %}disabled{% endif %}>
+                        {% if row_is_admin %}<option value="administrator" selected>Administrator</option>{% endif %}
+                        {% for value,label in role_names.items() if value != 'administrator' %}
+                        <option value="{{ value }}" {{ 'selected' if (user.active_role or user.role) == value }}>{{ label }}</option>
                         {% endfor %}
                       </select>
                     </label>
+                    <p class="mt-3 text-xs leading-5 text-slate-500">Changing the role replaces the current workspace role. Roles cannot be combined.</p>
                     {% if row_is_admin %}
                     <div class="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-800">
                       <p class="font-semibold">System administrator access</p>
@@ -209,7 +203,7 @@
                       </select>
                     </label>
                     {% endif %}
-                    <button class="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 {% if is_self %}opacity-50{% endif %}" {% if is_self %}disabled{% endif %}>Update roles</button>
+                    <button class="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 {% if is_self %}opacity-50{% endif %}" {% if is_self %}disabled{% endif %}>Update account</button>
                   </form>
                   <form method="post" action="{{ url_for('administrator_update_user', user_id=user._id) }}" class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                     <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Status</p>
@@ -220,8 +214,7 @@
                         <option value="inactive" {{ 'selected' if status_value == 'inactive' }}>Inactive</option>
                       </select>
                     </label>
-                    <input type="hidden" name="active_role" value="{{ user.active_role or user.role }}">
-                    {% for value in user.roles or [user.role] %}<input type="hidden" name="roles" value="{{ value }}">{% endfor %}
+                    <input type="hidden" name="workspace_role" value="{{ user.active_role or user.role }}">
                     {% if not row_is_admin %}<input type="hidden" name="membership_tier" value="{{ normalize_membership_tier(user.membership_tier or user.plan or 'basic') }}">{% endif %}
                     <button class="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 {% if is_self %}opacity-50{% endif %}" {% if is_self %}disabled{% endif %}>Update status</button>
                   </form>

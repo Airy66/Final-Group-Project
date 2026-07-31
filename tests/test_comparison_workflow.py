@@ -104,6 +104,77 @@ def test_retailer_dashboard_uses_latest_active_monitor_snapshots_only():
     assert view["source_kind"] == "watchlist"
 
 
+def test_retailer_dashboard_builds_actionable_price_trend_metrics():
+    _client, user = make_client("Retailer Trend Owner")
+    precision_app.repository.create_watchlist_item(user["_id"], {
+        "keyword": "Phone", "product_label": "Phone", "status": "active", "tracking_mode": "selected_records",
+        "selected_records_snapshot": [],
+    })
+    monitor = precision_app.repository.list_watchlist_items(user["_id"], limit=1)[0]
+    precision_app.repository.save_price_snapshot(monitor["_id"], user["_id"], {
+        "average_price": 100, "lowest_price": 90, "highest_price": 120, "record_count": 2,
+        "collected_at": precision_app.utcnow() - precision_app.timedelta(days=1),
+        "listing_records": [
+            {"title": "Phone A", "platform": "eBay", "price": 90, "raw_price_text": "$90"},
+            {"title": "Phone B", "platform": "Walmart", "price": 110, "raw_price_text": "$110"},
+        ],
+    })
+    precision_app.repository.save_price_snapshot(monitor["_id"], user["_id"], {
+        "average_price": 90, "lowest_price": 80, "highest_price": 110, "record_count": 2,
+        "collected_at": precision_app.utcnow(),
+        "listing_records": [
+            {"title": "Phone A", "platform": "eBay", "price": 100, "raw_price_text": "$100"},
+            {"title": "Phone B", "platform": "Walmart", "price": 80, "raw_price_text": "$80"},
+        ],
+    })
+
+    view = precision_app.build_retailer_dashboard_view(user["_id"], monitor["_id"])
+    metrics = view["selected_metrics"]
+    assert view["trend_chart"]["available"] is True
+    assert view["trend_chart"]["average"] == [100.0, 90.0]
+    assert metrics["change_amount"] == -10
+    assert metrics["change_percentage"] == -10
+    assert metrics["trend_state"] == "falling"
+    assert metrics["best_platform"] == "Walmart"
+    assert metrics["best_price"] == 80
+    assert metrics["below_average_percent"] == 11.1
+    assert metrics["average_position"] == 33.3
+    assert "Walmart" in view["sourcing_insight"] and "11.1%" in view["sourcing_insight"]
+
+
+def test_retailer_dashboard_renders_portfolio_and_monitor_trend_views():
+    client, user = make_client("Retailer Dashboard Render")
+    precision_app.repository.update_user(user["_id"], {
+        "roles": ["retailer"], "primary_role": "retailer", "active_role": "retailer", "role": "retailer",
+    })
+    with client.session_transaction() as browser_session:
+        browser_session["roles"] = ["retailer"]
+        browser_session["active_role"] = "retailer"
+        browser_session["role"] = "retailer"
+    precision_app.repository.create_watchlist_item(user["_id"], {
+        "keyword": "Phone", "product_label": "Phone", "status": "active", "tracking_mode": "selected_records",
+        "platform_scope": "eBay, Walmart", "selected_records_snapshot": [],
+    })
+    monitor = precision_app.repository.list_watchlist_items(user["_id"], limit=1)[0]
+    precision_app.repository.save_price_snapshot(monitor["_id"], user["_id"], {
+        "average_price": 100, "lowest_price": 90, "highest_price": 110, "record_count": 2,
+        "collected_at": precision_app.utcnow(),
+        "listing_records": [
+            {"title": "Phone A", "platform": "eBay", "price": 90, "raw_price_text": "$90"},
+            {"title": "Phone B", "platform": "Walmart", "price": 110, "raw_price_text": "$110"},
+        ],
+    })
+
+    portfolio = client.get("/dashboard/retailer")
+    monitor_view = client.get("/dashboard/retailer", query_string={"monitor_id": monitor["_id"]})
+    assert portfolio.status_code == monitor_view.status_code == 200
+    assert b"Price monitoring portfolio" in portfolio.data
+    assert b"BASELINE" in portfolio.data
+    assert b"Price trend" in monitor_view.data
+    assert b"Baseline collected" in monitor_view.data
+    assert b"Sourcing opportunity" in monitor_view.data
+
+
 def test_compare_requires_two_and_accepts_practical_selected_sets():
     client, user = make_client()
     search_id, tokens = seed_search(user)
