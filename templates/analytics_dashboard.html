@@ -44,7 +44,7 @@
   </div>
 </section>
 
-{% if summary.mixed_storage %}<p class="mx-auto mt-5 max-w-7xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><strong>Mixed storage comparison.</strong> Aggregate values cover {{ summary.storage_variants|join(', ') }}. A Best Platform is not calculated across different capacities; use the Storage filter in Search for a qualified comparison.</p>{% endif %}
+{% if summary.scope_refinement_notice %}<p class="mx-auto mt-5 max-w-7xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><strong>Comparison scope needs refinement.</strong> {{ summary.scope_refinement_notice }}</p>{% endif %}
 
 <section class="mx-auto mt-6 grid max-w-7xl gap-3 px-4 sm:grid-cols-2 xl:grid-cols-4 sm:px-6 lg:px-8" aria-label="Analysis summary">
   {% for label,value,icon,accent,value_id in [

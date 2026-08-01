@@ -121,6 +121,8 @@ app.config.update(
     PRICE_ALERTS_ENABLED=env_flag("PRICE_ALERTS_ENABLED", True),
     PRICE_ALERT_DEFAULT_THRESHOLD_PERCENT=os.getenv("PRICE_ALERT_DEFAULT_THRESHOLD_PERCENT", "5"),
     PRICE_ALERT_COOLDOWN_HOURS=_env_int("PRICE_ALERT_COOLDOWN_HOURS", 24, 1),
+    PRICE_ALERT_MIN_COMPARABLE_RECORDS=_env_int("PRICE_ALERT_MIN_COMPARABLE_RECORDS", 2, 1),
+    PRICE_ALERT_MAX_RECORD_COUNT_CHANGE_PERCENT=_env_int("PRICE_ALERT_MAX_RECORD_COUNT_CHANGE_PERCENT", 50, 0),
     RUNTIME_ENVIRONMENT=_runtime_environment,
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,
     MAX_FORM_MEMORY_SIZE=16 * 1024 * 1024,
@@ -2399,6 +2401,37 @@ def _watchlist_scope_from_products(products, record=None, tracking_mode="search_
     }
 
 
+def _monitor_alert_scope_signature(watchlist_item):
+    frozen_scope = watchlist_item.get("frozen_scope") or {}
+    scope = {
+        "tracking_mode": watchlist_item.get("tracking_mode") or "search_scope",
+        "keyword": " ".join(str(frozen_scope.get("keyword") or watchlist_item.get("keyword") or "").lower().split()),
+        "category_key": frozen_scope.get("category_key") or watchlist_item.get("category_key"),
+        "storage": frozen_scope.get("storage") or watchlist_item.get("storage_scope"),
+        "condition": frozen_scope.get("condition_scope") or watchlist_item.get("condition_scope"),
+        "platform_scope": str(frozen_scope.get("platform_scope") or watchlist_item.get("platform_scope") or "all").lower(),
+        "selected_record_ids": sorted(str(value) for value in (watchlist_item.get("selected_record_ids") or [])),
+    }
+    encoded = json.dumps(scope, sort_keys=True, ensure_ascii=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:24]
+
+
+def _snapshot_observed_scope_signature(watchlist_item, items):
+    category_key = watchlist_item.get("category_key") or (watchlist_item.get("frozen_scope") or {}).get("category_key") or "generic"
+    configuration = {}
+    for field in COMPARISON_CONFIGURATION_FIELDS.get(category_key, COMPARISON_CONFIGURATION_FIELDS["generic"]):
+        values = sorted({_summary_configuration_value(item, field) for item in items if _summary_configuration_value(item, field)})
+        if values:
+            configuration[field] = values
+    scope = {
+        "configuration": configuration,
+        "conditions": sorted({str(item.get("condition_normalized") or item.get("condition_display") or item.get("condition") or "").strip().lower() for item in items if str(item.get("condition_normalized") or item.get("condition_display") or item.get("condition") or "").strip()}),
+        "platforms": sorted({str(item.get("platform") or "").strip().lower() for item in items if str(item.get("platform") or "").strip()}),
+    }
+    encoded = json.dumps(scope, sort_keys=True, ensure_ascii=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:24]
+
+
 def _snapshot_payload_from_items(watchlist_item, items):
     items = [item for item in normalize_price_items(items) if item.get("analytics_eligible") and item.get("total_price") not in (None, 0)]
     if not items:
@@ -2415,11 +2448,14 @@ def _snapshot_payload_from_items(watchlist_item, items):
         "selected_result_ids": list(watchlist_item.get("selected_record_ids") or []),
         "comparable_result_ids": [item.get("_selection_token") or item.get("_id") for item in items],
         "tracking_mode": watchlist_item.get("tracking_mode") or "search_scope",
+        "alert_scope_signature": _monitor_alert_scope_signature(watchlist_item),
+        "observed_scope_signature": _snapshot_observed_scope_signature(watchlist_item, items),
         "keyword": watchlist_item["keyword"],
         "product_label": watchlist_item["product_label"],
         "platform_scope": watchlist_item.get("platform_scope"),
         "source_scope": watchlist_item.get("source_scope"),
         "record_count": len(items),
+        "eligible_record_count": len(items),
         "listing_count": len(items),
         "lowest_price": round(min(prices), 2),
         "highest_price": round(max(prices), 2),
@@ -3162,6 +3198,18 @@ def build_analytics_payload(records, *, query="", source="", analysis_scope="", 
         parsed_model = item.get("parsed_model") or parse_canonical_product_model(item.get("title"))
         attributes = item.get("attributes") or {}
         item_storage = item.get("storage") or attributes.get("storage") or parsed_model.get("storage")
+        item_category_key = item.get("category_key")
+        if not item_category_key:
+            item_category_key = detect_product_category(
+                item.get("title") or item.get("product_name"),
+                item.get("category_display") or item.get("category"),
+            ).category_key
+        configuration_parts = []
+        for field in COMPARISON_CONFIGURATION_FIELDS.get(item_category_key, COMPARISON_CONFIGURATION_FIELDS["generic"]):
+            value = _summary_configuration_value(item, field)
+            if value:
+                configuration_parts.append(f"{COMPARISON_CONFIGURATION_LABELS.get(field, field.replace('_', ' ').title())}: {value}")
+        configuration_display = " · ".join(configuration_parts) or "Not consistently provided"
         price_value = item.get("normalized_price", item.get("price"))
         try:
             numeric_price = float(price_value)
@@ -3197,6 +3245,7 @@ def build_analytics_payload(records, *, query="", source="", analysis_scope="", 
             "analytics_eligible": eligible,
             "condition_source": item.get("condition_source") or "not_specified_by_source",
             "storage": item_storage,
+            "configuration_display": configuration_display,
             "collected_at": display_sgt_datetime(item.get("collected_at") or item.get("created_at")),
             "source_url": item.get("source_url") or item.get("item_url") or "",
             "record_source": _record_source_label(item),
@@ -3216,6 +3265,16 @@ def build_analytics_payload(records, *, query="", source="", analysis_scope="", 
             "maximum_price": 0.0,
             "price_range": 0.0,
             "best_platform": "",
+            "platform_metric_label": "Platform comparison",
+            "platform_metric_detail": None,
+            "platform_qualification_reason": "No comparable prices are available.",
+            "scope_refinement_notice": None,
+            "mixed_configuration": False,
+            "mixed_condition": False,
+            "mixed_conditions": False,
+            "mixed_variants": False,
+            "configuration_values": {},
+            "differing_configuration_fields": [],
         }
         payload["platform_distribution"] = {
             "labels": [str(label) for label in platform_counts.keys()],
@@ -3280,14 +3339,13 @@ def build_analytics_payload(records, *, query="", source="", analysis_scope="", 
     histogram_labels = [str(bucket).replace("(", "").replace("]", "").replace(",", " -") for bucket in histogram["bucket"].tolist()]
     histogram_counts = [int(value) for value in histogram["count"].tolist()]
     histogram_total = sum(histogram_counts) or 1
-    storage_variants = sorted(set(storage_values))
-    mixed_storage = len(storage_variants) > 1
-    mixed_conditions = len(condition_counts) > 1
-    # Storage changes the product variant being compared. Condition is a
-    # separate price-quality dimension and must not silently turn a
-    # single-capacity comparison into a mixed-variant analysis.
-    mixed_variants = mixed_storage
-    lowest_platform = str(min(metric_rows, key=lambda item: float(item.get("normalized_price", item.get("price")))).get("platform")) if metric_rows else ""
+    summary_items = []
+    for item in metric_rows:
+        summary_item = dict(item)
+        summary_item["total_price"] = item.get("normalized_price", item.get("price"))
+        summary_item["analytics_eligible"] = True
+        summary_items.append(summary_item)
+    comparison_summary = calculate_summary(summary_items)
     payload["summary"] = {
         "total_records": int(len(series)),
         "platform_count": int(len(platform_counts)),
@@ -3297,12 +3355,25 @@ def build_analytics_payload(records, *, query="", source="", analysis_scope="", 
         "minimum_price": round(min_price, 2),
         "maximum_price": round(max_price, 2),
         "price_range": round(max_price - min_price, 2),
-        "best_platform": "" if mixed_variants else lowest_platform,
-        "storage_variants": storage_variants,
-        "mixed_storage": mixed_storage,
-        "mixed_variants": mixed_variants,
-        "mixed_conditions": mixed_conditions,
-        "scope_label": "Aggregate across mixed storage variants" if mixed_storage else "Comparable single-storage scope",
+        "best_platform": comparison_summary.get("best_platform") or "",
+        "best_platform_price": comparison_summary.get("best_platform_price"),
+        "best_platform_listing_count": comparison_summary.get("best_platform_listing_count", 0),
+        "platform_metric_label": comparison_summary.get("platform_metric_label"),
+        "platform_metric_detail": comparison_summary.get("platform_metric_detail"),
+        "platform_qualification_reason": comparison_summary.get("platform_qualification_reason"),
+        "platform_summaries": comparison_summary.get("platform_summaries", []),
+        "storage_variants": comparison_summary.get("storage_variants", []),
+        "mixed_storage": comparison_summary.get("mixed_storage", False),
+        "mixed_variants": comparison_summary.get("mixed_configuration", False),
+        "mixed_configuration": comparison_summary.get("mixed_configuration", False),
+        "mixed_condition": comparison_summary.get("mixed_condition", False),
+        "mixed_conditions": comparison_summary.get("mixed_condition", False),
+        "configuration_values": comparison_summary.get("configuration_values", {}),
+        "differing_configuration_fields": comparison_summary.get("differing_configuration_fields", []),
+        "configuration_notice": comparison_summary.get("configuration_notice"),
+        "scope_refinement_notice": comparison_summary.get("scope_refinement_notice"),
+        "scope_label": comparison_summary.get("scope_label"),
+        "category_key": comparison_summary.get("category_key"),
     }
     payload["price_distribution"] = {
         "bins": histogram_labels,
@@ -4136,13 +4207,145 @@ def sort_items(items, sort_option):
     return items
 
 
-def calculate_summary(items):
+COMPARISON_CONFIGURATION_FIELDS = {
+    "smartphones": ("storage", "carrier"),
+    "laptops": ("cpu", "ram", "storage", "screen_size", "gpu"),
+    "headphones": ("headphone_type", "wireless", "noise_cancelling"),
+    "cameras": ("camera_type", "lens_mount", "kit_type"),
+    "generic": ("product_type",),
+    "food_and_grocery": (),
+}
+
+COMPARISON_CONFIGURATION_LABELS = {
+    "storage": "Storage",
+    "carrier": "Carrier",
+    "cpu": "Processor",
+    "ram": "Memory",
+    "screen_size": "Screen",
+    "gpu": "Graphics",
+    "headphone_type": "Headphone type",
+    "wireless": "Wireless",
+    "noise_cancelling": "Noise cancelling",
+    "camera_type": "Camera type",
+    "lens_mount": "Lens mount",
+    "kit_type": "Kit type",
+    "product_type": "Product type",
+}
+
+
+def _summary_configuration_value(item, field):
+    attributes = item.get("attributes") or {}
+    parsed = item.get("parsed_model") or parse_canonical_product_model(item.get("title"))
+    value = attributes.get(field) or parsed.get(field) or item.get(field)
+    normalized = " ".join(str(value or "").strip().split())
+    return "" if normalized.casefold() in {"", "unknown", "not stated", "not specified", "n/a", "none"} else normalized
+
+
+def _configuration_notice(category_key, differing_fields):
+    fields = set(differing_fields)
+    if category_key == "smartphones" and fields == {"storage"}:
+        return "Multiple storage capacities are included. Choose one capacity for a reliable price comparison."
+    if category_key == "smartphones" and fields == {"carrier"}:
+        return "Multiple carrier variants are included. Choose one carrier configuration for a reliable price comparison."
+    if category_key == "laptops":
+        return "Multiple hardware configurations are included. Choose one processor, memory, storage, graphics, and screen configuration before comparing platforms."
+    if category_key == "cameras":
+        return "Multiple camera configurations are included. Choose one body or kit configuration before comparing platforms."
+    if category_key == "headphones":
+        return "Multiple headphone variants are included. Choose one product configuration before comparing platforms."
+    return "Multiple product configurations are included. Choose one configuration for a reliable price comparison."
+
+
+def calculate_summary(items, category_key=None):
     eligible = [item for item in items if item.get("analytics_eligible") and item.get("total_price") is not None]
-    storage_variants = sorted({(item.get("parsed_model") or parse_canonical_product_model(item.get("title"))).get("storage") for item in eligible if (item.get("parsed_model") or parse_canonical_product_model(item.get("title"))).get("storage")})
+    storage_variants = sorted({_summary_configuration_value(item, "storage") for item in eligible if _summary_configuration_value(item, "storage")})
     mixed_storage = len(storage_variants) > 1
+    category_key = category_key or next((item.get("category_key") for item in eligible if item.get("category_key")), None)
+    if not category_key and eligible:
+        detected = detect_product_category(eligible[0].get("title"), eligible[0].get("category"))
+        category_key = detected.category_key
+    category_key = category_key or "generic"
+    configuration_values = {}
+    for field in COMPARISON_CONFIGURATION_FIELDS.get(category_key, COMPARISON_CONFIGURATION_FIELDS["generic"]):
+        values = sorted({_summary_configuration_value(item, field) for item in eligible if _summary_configuration_value(item, field)})
+        if values:
+            configuration_values[field] = values
+    differing_fields = [field for field, values in configuration_values.items() if len(values) > 1]
+    mixed_configuration = bool(differing_fields)
+    conditions = sorted({str(item.get("condition_normalized") or item.get("condition_display") or "").strip() for item in eligible if str(item.get("condition_normalized") or item.get("condition_display") or "").strip()})
+    mixed_condition = len(conditions) > 1
     totals = [float(item["total_price"]) for item in eligible]
-    best = min(eligible, key=lambda item: item["total_price"]) if eligible else None
-    return {"total_results": len(items), "comparable_results": len(eligible), "excluded_results": len(items) - len(eligible), "lowest_price": round(min(totals), 2) if totals else None, "highest_price": round(max(totals), 2) if totals else None, "average_price": round(sum(totals) / len(totals), 2) if totals else None, "potential_saving": round(max(totals)-min(totals), 2) if totals else None, "best_platform": None if mixed_storage else (best.get("platform") if best else None), "best_source": None if mixed_storage else (best.get("source_type") if best else None), "storage_variants": storage_variants, "mixed_storage": mixed_storage, "scope_label": "Mixed storage variants" if mixed_storage else "Comparable model variant", "accessories_excluded": sum(bool(item.get("is_accessory")) for item in items)}
+    platform_prices = {}
+    for item in eligible:
+        platform = str(item.get("platform") or "").strip()
+        if platform:
+            platform_prices.setdefault(platform, []).append(float(item["total_price"]))
+    platform_summary = [
+        {"platform": platform, "median": round(float(pd.Series(prices, dtype="float64").median()), 2), "count": len(prices)}
+        for platform, prices in sorted(platform_prices.items())
+    ]
+    qualification_reason = None
+    best_platform = None
+    best_platform_price = None
+    best_platform_listing_count = 0
+    best_source = None
+    qualification_requirements = []
+    if mixed_configuration:
+        qualification_requirements.append("choose one product configuration")
+    if mixed_condition:
+        qualification_requirements.append("choose one product condition")
+    if len(platform_summary) < 2:
+        qualification_requirements.append("include at least two marketplaces")
+    if qualification_requirements:
+        if len(qualification_requirements) == 1:
+            requirements_text = qualification_requirements[0]
+        else:
+            requirements_text = ", ".join(qualification_requirements[:-1]) + f", and {qualification_requirements[-1]}"
+        qualification_reason = f"To compare platforms fairly, {requirements_text}."
+    elif platform_summary:
+        winner = min(platform_summary, key=lambda row: (row["median"], row["platform"].casefold()))
+        best_platform = winner["platform"]
+        best_platform_price = winner["median"]
+        best_platform_listing_count = winner["count"]
+        best_source = next((item.get("source_type") for item in eligible if item.get("platform") == best_platform), None)
+    robust_platform_sample = bool(platform_summary) and all(row["count"] >= 2 for row in platform_summary)
+    platform_metric_label = "Lowest median-price platform" if robust_platform_sample else "Lowest observed platform"
+    platform_metric_detail = None
+    if best_platform:
+        if robust_platform_sample:
+            platform_metric_detail = f"Median USD {best_platform_price:.2f} · {best_platform_listing_count} comparable listings"
+        else:
+            platform_metric_detail = f"USD {best_platform_price:.2f} · Limited cross-platform sample"
+    configuration_notice = _configuration_notice(category_key, differing_fields) if mixed_configuration else None
+    if mixed_configuration and mixed_condition:
+        scope_refinement_notice = (
+            f"{configuration_notice} Also choose one condition so marketplace price levels are compared fairly."
+        )
+    elif mixed_configuration:
+        scope_refinement_notice = configuration_notice
+    elif mixed_condition:
+        scope_refinement_notice = "Multiple product conditions are included. Choose one condition before comparing marketplace price levels."
+    else:
+        scope_refinement_notice = None
+    return {
+        "total_results": len(items), "comparable_results": len(eligible), "excluded_results": len(items) - len(eligible),
+        "lowest_price": round(min(totals), 2) if totals else None, "highest_price": round(max(totals), 2) if totals else None,
+        "average_price": round(sum(totals) / len(totals), 2) if totals else None,
+        "potential_saving": round(max(totals)-min(totals), 2) if totals else None,
+        "best_platform": best_platform, "best_source": best_source,
+        "best_platform_price": best_platform_price, "best_platform_listing_count": best_platform_listing_count,
+        "platform_metric_label": platform_metric_label, "platform_metric_detail": platform_metric_detail,
+        "platform_qualification_reason": qualification_reason,
+        "platform_summaries": platform_summary,
+        "storage_variants": storage_variants, "mixed_storage": mixed_storage,
+        "mixed_configuration": mixed_configuration, "mixed_condition": mixed_condition,
+        "configuration_values": configuration_values, "differing_configuration_fields": differing_fields,
+        "configuration_notice": configuration_notice,
+        "scope_refinement_notice": scope_refinement_notice,
+        "category_key": category_key,
+        "scope_label": "Mixed product configurations" if mixed_configuration else "Comparable product configuration",
+        "accessories_excluded": sum(bool(item.get("is_accessory")) for item in items),
+    }
 
 
 NON_COMPARABLE_PRICE_TYPES = {"installment", "subscription", "deposit", "down_payment", "contract", "starting_price", "unknown_suspicious"}
@@ -4385,6 +4588,57 @@ def _tokens_allowed_for_search(record, tokens):
 
 def _comparison_group_records(group):
     return normalize_price_items(group.get("selected_records") or [])
+
+
+def _comparison_storage(item):
+    value = item.get("storage") or (item.get("attributes") or {}).get("storage") or (item.get("parsed_model") or {}).get("storage")
+    return str(value or "").strip().upper()
+
+
+def _storage_sort_key(value):
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(GB|TB)", str(value or "").upper())
+    if not match:
+        return float("inf"), str(value or "")
+    amount = float(match.group(1)) * (1024 if match.group(2) == "TB" else 1)
+    return amount, str(value or "")
+
+
+def _comparison_storage_groups(items):
+    grouped = {}
+    for item in items:
+        storage = _comparison_storage(item)
+        if storage:
+            grouped.setdefault(storage, []).append(item)
+    groups = []
+    for storage in sorted(grouped, key=_storage_sort_key):
+        records = grouped[storage]
+        metrics = comparison_metrics(records)
+        groups.append({
+            "value": storage,
+            "listing_count": len(records),
+            "comparable_count": metrics["comparable_count"],
+            "lowest": metrics["lowest"],
+            "highest": metrics["highest"],
+            "average": metrics["average"],
+            "ready": metrics["comparable_count"] >= 2,
+            "record_ids": [item.get("_selection_token") for item in records if item.get("_selection_token")],
+        })
+    return groups
+
+
+def _comparison_records_for_storage(group, requested_storage=None):
+    products = annotate_comparison(
+        _comparison_group_records(group),
+        group.get("query") or "",
+    )
+    groups = _comparison_storage_groups(products)
+    allowed = {entry["value"] for entry in groups}
+    requested = str(requested_storage or "").strip().upper()
+    if requested and requested not in allowed:
+        return products, groups, None
+    if requested:
+        return [item for item in products if _comparison_storage(item) == requested], groups, requested
+    return products, groups, None
 
 
 def annotate_comparison(items, query):
@@ -4730,12 +4984,12 @@ def sample_analysis():
         {"title": "Search", "description": "Collect sample price records from available sources."},
         {"title": "Compare", "description": "Review price differences and platform coverage."},
         {"title": "Save Evidence", "description": "Preserve selected records for later review."},
-        {"title": "Analyze", "description": "Summarise price range, average price, and best visible option."},
+        {"title": "Analyze", "description": "Summarise price range, average price, and the lowest observed offer."},
         {"title": "Review Results", "description": "Inspect sample records and workflow output."},
     ]
     sample_insight = (
         f"The sample records show a price range from {summary['lowest_price']:.2f} to {summary['highest_price']:.2f}, "
-        f"with {summary['best_platform']} currently the strongest visible option among the displayed records."
+        f"with {summary['best_platform']} containing the lowest observed offer among the displayed sample records."
     )
     return render_template(
         "public_sample.html",
@@ -5286,9 +5540,19 @@ def save_comparison_set(comparison_id):
         abort(404)
     items = annotate_comparison(_comparison_group_records(group), group.get("query", ""))
     metrics = comparison_metrics(items)
+    variant_groups = _comparison_storage_groups(items)
+    frozen_summary = {key: value for key, value in metrics.items() if key not in {"excluded", "comparable"}}
+    if len(variant_groups) > 1:
+        frozen_summary = {
+            "scope": "variant_package",
+            "selected_count": len(items),
+            "group_count": len(variant_groups),
+            "ready_group_count": sum(bool(entry.get("ready")) for entry in variant_groups),
+        }
     repository.update_comparison_group(comparison_id, {
         "document_type": "comparison_set", "saved_status": "saved", "status": "saved", "saved_at": utcnow(),
-        "frozen_summary": {key: value for key, value in metrics.items() if key not in {"excluded", "comparable"}},
+        "frozen_summary": frozen_summary,
+        "variant_groups": variant_groups,
         "monitoring_enabled": False,
     })
     repository.log_event(session["user_id"], "comparison_set_saved", session.get("role"), session.get("username"), {"comparison_id": comparison_id, "record_count": len(items)})
@@ -5674,6 +5938,7 @@ def compare():
         "search_record_id": record.get("_id"),
         "selected_record_ids": tokens,
         "selected_records": products,
+        "variant_groups": _comparison_storage_groups(products),
         "source_types": [item.get("source_type") or item.get("platform") for item in products],
         "document_type": "comparison_set",
         "saved_status": "draft",
@@ -5694,25 +5959,34 @@ def compare_group(comparison_id):
         return redirect(url_for("search"))
     search_id = group.get("search_record_id", "")
     record = repository.get_search(search_id, session["user_id"]) if search_id else None
-    products = annotate_comparison(_comparison_group_records(group), group.get("query") or (record.get("keyword", "") if record else ""))
-    selected_record_ids = [str(token) for token in group.get("selected_record_ids", [])]
-    _comparison_debug("compare_display", comparison_id=comparison_id, selected_record_ids=selected_record_ids, displayed_count=len(products))
-    products = annotate_comparison(normalize_price_items(products), record.get("keyword", "") if record else "")
+    all_products = annotate_comparison(_comparison_group_records(group), group.get("query") or (record.get("keyword", "") if record else ""))
+    storage_groups = _comparison_storage_groups(all_products)
+    storage_variants = [entry["value"] for entry in storage_groups]
+    mixed_storage = len(storage_groups) > 1
+    requested_storage = str(request.args.get("storage") or "").strip().upper()
+    active_storage = requested_storage if requested_storage in set(storage_variants) else None
+    if requested_storage and not active_storage:
+        flash("That storage group is not part of this comparison.", "warning")
+        return redirect(url_for("compare_group", comparison_id=comparison_id))
+    overview_mode = bool(mixed_storage and not active_storage)
+    products = [item for item in all_products if _comparison_storage(item) == active_storage] if active_storage else all_products
+    selected_record_ids = [str(item.get("_selection_token")) for item in products if item.get("_selection_token")]
+    _comparison_debug("compare_display", comparison_id=comparison_id, selected_record_ids=selected_record_ids, displayed_count=len(products), storage_scope=active_storage)
     if len(products) < 2:
         flash("Select at least two results to compare.", "error")
     stats = comparison_metrics(products)
-    conclusion = comparison_conclusion(products, stats)
+    conclusion = None if overview_mode else comparison_conclusion(products, stats)
     platforms = sorted({item.get("platform") for item in products if item.get("platform")})
     source_summary = f"{len(products)} selected records" + (f" · {' and '.join(platforms)}" if platforms else "")
-    storage_variants = sorted({item.get("storage") or (item.get("parsed_model") or {}).get("storage") for item in products if item.get("storage") or (item.get("parsed_model") or {}).get("storage")})
-    mixed_storage = len(storage_variants) > 1
-    preview_payload = _analysis_record_payload("selected_comparison", record or {"_id": search_id, "keyword": group.get("query", "")}, products, selected_record_ids, comparison_set_id=comparison_id)
-    current_analysis = repository.find_analysis_by_signature(session["user_id"], preview_payload["analysis_signature"])
+    preview_payload = None if overview_mode else _analysis_record_payload("selected_comparison", record or {"_id": search_id, "keyword": group.get("query", "")}, products, selected_record_ids, comparison_set_id=comparison_id, analysis_filters={"storage": active_storage} if active_storage else {})
+    current_analysis = repository.find_analysis_by_signature(session["user_id"], preview_payload["analysis_signature"]) if preview_payload else None
     if current_analysis:
         analysis_action, analysis_label = "open", "Open analysis"
     else:
         analysis_action, analysis_label = "create", "Analyze comparison"
-    return render_template("compare_complete.html", products=products, record=record, stats=stats, conclusion=conclusion, source_summary=source_summary, comparison_id=comparison_id, selected_record_ids=selected_record_ids, comparison_created_at=group.get("created_at"), storage_variants=storage_variants, mixed_storage=mixed_storage, current_analysis=current_analysis, analysis_action=analysis_action, analysis_label=analysis_label, comparison_saved=group.get("saved_status") == "saved")
+    if group.get("variant_groups") != storage_groups:
+        repository.update_comparison_group(comparison_id, {"variant_groups": storage_groups})
+    return render_template("compare_complete.html", products=products, all_products=all_products, record=record, stats=stats, conclusion=conclusion, source_summary=source_summary, comparison_id=comparison_id, selected_record_ids=selected_record_ids, comparison_created_at=group.get("created_at"), storage_variants=storage_variants, storage_groups=storage_groups, mixed_storage=mixed_storage, active_storage=active_storage, overview_mode=overview_mode, current_analysis=current_analysis, analysis_action=analysis_action, analysis_label=analysis_label, comparison_saved=group.get("saved_status") == "saved")
 
 
 def _watchlist_item_payload_from_search(record, items, tracking_mode="search_scope"):
@@ -5826,17 +6100,25 @@ def watchlist_from_compare():
     comparison_id = request.form.get("comparison_id", "")
     group = repository.get_comparison_group(comparison_id, session["user_id"]) if comparison_id else None
     record = repository.get_search(search_id, session["user_id"]) if search_id else None
+    active_storage = None
     if group:
         search_id = group.get("search_record_id") or search_id
         record = repository.get_search(search_id, session["user_id"]) if search_id else record
-        tokens = [str(token) for token in group.get("selected_record_ids", [])]
-        products = _comparison_group_records(group)
+        products, storage_groups, active_storage = _comparison_records_for_storage(group, request.form.get("storage_scope"))
+        if len(storage_groups) > 1 and not active_storage:
+            flash("Choose one storage group before creating a Monitor.", "info")
+            return redirect(url_for("compare_group", comparison_id=comparison_id))
+        tokens = [str(item.get("_selection_token")) for item in products if item.get("_selection_token")]
     else:
         tokens = _submitted_selection_tokens(request.form)
         products = []
     if not group and record and tokens and record.get("result_tokens"):
         allowed = set(record.get("result_tokens", []))
         products = resolve_result_tokens([token for token in tokens if token in allowed])
+    scoped_metrics = comparison_metrics(annotate_comparison(normalize_price_items(products), (record or {}).get("keyword", "")))
+    if scoped_metrics["comparable_count"] < 2:
+        flash("At least two comparable listings in one storage group are required to create a Monitor.", "error")
+        return redirect(url_for("compare_group", comparison_id=comparison_id, storage=active_storage) if comparison_id and active_storage else url_for("compare_group", comparison_id=comparison_id) if comparison_id else url_for("search", search_record_id=search_id))
     _comparison_debug("watchlist_from_compare", comparison_id=comparison_id, search_record_id=search_id, selected_record_ids=tokens, record_count=len(products))
     payload = _watchlist_item_payload_from_search(record or {}, products, tracking_mode="selected_records")
     if not payload:
@@ -5844,6 +6126,10 @@ def watchlist_from_compare():
         return redirect(url_for("compare_group", comparison_id=comparison_id) if comparison_id else url_for("search", search_record_id=search_id))
     payload["comparison_group_id"] = comparison_id
     payload["comparison_set_id"] = comparison_id
+    if group and active_storage:
+        payload["storage_scope"] = active_storage
+        payload["product_label"] = f"{payload.get('product_label') or group.get('query') or 'Comparison'} · {active_storage}"
+        payload["frozen_scope"]["storage"] = active_storage
     watchlist_id, created = repository.create_watchlist_item(session["user_id"], payload)
     watchlist_item = repository.get_watchlist_item(watchlist_id, session["user_id"])
     snapshot_result = _collect_watchlist_snapshot(watchlist_item) if watchlist_item else None
@@ -6083,6 +6369,8 @@ def refresh_monitor(monitor_id, owner_id=None, trigger="manual", force=False, sc
                 alerts_enabled=app.config.get("PRICE_ALERTS_ENABLED", True),
                 now=now_utc,
                 audit=alert_audit,
+                minimum_records=app.config.get("PRICE_ALERT_MIN_COMPARABLE_RECORDS", 2),
+                maximum_record_count_change_percent=app.config.get("PRICE_ALERT_MAX_RECORD_COUNT_CHANGE_PERCENT", 50),
             ), None)
     else:
         error_code = "no_valid_comparable_data" if succeeded_count else "all_sources_unavailable"
@@ -7591,7 +7879,7 @@ def search(search_run_id=None):
     )
     if source_statuses.get("walmart"):
         source_statuses["walmart"]["displayed_count"] = search_diagnostics["displayed_walmart_count"]
-    summary = calculate_summary(items) if items and comparison_enabled else None
+    summary = calculate_summary(items, category_key=category_key) if items and comparison_enabled else None
     current_filter_signature = hashlib.sha256(json.dumps({"selected_facets": selected_facets, "active_filters": {"selected_category_key": selected_category_key, "selected_product_type": selected_product_type, "platform": platform, "condition": condition_filter, "min_price": min_price, "max_price": max_price, "sort": sort_option}}, sort_keys=True, default=str, separators=(",", ":")).encode("utf-8")).hexdigest()
     if ai_insight and not stale_ai_insight and ai_insight.get("filter_signature") == current_filter_signature and str(ai_insight.get("search_run_id")) in {str(search_record_id), str(public_search_run_id or "")}:
         insight = ai_insight.get("summary")
@@ -7811,9 +8099,19 @@ def ai_discover():
     if not record or not items:
         return jsonify({"error": "Please search sources first before using AI Discover.", "summary_source": None, "record_count": 0}), 400
     query = record.get("keyword", "current market") if record else "current market"
-    summary, mode, fallback_reason = summarize_market(query, items)
+    comparison_summary = calculate_summary(items, category_key=record.get("selected_category_key") or None)
+    decision_context = {
+        "qualified": bool(comparison_summary.get("best_platform")),
+        "best_platform": comparison_summary.get("best_platform"),
+        "platform_metric_label": comparison_summary.get("platform_metric_label"),
+        "robust_platform_sample": comparison_summary.get("platform_metric_label") == "Lowest median-price platform",
+        "mixed_configuration": bool(comparison_summary.get("mixed_configuration")),
+        "mixed_condition": bool(comparison_summary.get("mixed_condition")),
+        "qualification_reason": comparison_summary.get("platform_qualification_reason"),
+    }
+    summary, mode, fallback_reason = summarize_market(query, items, decision_context=decision_context)
     model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
-    summary_source = "Gemini API" if mode == "gemini_api" else "Rule-based fallback"
+    summary_source = "Gemini API" if mode == "gemini_api" else ("Decision guidance" if mode == "scope_guidance" else "Rule-based fallback")
     repository.log_ai_search(session["user_id"], query, model, "Gemini market summary grounded in current normalized records.", summary)
     repository.log_ai_activity(session["user_id"], query, model, summary_source, len(items), fallback_reason)
     repository.log_event(session["user_id"], "ai_discover", session["role"], session["username"], {"query": query, "provider": "Gemini", "model": model, "generation_mode": mode, "summary_source": summary_source, "fallback_reason": fallback_reason, "record_count": len(items)})
@@ -7833,12 +8131,14 @@ def ai_discover():
         "filter_signature": hashlib.sha256(json.dumps({"selected_facets": record.get("selected_facets") or {}, "active_filters": record.get("active_filters") or {}}, sort_keys=True, default=str, separators=(",", ":")).encode("utf-8")).hexdigest(),
         "summary": summary, "summary_source": summary_source, "generation_mode": mode,
         "model": model, "generated_at": generated_at, "fallback_reason": fallback_reason,
+        "decision_context": decision_context,
     }
     ai_insight_id = repository.save_ai_insight(session["user_id"], insight_document)
     return jsonify({"ai_insight_id": ai_insight_id, "summary": summary, "summary_source": summary_source, "generation_mode": mode, "model": model,
                     "search_run_id": str(record.get("_id")), "user_id": str(session["user_id"]), "query": query,
                     "included_result_ids": included_result_ids,
                     "comparable_result_count": len(items), "record_count": len(items),
+                    "decision_status": "qualified" if decision_context["qualified"] else "needs_refinement",
                     "platforms": sorted({item.get("platform") for item in items if item.get("platform")} ),
                     "generated_at": display_sgt_datetime(generated_at), "fallback_reason": fallback_reason})
 
@@ -8017,12 +8317,15 @@ def create_comparison_analysis(comparison_id):
     if not group:
         abort(404)
     record = repository.get_search(group.get("search_record_id"), session["user_id"])
-    tokens = list(group.get("selected_record_ids") or [])
-    items = _comparison_group_records(group)
-    payload = _analysis_record_payload("selected_comparison", record or {"_id": group.get("search_record_id"), "keyword": group.get("query", "")}, items, tokens, comparison_set_id=comparison_id)
-    if not payload["included_result_ids"]:
-        flash("No comparable full-price records are available for analysis.", "error")
+    items, storage_groups, active_storage = _comparison_records_for_storage(group, request.form.get("storage_scope"))
+    if len(storage_groups) > 1 and not active_storage:
+        flash("Choose one storage group before analyzing this comparison.", "info")
         return redirect(url_for("compare_group", comparison_id=comparison_id))
+    tokens = [str(item.get("_selection_token")) for item in items if item.get("_selection_token")]
+    payload = _analysis_record_payload("selected_comparison", record or {"_id": group.get("search_record_id"), "keyword": group.get("query", "")}, items, tokens, comparison_set_id=comparison_id, analysis_filters={"storage": active_storage} if active_storage else {})
+    if len(payload["included_result_ids"]) < 2:
+        flash("At least two comparable full-price records are required for analysis.", "error")
+        return redirect(url_for("compare_group", comparison_id=comparison_id, storage=active_storage) if active_storage else url_for("compare_group", comparison_id=comparison_id))
     existing = repository.find_analysis_by_signature(session["user_id"], payload["analysis_signature"])
     if existing and request.form.get("refresh") != "1":
         analysis_id = existing["_id"]
@@ -8133,7 +8436,10 @@ def analytics_comparison(comparison_id):
     search_id = group.get("search_record_id")
     record = repository.get_search(search_id, session["user_id"]) if search_id else None
     display_query = group.get("query") or (analytics_display_query(record) if record else "Selected comparison")
-    items = annotate_comparison(_comparison_group_records(group), display_query)
+    items, storage_groups, active_storage = _comparison_records_for_storage(group, request.args.get("storage"))
+    if len(storage_groups) > 1 and not active_storage:
+        flash("Choose one storage group before opening comparison analytics.", "info")
+        return redirect(url_for("compare_group", comparison_id=comparison_id))
     if request.args.get("include_demo") != "1":
         items = [item for item in items if _normalize_export_source_type(item) != "demo_sample"]
     analysis_items = [item for item in items if item.get("analytics_eligible") and item.get("total_price") is not None]
@@ -8142,7 +8448,7 @@ def analytics_comparison(comparison_id):
         items,
         query=display_query,
         source="selected comparison records",
-        analysis_scope="selected comparison records",
+        analysis_scope=f"selected {active_storage} comparison records" if active_storage else "selected comparison records",
         mode="selected",
     )
     summary = analytics_payload["summary"]
@@ -8297,7 +8603,7 @@ def analytics_export_results_csv(search_record_id):
     if not can_access(current_user(), "watchlist"):
         return export_forbidden_response("Export is available on Premium and Professional plans.")
     record, analytics_payload, _items = _analytics_export_context(search_record_id)
-    rows = [["Analysis ID", "Query", "Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL", "Analysis Included", "Exclusion Reason"]]
+    rows = [["Analysis ID", "Query", "Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL", "Analysis Included", "Exclusion Reason", "Product Configuration"]]
     for item in analytics_payload["records"]:
         rows.append([
             search_record_id,
@@ -8315,6 +8621,7 @@ def analytics_export_results_csv(search_record_id):
             item.get("source_url") or "",
             "Yes",
             "",
+            item.get("configuration_display") or "Not consistently provided",
         ])
     return csv_response(rows, f"analytics-results-{search_record_id}.csv")
 
@@ -8335,10 +8642,13 @@ def _analytics_workbook_response(analysis_id, record, payload):
     summary_sheet.append(["Price Range", summary.get("price_range")])
     summary_sheet.append(["Analysis Scope", f"{summary.get('total_records', 0)} comparable listings"])
     summary_sheet.append(["Applied Filters", "No additional filters"])
+    summary_sheet.append([summary.get("platform_metric_label") or "Platform Comparison", summary.get("best_platform") or "Not qualified"])
+    summary_sheet.append(["Platform Comparison Detail", summary.get("platform_metric_detail") or summary.get("platform_qualification_reason") or "Not available"])
+    summary_sheet.append(["Scope Refinement", summary.get("scope_refinement_notice") or "Not required"])
     records_sheet = workbook.create_sheet("Records")
-    records_sheet.append(["Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL"])
+    records_sheet.append(["Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL", "Product Configuration"])
     for item in payload["records"]:
-        records_sheet.append([item.get("platform"), item.get("title"), item.get("price"), item.get("currency"), item.get("normalized_price"), item.get("condition_display") or "Not available", item.get("category_display") or "Not available", item.get("seller") or "", item.get("collected_at"), item.get("record_source"), item.get("source_url")])
+        records_sheet.append([item.get("platform"), item.get("title"), item.get("price"), item.get("currency"), item.get("normalized_price"), item.get("condition_display") or "Not available", item.get("category_display") or "Not available", item.get("seller") or "", item.get("collected_at"), item.get("record_source"), item.get("source_url"), item.get("configuration_display") or "Not consistently provided"])
     platform_sheet = workbook.create_sheet("Platform Breakdown")
     platform_sheet.append(["Platform", "Count", "Percentage", "Average", "Median", "Minimum", "Maximum"])
     comparison = payload["platform_price_comparison"]
@@ -8443,6 +8753,14 @@ def analytics_export_report_post(search_record_id):
             if not report_row.get("storage"):
                 report_row["storage"] = storage_values[0]
     storage_scope = ", ".join(storage_values) if storage_values else "Not consistently provided"
+    configuration_values = summary.get("configuration_values") or {}
+    configuration_parts = []
+    for field, values in configuration_values.items():
+        clean_values = [str(value) for value in values if str(value).strip()]
+        if clean_values:
+            label = COMPARISON_CONFIGURATION_LABELS.get(field, field.replace("_", " ").title())
+            configuration_parts.append(f"{label}: {', '.join(clean_values)}")
+    configuration_scope = "; ".join(configuration_parts) or storage_scope
     condition_values = payload.get("condition_distribution", {}).get("labels") or []
     condition_scope = ", ".join(condition_values) if condition_values else "Not consistently provided"
     query = analytics_display_query(record)
@@ -8463,11 +8781,14 @@ def analytics_export_report_post(search_record_id):
         "platforms": ", ".join(payload["platform_distribution"].get("labels") or []) or "Not available",
         "filters": _report_filter_text(persisted_filters, dashboard_filters),
         "storage_scope": storage_scope,
+        "configuration_scope": configuration_scope,
         "condition_scope": condition_scope,
         "collected_at": display_sgt_datetime(record.get("created_at")),
         "analysis_id": search_record_id,
         "mixed_variants": bool(summary.get("mixed_variants")),
         "mixed_conditions": bool(summary.get("mixed_conditions")),
+        "scope_refinement_notice": summary.get("scope_refinement_notice"),
+        "platform_qualification_reason": summary.get("platform_qualification_reason"),
     }
     return render_template(
         "export_report.html",

@@ -70,6 +70,18 @@ def test_responsive_shell_has_explicit_wide_and_mobile_policies():
     assert ".workspace-sidebar{position:relative" in base
     assert ".workspace-main{width:100%" in base
     assert "max-width:calc(100vw - 1.5rem)" in base
+    assert ".workspace-sidebar .sidebar-nav{display:flex;width:100%;min-width:0;max-width:100%" in base
+    assert "overflow-x:auto;overflow-y:hidden" in base
+    assert "scroll-snap-type:x proximity" in base
+    assert ".workspace-sidebar .sidebar-section-label{display:none}" in base
+    assert 'class="app-sidebar workspace-sidebar border-b' in base
+
+
+def test_tailwind_configuration_has_balanced_closing_braces():
+    base = _template("product_base.html")
+    config_line = next(line.strip() for line in base.splitlines() if line.strip().startswith("<script>tailwind.config="))
+    assert config_line.endswith("}}}}</script>")
+    assert not config_line.endswith("}}}}}</script>")
 
 
 def test_search_loading_is_generic_and_duplicate_safe_by_default(monkeypatch):

@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-  <script>tailwind.config={theme:{extend:{colors:{primary:'#2563eb',ink:'#172033',surface:'#f6f8fc'},fontFamily:{body:['Inter'],display:['Manrope']},boxShadow:{soft:'0 18px 45px rgba(30,64,175,.08)'}}}}}</script>
+  <script>tailwind.config={theme:{extend:{colors:{primary:'#2563eb',ink:'#172033',surface:'#f6f8fc'},fontFamily:{body:['Inter'],display:['Manrope']},boxShadow:{soft:'0 18px 45px rgba(30,64,175,.08)'}}}}</script>
   <script>
     window.csrfFetch = function(input, options) {
       const requestOptions = Object.assign({}, options || {});
@@ -186,14 +186,16 @@
     @media (max-width: 767px){
       .app-brand{width:auto;border-right:0;padding:0 1rem}.app-header .app-logo{height:2rem}
       .workspace-shell{overflow-x:hidden}
-      .workspace-main{margin-left:0}.app-header{left:0;margin-left:0}.workspace-sidebar{position:relative;inset:auto;width:100%;overflow-x:auto;overflow-y:hidden;padding:.5rem .5rem .75rem!important}
-      .workspace-sidebar .sidebar-nav{display:flex;flex-direction:row;flex-wrap:nowrap;gap:.5rem;min-width:max-content;width:max-content}
-      .workspace-sidebar .sidebar-nav a{min-height:2.75rem;white-space:nowrap}
+      .workspace-main{margin-left:0}.app-header{left:0;margin-left:0}.workspace-sidebar{position:relative;inset:auto;width:100%;overflow:visible;padding:.5rem!important}
+      .workspace-sidebar .sidebar-nav{display:flex;width:100%;min-width:0;max-width:100%;flex-direction:row;flex-wrap:nowrap;gap:.5rem;overflow-x:auto;overflow-y:hidden;padding:.125rem 0 .4rem;scroll-padding-inline:.25rem;scroll-snap-type:x proximity;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+      .workspace-sidebar .sidebar-nav>a{flex:0 0 auto;min-height:2.75rem;white-space:nowrap;scroll-snap-align:start}
+      .workspace-sidebar .sidebar-section-label{display:none}
       .workspace-sidebar .sidebar-badge{min-width:auto;max-width:3rem}
       #sidebar-toggle,.sidebar-support{display:none!important}
       .workspace-main{width:100%;padding-left:1rem!important;padding-right:1rem!important}
-      .workspace-sidebar::-webkit-scrollbar{height:4px}
-      .workspace-sidebar{scrollbar-width:thin;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+      .workspace-sidebar .sidebar-nav::-webkit-scrollbar{height:4px}
+      .workspace-sidebar .sidebar-nav::-webkit-scrollbar-thumb{border-radius:999px;background:#64748b}
+      .workspace-sidebar .sidebar-nav{scrollbar-width:thin;scrollbar-color:#64748b transparent}
       .app-hero,.app-page-header{padding:1.25rem;border-radius:1.25rem}.app-page-header{align-items:flex-start;flex-direction:column;gap:1.25rem}.app-page-header__title{font-size:1.875rem}.app-page-header__actions{width:100%;flex-wrap:wrap}
       .app-section,.app-section-alt{padding:3.25rem 1rem}
       .app-dropdown-panel{left:0;right:auto;min-width:min(18rem,calc(100vw - 2rem))}
@@ -214,16 +216,18 @@
       .app-badge{padding:.18rem .45rem;font-size:.54rem}
       [id$="-echart"],[id*="-echart"]{min-height:240px}
     }
-    body[data-sidebar-collapsed="true"] .sidebar-label,
-    body[data-sidebar-collapsed="true"] .sidebar-section-label,
-    body[data-sidebar-collapsed="true"] .sidebar-badge,
-    body[data-sidebar-collapsed="true"] .sidebar-support,
-    body[data-sidebar-collapsed="true"] .sidebar-link-text{display:none}
-    body[data-sidebar-collapsed="true"] .sidebar-nav{align-items:center}
-    body[data-sidebar-collapsed="true"] .sidebar-nav a{justify-content:center;padding-left:0.85rem;padding-right:0.85rem}
-    body[data-sidebar-collapsed="true"] .app-nav-item{display:flex}
-    body[data-sidebar-collapsed="true"] .sidebar-brand{gap:.25rem;padding-inline:.375rem}body[data-sidebar-collapsed="true"] .sidebar-brand img,body[data-sidebar-collapsed="true"] .sidebar-brand-fallback,body[data-sidebar-collapsed="true"] .sidebar-collapse-button{width:1.75rem;height:1.75rem;flex-basis:1.75rem}
-    body[data-sidebar-collapsed="true"] .sidebar-toggle-icon{transform:rotate(180deg)}
+    @media (min-width:768px){
+      body[data-sidebar-collapsed="true"] .sidebar-label,
+      body[data-sidebar-collapsed="true"] .sidebar-section-label,
+      body[data-sidebar-collapsed="true"] .sidebar-badge,
+      body[data-sidebar-collapsed="true"] .sidebar-support,
+      body[data-sidebar-collapsed="true"] .sidebar-link-text{display:none}
+      body[data-sidebar-collapsed="true"] .sidebar-nav{align-items:center}
+      body[data-sidebar-collapsed="true"] .sidebar-nav a{justify-content:center;padding-left:0.85rem;padding-right:0.85rem}
+      body[data-sidebar-collapsed="true"] .app-nav-item{display:flex}
+      body[data-sidebar-collapsed="true"] .sidebar-brand{gap:.25rem;padding-inline:.375rem}body[data-sidebar-collapsed="true"] .sidebar-brand img,body[data-sidebar-collapsed="true"] .sidebar-brand-fallback,body[data-sidebar-collapsed="true"] .sidebar-collapse-button{width:1.75rem;height:1.75rem;flex-basis:1.75rem}
+      body[data-sidebar-collapsed="true"] .sidebar-toggle-icon{transform:rotate(180deg)}
+    }
     @media (prefers-reduced-motion: reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
     @keyframes float-slow{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
     @keyframes float-delayed{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}
@@ -282,7 +286,7 @@
     </div>
   </header>
   <div class="app-page workspace-shell">
-    <aside class="app-sidebar workspace-sidebar overflow-hidden border-b border-slate-200 p-2 md:border-b-0 md:border-r md:p-2">
+    <aside class="app-sidebar workspace-sidebar border-b border-slate-200 p-2 md:border-b-0 md:border-r md:p-2">
       <div class="sidebar-brand"><a href="{{ url_for('dashboard_redirect') }}" class="sidebar-brand-link"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="Precision Curator logo" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="sidebar-brand-fallback" aria-hidden="true" hidden>PC</span><span class="sidebar-brand-name sidebar-label">Precision Curator</span></a>
         <button id="sidebar-toggle" type="button" title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true" class="sidebar-collapse-button inline-flex shrink-0 items-center justify-center rounded-lg text-slate-300 transition duration-200 hover:bg-slate-700 hover:text-white">
           <span class="material-symbols-outlined sidebar-toggle-icon text-[20px]">chevron_left</span>
@@ -446,7 +450,9 @@
       if (!scrollTopBtn) return;
       const visible = window.scrollY > 320;
       scrollTopBtn.classList.toggle('is-visible', visible);
+      if (!visible && document.activeElement === scrollTopBtn) scrollTopBtn.blur();
       scrollTopBtn.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      scrollTopBtn.tabIndex = visible ? 0 : -1;
     };
     scrollTopBtn?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
     window.addEventListener('scroll', updateScrollTop, { passive: true });

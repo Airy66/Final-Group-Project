@@ -52,7 +52,7 @@
     <div class="meta">
       <div class="meta-card"><span class="label">Analysis scope</span><div class="value">{{ metadata.scope }}</div></div>
       <div class="meta-card"><span class="label">Platforms</span><div class="value">{{ metadata.platforms }}</div></div>
-      <div class="meta-card"><span class="label">Storage scope</span><div class="value">{{ metadata.storage_scope }}</div></div>
+      <div class="meta-card"><span class="label">Product configuration</span><div class="value">{{ metadata.configuration_scope }}</div></div>
       <div class="meta-card"><span class="label">Condition scope</span><div class="value">{{ metadata.condition_scope }}</div></div>
       <div class="meta-card"><span class="label">Collected / analyzed</span><div class="value">{{ metadata.collected }} collected · {{ metadata.included }} analyzed</div></div>
       <div class="meta-card"><span class="label">Excluded in frozen analysis</span><div class="value">{{ metadata.excluded }}</div></div>
@@ -62,15 +62,10 @@
     </div>
   </header>
 
-  {% if metadata.mixed_variants %}
+  {% if metadata.scope_refinement_notice %}
   <section class="warning">
-    <strong>Mixed storage limitation.</strong>
-    A lowest-price platform is not stated because multiple storage capacities are included. Choose one capacity before making a platform comparison.
-  </section>
-  {% elif metadata.mixed_conditions %}
-  <section class="warning">
-    <strong>Condition mix.</strong>
-    The selected records include multiple conditions. The lowest-price platform is shown, but condition and seller details should be reviewed before making a purchasing conclusion.
+    <strong>Comparison scope needs refinement.</strong>
+    {{ metadata.scope_refinement_notice }}
   </section>
   {% endif %}
 
@@ -89,13 +84,13 @@
   <section>
     <h2>Insight summary</h2>
     <div class="note">
-      {% if metadata.mixed_variants %}
-        A lowest-price platform is not determined for this mixed-storage result set.
+      {% if summary.best_platform %}
+        {{ summary.platform_metric_label }}: {{ summary.best_platform }}{% if summary.platform_metric_detail %} ({{ summary.platform_metric_detail }}){% endif %}.
       {% else %}
-        Lowest-price platform: {{ summary.best_platform or 'Not available' }}.
+        Platform comparison: Not qualified. {{ summary.platform_qualification_reason }}
       {% endif %}
       Prices span USD {{ '%.2f'|format(summary.minimum_price) }} to USD {{ '%.2f'|format(summary.maximum_price) }}.
-      “Lowest-price platform” identifies the marketplace containing the lowest comparable listing; it is not an overall seller or marketplace recommendation.
+      Platform price comparisons use the median normalized price within one product configuration and condition. They are price signals, not overall marketplace or seller recommendations.
     </div>
   </section>
 
@@ -121,7 +116,7 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Title</th><th>Platform</th><th>Price</th><th>Storage</th><th>Condition</th><th>Seller</th><th>Source</th></tr>
+          <tr><th>Title</th><th>Platform</th><th>Price</th><th>Configuration</th><th>Condition</th><th>Seller</th><th>Source</th></tr>
         </thead>
         <tbody>
           {% for item in records %}
@@ -129,7 +124,7 @@
             <td>{{ item.title }}</td>
             <td>{{ item.platform or 'Not available' }}</td>
             <td>{{ item.currency or 'USD' }} {{ '%.2f'|format(item.normalized_price) if item.normalized_price is not none else 'Not available' }}</td>
-            <td>{{ item.storage or 'Not specified' }}</td>
+            <td>{{ item.configuration_display or 'Not consistently provided' }}</td>
             <td>{{ item.condition_display or 'Not available' }}</td>
             <td>{{ item.seller or 'Not specified' }}</td>
             <td>
@@ -145,7 +140,7 @@
 
   <section>
     <h2>Methodology and limitations</h2>
-    <p>Only server-validated records frozen into this analysis are used across metrics, charts and exports. Any Analytics dashboard filters shown above are validated against that frozen set and recalculated by the server. Marketplace prices, availability and seller information may change after collection. Review source evidence before making a decision.</p>
+    <p>Only server-validated records frozen into this analysis are used across metrics, charts and exports. Analytics dashboard filters are validated against that frozen set and recalculated by the server. A platform price comparison is qualified only when at least two marketplaces are represented within one product configuration and one condition; the platform median is used to reduce the effect of a single unusually low listing. Marketplace prices, availability and seller information may change after collection. Review source evidence before making a decision.</p>
   </section>
   <footer class="label">Analysis identifier: {{ metadata.analysis_id }}</footer>
 </main>

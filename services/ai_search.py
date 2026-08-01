@@ -177,6 +177,54 @@ def rule_based_market_summary(keyword, items):
             "Compare like-for-like variants and seller quality before deciding.")
 
 
+def decision_support_summary(decision_context):
+    """Explain server-calculated comparison readiness without repeating KPI cards."""
+    context = decision_context or {}
+    if not context.get("qualified"):
+        mixed_configuration = bool(context.get("mixed_configuration"))
+        mixed_condition = bool(context.get("mixed_condition"))
+        if mixed_configuration and mixed_condition:
+            next_step = "Choose one product configuration and one condition, then explain the comparison again."
+            distortion = "Differences in variant and condition may be driving the visible spread more than marketplace pricing."
+        elif mixed_configuration:
+            next_step = "Choose one product configuration, then explain the comparison again."
+            distortion = "Differences between product variants may be driving the visible spread more than marketplace pricing."
+        elif mixed_condition:
+            next_step = "Choose one product condition, then explain the comparison again."
+            distortion = "Differences in product condition may be driving the visible spread more than marketplace pricing."
+        else:
+            next_step = "Include comparable records from at least two marketplaces, then explain the comparison again."
+            distortion = "The current scope does not support a cross-marketplace conclusion."
+        return (
+            "Decision readiness\nNot ready for a marketplace-level conclusion.\n\n"
+            f"Key interpretation\n{distortion} The price cards remain descriptive of the current result set, not a platform recommendation.\n\n"
+            f"Recommended next step\n{next_step}"
+        )
+
+    platform = str(context.get("best_platform") or "The highlighted marketplace")
+    robust = bool(context.get("robust_platform_sample"))
+    support = (
+        "The signal is supported by multiple comparable listings on each marketplace."
+        if robust else
+        "Treat the signal as directional because at least one marketplace has limited comparable coverage."
+    )
+    return (
+        "Decision readiness\nReady for a like-for-like marketplace price comparison.\n\n"
+        f"Key interpretation\n{platform} has the lower typical price in the current scope. {support}\n\n"
+        "Recommended next step\nReview seller quality, shipping, availability, and source evidence before acting on the price signal."
+    )
+
+
+def _valid_decision_support_output(text):
+    value = str(text or "").strip()
+    required = ("Decision readiness", "Key interpretation", "Recommended next step")
+    if not value or not all(label in value for label in required):
+        return False
+    # KPI values are owned by the server-rendered cards. The model interprets
+    # them but must not restate or recalculate numeric values.
+    return re.search(r"\d", value) is None
+
+
 def ground_market_summary(keyword, summary, items):
     """Replace an AI summary when its condition claim contradicts record coverage."""
     provided, total = _condition_coverage(items)
@@ -220,25 +268,40 @@ def _gemini_fallback_reason(exc):
     return "api_error"
 
 
-def summarize_market_gemini(keyword, items):
+def summarize_market_gemini(keyword, items, decision_context=None):
     """Generate through Gemini on the backend, with a deterministic local fallback."""
-    fallback = rule_based_market_summary(keyword, items)
+    fallback = decision_support_summary(decision_context) if decision_context is not None else rule_based_market_summary(keyword, items)
+    if decision_context is not None and not decision_context.get("qualified"):
+        return fallback, "scope_guidance", "comparison_scope_not_qualified"
     api_key = os.getenv("GEMINI_API_KEY")
     model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     if not api_key:
         return fallback, "rule_based_fallback", "missing_key"
     condition_count, record_count = _condition_coverage(items)
     compact = [{key: row.get(key) for key in ("platform", "title", "product_name", "normalized_price", "price", "currency", "category", "condition_display", "condition", "confidence_level")} for row in items[:25]]
-    prompt = ("You are assisting an e-commerce price intelligence system. Write a concise factual market summary in no more than four short sentences. "
-              "grounded only in the supplied records. Mention the cheapest option, price spread, platform coverage, "
-              "and a limitation only when supported by the supplied counts. Treat condition and availability as separate fields. "
-              "Never claim condition is often missing when it is provided for most records. Use plain text only: no Markdown, headings, bullets, or asterisks. "
-              "Do not invent prices or expose system configuration.\n"
-              f"Query: {keyword}\nCondition coverage: {condition_count} of {record_count} records.\nRule-based statistics: {fallback}\nRecords: {json.dumps(compact, ensure_ascii=False, default=str)}")
+    if decision_context is not None:
+        prompt = (
+            "You are explaining a server-calculated marketplace comparison. Do not recalculate or repeat prices, percentages, counts, the product name, or other numeric values. "
+            "Do not repeat the KPI cards. Explain what the qualified signal means, its reliability, and the next review action. "
+            "Return plain text using exactly these three labels on separate lines: Decision readiness, Key interpretation, Recommended next step. "
+            "Use one short sentence under each label. Do not use Markdown, bullets, purchasing advice, or claims beyond the supplied decision context.\n"
+            f"Decision context: {json.dumps(decision_context, ensure_ascii=False, default=str)}"
+        )
+    else:
+        prompt = ("You are assisting an e-commerce price intelligence system. Write a concise factual market summary in no more than four short sentences. "
+                  "grounded only in the supplied records. Mention the cheapest option, price spread, platform coverage, "
+                  "and a limitation only when supported by the supplied counts. Treat condition and availability as separate fields. "
+                  "Never claim condition is often missing when it is provided for most records. Use plain text only: no Markdown, headings, bullets, or asterisks. "
+                  "Do not invent prices or expose system configuration.\n"
+                  f"Query: {keyword}\nCondition coverage: {condition_count} of {record_count} records.\nRule-based statistics: {fallback}\nRecords: {json.dumps(compact, ensure_ascii=False, default=str)}")
     try:
         text = _call_gemini(api_key, model, prompt, int(os.getenv("GEMINI_TIMEOUT_MS", "45000")))
         if not text:
             return fallback, "rule_based_fallback", "empty_response"
+        if decision_context is not None and not _valid_decision_support_output(text):
+            return fallback, "rule_based_fallback", "unstructured_or_numeric_restatement"
+        if decision_context is not None:
+            return text, "gemini_api", None
         grounded, replaced = ground_market_summary(keyword, text, items)
         if replaced:
             return grounded, "rule_based_fallback", "unsupported_condition_claim"

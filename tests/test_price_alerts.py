@@ -115,6 +115,50 @@ def test_first_snapshot_and_invalid_prices_do_not_trigger(monkeypatch):
     assert _evaluate(repository, monitor, invalid)["status"] == "invalid"
 
 
+def test_incomplete_or_incomparable_snapshots_are_not_evaluated(monkeypatch):
+    cases = (
+        ({"data_quality": "partial"}, "partial_source_coverage"),
+        ({"record_count": 1}, "insufficient_comparable_records"),
+        ({"record_count": 6}, "record_count_changed_substantially"),
+        ({"alert_scope_signature": "different-scope"}, "comparison_scope_changed"),
+    )
+    for current_fields, expected_reason in cases:
+        _client, repository, user = _setup(monkeypatch)
+        monitor = _configure(repository, _monitor(repository, user))
+        base = datetime(2026, 7, 1, tzinfo=timezone.utc)
+        baseline = _snapshot(repository, monitor, 100, base, alert_scope_signature="stable-scope")
+        _evaluate(repository, monitor, baseline, base)
+        monitor = repository.get_watchlist_item(monitor["_id"], user["_id"])
+        snapshot_fields = {"alert_scope_signature": "stable-scope", **current_fields}
+        current = _snapshot(repository, monitor, 80, base + timedelta(hours=1), **snapshot_fields)
+        result = _evaluate(repository, monitor, current, base + timedelta(hours=1))
+        saved = repository.get_watchlist_item(monitor["_id"], user["_id"])
+        assert result == {
+            "status": "not_evaluated", "event_id": None,
+            "change_percent": None, "reason": expected_reason,
+        }
+        assert saved["alert_last_evaluation_status"] == "not_evaluated"
+        assert saved["alert_last_evaluation_reason"] == expected_reason
+        assert saved["alert_last_change_percent"] is None
+        assert repository.list_price_alert_events(user["_id"], monitor["monitor_id"]) == []
+
+
+def test_alert_resumes_after_two_snapshots_share_the_new_sample_shape(monkeypatch):
+    _client, repository, user = _setup(monkeypatch)
+    monitor = _configure(repository, _monitor(repository, user), direction="drop", threshold=5)
+    base = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    baseline = _snapshot(repository, monitor, 100, base, record_count=3)
+    _evaluate(repository, monitor, baseline, base)
+    shifted = _snapshot(repository, monitor, 95, base + timedelta(hours=1), record_count=6)
+    assert _evaluate(repository, monitor, shifted, base + timedelta(hours=1))["status"] == "not_evaluated"
+    monitor = repository.get_watchlist_item(monitor["_id"], user["_id"])
+    comparable = _snapshot(repository, monitor, 85, base + timedelta(hours=2), record_count=6)
+    result = _evaluate(repository, monitor, comparable, base + timedelta(hours=2))
+    assert result["status"] == "email_sent"
+    event = repository.list_price_alert_events(user["_id"], monitor["monitor_id"])[0]
+    assert event["previous_snapshot_id"] == shifted["_id"]
+
+
 def test_drop_increase_either_and_below_threshold_calculation(monkeypatch):
     for direction, current, expected in (("drop", 90, True), ("increase", 110, True), ("either", 94, True), ("drop", 98, False)):
         _client, repository, user = _setup(monkeypatch)
@@ -180,7 +224,8 @@ def test_email_failure_preserves_snapshot_and_refresh_success(monkeypatch):
     monkeypatch.setattr(precision_app, "PasswordResetMailService", CapturingMail)
     monkeypatch.setattr(precision_app, "_offline_monitor_records", lambda _monitor: ([
         {"title": "Alert Monitor", "platform": "eBay", "price": 90, "shipping": 0, "condition": "New"},
-    ], {"ebay": {"status": "success", "record_count": 1}}))
+        {"title": "Alert Monitor", "platform": "eBay", "price": 90, "shipping": 0, "condition": "New"},
+    ], {"ebay": {"status": "success", "record_count": 2}}))
     result = precision_app.refresh_monitor(monitor["_id"], user["_id"], trigger="manual", now=datetime(2026, 7, 2, tzinfo=timezone.utc))
     assert result["status"] == "success" and repository.count_price_snapshots(monitor["_id"]) == 2
     events = repository.list_price_alert_events(user["_id"], monitor["monitor_id"])
@@ -231,7 +276,7 @@ def test_email_content_ui_and_history_are_scoped(monkeypatch):
     assert "password" not in content.lower() and "mongodb" not in content.lower() and "api key" not in content.lower()
     page = client.get("/watchlist", query_string={"item_id": monitor["_id"]})
     body = page.get_data(as_text=True)
-    for value in ("Price Alert", "Last evaluated", "Latest change", "Send test email", "Alert history", "USD 100.00", "USD 90.00"):
+    for value in ("Price Alert", "Last checked", "Latest change", "Send test email", "Alert history", "USD 100.00", "USD 90.00"):
         assert value in body
     other = repository.create_user("Other", "history.other@example.test", "unused", "consumer", membership_tier="premium")
     other_monitor = _configure(repository, _monitor(repository, other, "Private history"))
@@ -239,6 +284,21 @@ def test_email_content_ui_and_history_are_scoped(monkeypatch):
     other_current = _snapshot(repository, other_monitor, 180, base + timedelta(hours=1))
     _evaluate(repository, other_monitor, other_current, base + timedelta(hours=1))
     assert "Private history" not in client.get("/watchlist", query_string={"item_id": monitor["_id"]}).get_data(as_text=True)
+
+
+def test_not_evaluated_reason_is_visible_in_watchlist(monkeypatch):
+    client, repository, user = _setup(monkeypatch)
+    monitor = _configure(repository, _monitor(repository, user))
+    repository.update_watchlist_item(monitor["_id"], {
+        "alert_last_evaluated_at": datetime(2026, 7, 2, tzinfo=timezone.utc),
+        "alert_last_email_status": "not_evaluated",
+        "alert_last_evaluation_status": "not_evaluated",
+        "alert_last_evaluation_reason": "partial_source_coverage",
+    }, user_id=user["_id"])
+    page = client.get("/watchlist", query_string={"item_id": monitor["_id"]})
+    body = page.get_data(as_text=True)
+    assert "Not evaluated because one or more marketplace sources were unavailable." in body
+    assert "Threshold not reached" not in body
 
 
 def test_below_threshold_ui_neutral_status(monkeypatch):

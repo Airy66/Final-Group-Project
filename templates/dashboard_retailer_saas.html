@@ -111,7 +111,7 @@
     ('Current lowest price', selected_metrics.current_low, 'Lowest comparable listing now.', 'sell', 'emerald'),
     ('Observed market average', selected_metrics.current_average, 'Mean price in the latest snapshot.', 'monitoring', 'blue'),
     ('Change vs previous', selected_metrics.change_percentage, selected_metrics.trend_label, 'trending_up', 'violet'),
-    ('Best-priced platform', selected_metrics.best_platform, 'Platform carrying the current low.', 'storefront', 'orange')
+    ('Current low platform', selected_metrics.best_platform, 'Platform carrying the current lowest listing.', 'storefront', 'orange')
   ] %}
   <article class="app-card border-t-2 border-t-{{ accent }}-500 p-5">
     <div class="flex items-start justify-between gap-3">
@@ -160,7 +160,7 @@
     <article class="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm">
       <div class="flex items-center justify-between gap-3"><h2 class="font-display text-lg font-bold text-slate-950">Sourcing opportunity</h2><span class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">Actionable</span></div>
       {% if selected_metrics.best_platform and selected_metrics.best_price is not none %}
-      <p class="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">Current best visible option</p>
+      <p class="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">Current lowest observed listing</p>
       <p class="mt-2 text-2xl font-extrabold text-slate-950">{{ selected_metrics.best_platform }} · USD {{ '%.2f'|format(selected_metrics.best_price) }}</p>
       <p class="mt-3 text-sm leading-6 text-slate-600">{% if selected_metrics.below_average_percent is not none %}This listing is {{ '%.1f'|format(selected_metrics.below_average_percent) }}% below the observed market average.{% else %}{{ sourcing_insight }}{% endif %}</p>
       {% else %}<p class="mt-4 text-sm leading-6 text-slate-600">Refresh the monitor to identify the lowest comparable sourcing option.</p>{% endif %}

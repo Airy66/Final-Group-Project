@@ -592,11 +592,13 @@ def test_missing_ai_key_is_readable(monkeypatch):
     response = test_client.post("/api/ai-discover", json={"query": "headphones", "search_record_id": record["_id"]})
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["generation_mode"] == "rule_based_fallback"
-    assert payload["summary_source"] == "Rule-based fallback"
-    assert "headphones" in payload["summary"]
+    assert payload["generation_mode"] == "scope_guidance"
+    assert payload["summary_source"] == "Decision guidance"
+    assert payload["decision_status"] == "needs_refinement"
+    assert "Decision readiness" in payload["summary"]
+    assert "Recommended next step" in payload["summary"]
     activity = precision_app.repository.list_activity_logs(limit=1)[0]
-    assert activity["summary_source"] == "Rule-based fallback"
+    assert activity["summary_source"] == "Decision guidance"
     assert activity["model"] == "gemini-3.1-flash-lite"
 
 
@@ -633,6 +635,88 @@ def test_gemini_success_and_failure_modes(monkeypatch):
         assert mode == "rule_based_fallback" and reason == expected_reason
         for expected in ("3 records", "100.00", "160.00", "133.33", "60.00", "3 platform"):
             assert expected in summary
+
+
+def test_decision_guidance_does_not_call_ai_for_an_unqualified_scope(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-not-real")
+
+    def unexpected_call(*_args, **_kwargs):
+        raise AssertionError("Gemini must not interpret an unqualified comparison")
+
+    monkeypatch.setattr(ai_search, "_call_gemini", unexpected_call)
+    context = {
+        "qualified": False,
+        "mixed_configuration": True,
+        "mixed_condition": True,
+        "best_platform": None,
+    }
+    summary, mode, reason = ai_search.summarize_market_gemini("phone", [], decision_context=context)
+
+    assert mode == "scope_guidance"
+    assert reason == "comparison_scope_not_qualified"
+    assert "Decision readiness\nNot ready" in summary
+    assert "Key interpretation\nDifferences in variant and condition" in summary
+    assert "Recommended next step\nChoose one product configuration and one condition" in summary
+    assert not any(character.isdigit() for character in summary)
+
+
+def test_qualified_ai_explanation_rejects_numeric_kpi_restatement(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-not-real")
+    monkeypatch.setattr(
+        ai_search,
+        "_call_gemini",
+        lambda *_args, **_kwargs: (
+            "Decision readiness\nReady for comparison.\n\n"
+            "Key interpretation\nWalmart is lower at 255.25.\n\n"
+            "Recommended next step\nReview the evidence."
+        ),
+    )
+    context = {
+        "qualified": True,
+        "best_platform": "Walmart",
+        "robust_platform_sample": True,
+    }
+    summary, mode, reason = ai_search.summarize_market_gemini("phone", [], decision_context=context)
+
+    assert mode == "rule_based_fallback"
+    assert reason == "unstructured_or_numeric_restatement"
+    assert "Walmart has the lower typical price" in summary
+    assert "255.25" not in summary
+
+
+def test_qualified_comparison_without_ai_key_uses_decision_fallback(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    context = {
+        "qualified": True,
+        "best_platform": "Walmart",
+        "robust_platform_sample": True,
+    }
+    summary, mode, reason = ai_search.summarize_market_gemini("phone", [], decision_context=context)
+
+    assert mode == "rule_based_fallback"
+    assert reason == "missing_key"
+    assert "Walmart has the lower typical price" in summary
+    assert "Decision readiness" in summary
+
+
+def test_qualified_ai_explanation_accepts_structured_decision_support(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-not-real")
+    generated = (
+        "Decision readiness\nReady for a like-for-like comparison.\n\n"
+        "Key interpretation\nThe highlighted marketplace has a consistent lower typical price.\n\n"
+        "Recommended next step\nReview seller and shipping evidence before deciding."
+    )
+    monkeypatch.setattr(ai_search, "_call_gemini", lambda *_args, **_kwargs: generated)
+    context = {
+        "qualified": True,
+        "best_platform": "Walmart",
+        "robust_platform_sample": True,
+    }
+    summary, mode, reason = ai_search.summarize_market_gemini("phone", [], decision_context=context)
+
+    assert summary == generated
+    assert mode == "gemini_api"
+    assert reason is None
 
 
 def test_gemini_prediction_uses_the_most_recent_twenty_snapshots(monkeypatch):
@@ -722,7 +806,7 @@ def test_complete_mongo_style_search_compare_and_evidence_flow():
     assert b"Enter workspace" in login_page.data
     response = test_client.post("/search?q=iPhone%2017%20Pro%20256GB&data_source=mongodb&sort=platform&action=search", follow_redirects=True)
     assert response.status_code == 200
-    for label in (b"Product Price Search & Comparison", b"Search Sources", b"Generate AI price insight", b"Compare selected", b"Save selected evidence"):
+    for label in (b"Product Price Search & Comparison", b"Search Sources", b"Explain this comparison", b"Compare selected", b"Save selected evidence"):
         assert label in response.data
     assert b"Normalized price" not in response.data
     assert b"MONGODB_URI" not in response.data
@@ -835,8 +919,11 @@ def test_explicit_search_dynamic_platforms_and_role_tables():
     assert b'name="result_token"' not in pending.data
 
     ebay_controls = test_client.get("/search?data_source=ebay")
-    options = [option.get_text(strip=True) for option in BeautifulSoup(ebay_controls.data, "html.parser").select("#platform-filter option")]
-    assert options == ["All platforms", "eBay"]
+    scope_options = BeautifulSoup(ebay_controls.data, "html.parser").select("#platform-filter option")
+    options = [option.get_text(strip=True) for option in scope_options]
+    assert options == ["Both platforms", "eBay", "Walmart"]
+    assert [option.get("value") for option in scope_options] == ["both", "ebay", "walmart"]
+    assert next(option for option in scope_options if option.has_attr("selected"))["value"] == "ebay"
 
     consumer = test_client.post("/search?q=iphone17&data_source=mongodb&action=search", follow_redirects=True)
     assert b"Condition" in consumer.data
@@ -975,7 +1062,7 @@ def test_analytics_export_csv_includes_metadata_and_record_fields():
     export = test_client.get(f"/analytics/{record['_id']}/export/results.csv")
     assert export.status_code == 200
     rows = list(csv.reader(io.StringIO(export.data.decode("utf-8", errors="ignore"))))
-    assert rows[0] == ["Analysis ID", "Query", "Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL", "Analysis Included", "Exclusion Reason"]
+    assert rows[0] == ["Analysis ID", "Query", "Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL", "Analysis Included", "Exclusion Reason", "Product Configuration"]
     assert rows[1][1] == "metadata-phone"
     assert rows[1][13] == "Yes"
 

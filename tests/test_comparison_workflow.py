@@ -1,4 +1,5 @@
 import precision_app
+from bs4 import BeautifulSoup
 from services.database import MongoRepository
 
 
@@ -334,7 +335,7 @@ def test_mixed_apple_search_requires_category_before_analytics_or_comparison(mon
     assert body.index(">Category<") < body.index(">Platform<")
     assert "Lowest comparable price" not in body
     assert "Analyze all comparable results" not in body
-    assert 'aria-label="AI Discover: Generate AI price insight"' not in body
+    assert 'aria-label="AI Discover: Explain this comparison"' not in body
     assert record["query_intent_status"] in {"ambiguous", "broad"}
     assert record["category_mode"] == "multi_category"
     assert set(record["detected_category_keys"]) == {"smartphones", "laptops", "food_and_grocery"}
@@ -405,7 +406,7 @@ def test_mixed_gucci_product_types_require_selection_and_scope_ai(monkeypatch):
     assert record["active_filters"]["selected_product_type"] == "fragrance"
 
     captured = {}
-    def fake_summary(_query, items):
+    def fake_summary(_query, items, **_kwargs):
         captured["titles"] = [item["title"] for item in items]
         return "Scoped fragrance insight", "rule_based_fallback", None
     monkeypatch.setattr(precision_app, "summarize_market", fake_summary)
@@ -759,6 +760,117 @@ def test_mixed_storage_summary_and_workspace_are_explicit():
     assert summary["best_platform"] is None
 
 
+def test_search_summary_uses_category_configuration_and_platform_median_not_single_lowest_listing():
+    rows = precision_app.normalize_price_items([
+        {"title": "Phone 128GB A", "platform": "eBay", "price": 100, "condition": "New", "attributes": {"storage": "128GB", "carrier": "Unlocked"}},
+        {"title": "Phone 128GB B", "platform": "eBay", "price": 300, "condition": "New", "attributes": {"storage": "128GB", "carrier": "Unlocked"}},
+        {"title": "Phone 128GB C", "platform": "Walmart", "price": 180, "condition": "New", "attributes": {"storage": "128GB", "carrier": "Unlocked"}},
+        {"title": "Phone 128GB D", "platform": "Walmart", "price": 190, "condition": "New", "attributes": {"storage": "128GB", "carrier": "Unlocked"}},
+    ])
+    summary = precision_app.calculate_summary(rows, category_key="smartphones")
+    assert summary["lowest_price"] == 100
+    assert summary["best_platform"] == "Walmart"
+    assert summary["best_platform_price"] == 185
+    assert summary["platform_metric_label"] == "Lowest median-price platform"
+    assert summary["platform_metric_detail"] == "Median USD 185.00 · 2 comparable listings"
+
+
+def test_search_summary_disqualifies_mixed_laptop_configuration_and_condition():
+    laptops = precision_app.normalize_price_items([
+        {"title": "Laptop 16GB 512GB", "platform": "eBay", "price": 900, "condition": "New", "attributes": {"cpu": "M3", "ram": "16GB", "storage": "512GB", "screen_size": "14 inch"}},
+        {"title": "Laptop 32GB 1TB", "platform": "Walmart", "price": 1100, "condition": "New", "attributes": {"cpu": "M3", "ram": "32GB", "storage": "1TB", "screen_size": "14 inch"}},
+    ])
+    summary = precision_app.calculate_summary(laptops, category_key="laptops")
+    assert summary["mixed_configuration"] is True
+    assert set(summary["differing_configuration_fields"]) == {"ram", "storage"}
+    assert "Multiple hardware configurations" in summary["configuration_notice"]
+    assert summary["best_platform"] is None
+    assert summary["platform_qualification_reason"] == "To compare platforms fairly, choose one product configuration."
+
+    phones = precision_app.normalize_price_items([
+        {"title": "Phone 128GB", "platform": "eBay", "price": 500, "condition": "Used", "attributes": {"storage": "128GB"}},
+        {"title": "Phone 128GB", "platform": "Walmart", "price": 600, "condition": "New", "attributes": {"storage": "128GB"}},
+    ])
+    condition_summary = precision_app.calculate_summary(phones, category_key="smartphones")
+    assert condition_summary["mixed_condition"] is True
+    assert condition_summary["best_platform"] is None
+    assert "choose one product condition" in condition_summary["platform_qualification_reason"]
+
+
+def test_search_template_has_compact_guidance_ai_icon_and_dynamic_configuration_copy():
+    template = open("templates/source_search_roles.html", encoding="utf-8").read()
+    assert "Example searches:" not in template
+    assert 'id="ai-button"' in template and ">auto_awesome</span>" in template
+    assert "Some technical filters are unavailable" not in template
+    assert "Filters only include specifications available across enough listings." in template
+    assert "summary.scope_refinement_notice" in template
+    assert "Choose one storage capacity to compare platforms." not in template
+
+
+def _seed_multi_storage_comparison(client, user):
+    search_id = precision_app.repository.create_search(user["_id"], "iPhone 17 Pro", "both", role="consumer", data_mode="api")
+    rows = precision_app.repository.save_external_results(search_id, user["_id"], [
+        {"title": "Apple iPhone 17 Pro 256GB eBay", "platform": "eBay", "price": 900, "source_url": "https://example.com/256-ebay", "match_type": "exact_match"},
+        {"title": "Apple iPhone 17 Pro 256GB Walmart", "platform": "Walmart", "price": 940, "source_url": "https://example.com/256-walmart", "match_type": "exact_match"},
+        {"title": "Apple iPhone 17 Pro 512GB eBay", "platform": "eBay", "price": 1100, "source_url": "https://example.com/512-ebay", "match_type": "exact_match"},
+        {"title": "Apple iPhone 17 Pro 512GB Walmart", "platform": "Walmart", "price": 1160, "source_url": "https://example.com/512-walmart", "match_type": "exact_match"},
+    ])
+    tokens = [f"external:{row['_id']}" for row in rows]
+    precision_app.repository.attach_result_tokens(search_id, tokens)
+    precision_app.repository.complete_search(search_id, len(rows))
+    page, group = create_comparison(client, search_id, tokens)
+    return search_id, tokens, page, group
+
+
+def test_multi_storage_comparison_opens_group_overview_then_recalculates_selected_scope():
+    client, user = make_client("Multi Storage Overview")
+    _search_id, _tokens, overview, group = _seed_multi_storage_comparison(client, user)
+    body = overview.get_data(as_text=True)
+    assert overview.status_code == 200
+    assert "Choose a storage capacity" in body
+    assert body.count("Open comparison") == 2
+    assert "All selected listings" in body
+    assert "Comparison coverage" not in body
+    assert "Market conclusion" not in body
+    assert "Comparison actions" not in body
+    assert "Compare separately by storage" not in body
+    assert "Continue with mixed variants" not in body
+
+    scoped = client.get(f"/compare/{group['_id']}", query_string={"storage": "256GB"})
+    scoped_body = scoped.get_data(as_text=True)
+    assert scoped.status_code == 200
+    assert "256GB comparison" in scoped_body
+    assert "Comparison coverage" in scoped_body and "Market conclusion" in scoped_body
+    assert "USD 900.00" in scoped_body and "USD 940.00" in scoped_body
+    assert "Apple iPhone 17 Pro 512GB eBay" not in scoped_body
+    assert 'name="storage_scope" value="256GB"' in scoped_body
+
+
+def test_multi_storage_analysis_and_monitor_are_server_scoped_to_selected_capacity():
+    client, user = make_client("Multi Storage Actions")
+    _search_id, _tokens, _overview, group = _seed_multi_storage_comparison(client, user)
+
+    blocked = client.post(f"/analytics/from-comparison/{group['_id']}", follow_redirects=True)
+    assert "Choose one storage group before analyzing" in blocked.get_data(as_text=True)
+    assert precision_app.repository.list_analysis_records(user["_id"], limit=10) == []
+
+    analysis = client.post(f"/analytics/from-comparison/{group['_id']}", data={"storage_scope": "512GB"})
+    assert analysis.status_code == 302
+    record = precision_app.repository.list_analysis_records(user["_id"], limit=1)[0]
+    assert record["filters"] == {"storage": "512GB"}
+    assert len(record["included_result_ids"]) == 2
+
+    blocked_monitor = client.post("/watchlist/from-compare", data={"comparison_id": group["_id"]}, follow_redirects=True)
+    assert "Choose one storage group before creating a Monitor" in blocked_monitor.get_data(as_text=True)
+    tracked = client.post("/watchlist/from-compare", data={"comparison_id": group["_id"], "storage_scope": "256GB"})
+    assert tracked.status_code == 302
+    monitor = precision_app.repository.list_watchlist_items(user["_id"], limit=1)[0]
+    assert monitor["storage_scope"] == "256GB"
+    assert monitor["frozen_scope"]["storage"] == "256GB"
+    assert len(monitor["selected_records_snapshot"]) == 2
+    assert all("256GB" in row["title"] for row in monitor["selected_records_snapshot"])
+
+
 def test_repeated_analysis_reuses_signature_without_duplicate_history():
     client, user = make_client("Idempotent Analysis Owner")
     search_id, tokens = seed_search(user)
@@ -780,7 +892,7 @@ def test_ai_insight_is_persisted_only_for_its_search_run(monkeypatch):
     client, user = make_client("Persisted Insight Owner")
     first_id, _tokens = seed_search(user)
     second_id = precision_app.repository.create_search(user["_id"], "iPhone 17 Pro Max", "ebay", role="consumer")
-    monkeypatch.setattr(precision_app, "summarize_market", lambda query, items: (f"Insight for {query}", "rule", None))
+    monkeypatch.setattr(precision_app, "summarize_market", lambda query, items, **_kwargs: (f"Insight for {query}", "rule", None))
     response = client.post("/api/ai-discover", json={"search_record_id": first_id})
     assert response.status_code == 200
     insight = precision_app.repository.get_ai_insight_for_search(first_id, user["_id"])
@@ -792,13 +904,18 @@ def test_ai_insight_is_persisted_only_for_its_search_run(monkeypatch):
 def test_ai_insight_browser_action_uses_prg(monkeypatch):
     client, user = make_client("Insight PRG Owner")
     search_id, _tokens = seed_search(user)
-    monkeypatch.setattr(precision_app, "summarize_market", lambda query, items: (f"Insight for {query}", "rule", None))
+    monkeypatch.setattr(precision_app, "summarize_market", lambda query, items, **_kwargs: (f"Insight for {query}", "rule", None))
+    initial_page = client.get(f"/search/results/{search_id}")
+    initial_soup = BeautifulSoup(initial_page.data, "html.parser")
+    assert "hidden" in (initial_soup.select_one("#ai-panel").get("class") or [])
+    assert initial_soup.select_one("#ai-summary") is not None
     response = client.post(f"/search/results/{search_id}/ai-insight", data={"search_record_id": search_id})
     assert response.status_code == 302
     assert response.location.endswith(f"/search/results/{search_id}")
     page = client.get(response.location)
     assert page.status_code == 200
     assert "Insight for iPhone 12" in page.get_data(as_text=True)
+    assert "hidden" not in (BeautifulSoup(page.data, "html.parser").select_one("#ai-panel").get("class") or [])
 
 
 def test_search_run_id_is_public_route_identity_with_legacy_id_compatibility():
@@ -820,7 +937,7 @@ def test_base_search_renders_only_meaningful_search_controls():
     body = page.get_data(as_text=True)
     assert page.status_code == 200
     assert "Product keyword or model" in body and "Search Sources" in body
-    assert "AI Price Insight" not in body
+    assert "AI Comparison Insight" not in body
     assert "Search again to generate an insight for the updated query." not in body
     assert "dynamic-filters" not in body
     assert "Compare selected" not in body and "Save as evidence" not in body

@@ -1013,6 +1013,7 @@ class MongoRepository:
             "category_key": payload.get("category_key"),
             "category_display": payload.get("category_display"),
             "condition_scope": payload.get("condition_scope"),
+            "storage_scope": payload.get("storage_scope") or (payload.get("frozen_scope") or {}).get("storage"),
             "source_scope": payload.get("source_scope") or "search",
             "record_scope": payload.get("record_scope") or ("selected_comparison_records" if payload.get("tracking_mode") == "selected_records" else "all_current_search_results"),
             "data_source_label": payload.get("data_source_label") or "live",
@@ -1048,6 +1049,8 @@ class MongoRepository:
             "alert_last_change_percent": None,
             "alert_last_triggered_at": None,
             "alert_last_email_status": None,
+            "alert_last_evaluation_status": None,
+            "alert_last_evaluation_reason": None,
             "alert_rule_updated_at": None,
             "alert_rule_version": 0,
         }
@@ -1079,6 +1082,8 @@ class MongoRepository:
         row.setdefault("alert_last_change_percent", None)
         row.setdefault("alert_last_triggered_at", None)
         row.setdefault("alert_last_email_status", None)
+        row.setdefault("alert_last_evaluation_status", None)
+        row.setdefault("alert_last_evaluation_reason", None)
         row.setdefault("alert_rule_updated_at", None)
         row.setdefault("alert_rule_version", 0)
         return row

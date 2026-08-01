@@ -48,6 +48,50 @@ def _audit(callback, event_type, details):
             pass
 
 
+def _record_count(snapshot):
+    try:
+        return max(int(snapshot.get("eligible_record_count") or snapshot.get("record_count") or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _static_quality_issue(snapshot, minimum_records):
+    if snapshot.get("data_quality") == "partial":
+        return "partial_source_coverage"
+    if _record_count(snapshot) < minimum_records:
+        return "insufficient_comparable_records"
+    return None
+
+
+def _comparison_quality_issue(previous, current, maximum_record_count_change_percent):
+    for field in ("alert_scope_signature", "observed_scope_signature"):
+        previous_signature = str(previous.get(field) or "").strip()
+        current_signature = str(current.get(field) or "").strip()
+        if previous_signature and current_signature and previous_signature != current_signature:
+            return "comparison_scope_changed"
+    previous_count = _record_count(previous)
+    current_count = _record_count(current)
+    if previous_count:
+        count_change_percent = abs(current_count - previous_count) / previous_count * 100
+        if count_change_percent > maximum_record_count_change_percent:
+            return "record_count_changed_substantially"
+    return None
+
+
+def _record_not_evaluated(repository, monitor, now, reason, audit):
+    repository.update_watchlist_item(monitor["_id"], {
+        "alert_last_evaluated_at": now,
+        "alert_last_change_percent": None,
+        "alert_last_email_status": "not_evaluated",
+        "alert_last_evaluation_status": "not_evaluated",
+        "alert_last_evaluation_reason": reason,
+    }, user_id=monitor["user_id"])
+    _audit(audit, "price_alert_evaluated", {
+        "monitor_id": str(monitor["_id"]), "status": "not_evaluated", "reason": reason,
+    })
+    return {"status": "not_evaluated", "event_id": None, "change_percent": None, "reason": reason}
+
+
 def normalize_mail_error(exc):
     if isinstance(exc, (TimeoutError, ConnectionError)):
         return "delivery_timeout"
@@ -57,7 +101,8 @@ def normalize_mail_error(exc):
 
 
 def evaluate_price_alert(repository, monitor, snapshot, *, mail_service_factory, monitor_url,
-                         alerts_enabled=True, now=None, audit=None):
+                         alerts_enabled=True, now=None, audit=None, minimum_records=2,
+                         maximum_record_count_change_percent=50):
     """Evaluate one snapshot without performing any marketplace retrieval."""
     now = _utc(now)
     if not alerts_enabled or not monitor.get("alert_enabled"):
@@ -67,17 +112,48 @@ def evaluate_price_alert(repository, monitor, snapshot, *, mail_service_factory,
     if direction not in VALID_DIRECTIONS or threshold is None or not _valid_snapshot(snapshot, monitor):
         return {"status": "invalid", "event_id": None, "change_percent": None}
 
+    try:
+        minimum_records = max(int(minimum_records), 1)
+    except (TypeError, ValueError):
+        minimum_records = 2
+    try:
+        maximum_record_count_change_percent = max(float(maximum_record_count_change_percent), 0)
+    except (TypeError, ValueError):
+        maximum_record_count_change_percent = 50.0
+    current_quality_issue = _static_quality_issue(snapshot, minimum_records)
+    if current_quality_issue:
+        return _record_not_evaluated(repository, monitor, now, current_quality_issue, audit)
+
     snapshots = [row for row in repository.list_price_snapshots(monitor["_id"], limit=0)
                  if _valid_snapshot(row, monitor)]
     snapshots.sort(key=_snapshot_time)
     current_index = next((index for index, row in enumerate(snapshots)
                           if str(row.get("_id")) == str(snapshot.get("_id"))), None)
-    previous = snapshots[current_index - 1] if current_index is not None and current_index > 0 else None
+    previous = None
+    comparison_quality_issue = None
+    if current_index is not None and current_index > 0:
+        candidates = [row for row in reversed(snapshots[:current_index])
+                      if _static_quality_issue(row, minimum_records) is None]
+        for candidate in candidates:
+            candidate_issue = _comparison_quality_issue(
+                candidate, snapshot, maximum_record_count_change_percent,
+            )
+            if candidate_issue is None:
+                previous = candidate
+                break
+            if comparison_quality_issue is None:
+                comparison_quality_issue = candidate_issue
+        if candidates and previous is None:
+            return _record_not_evaluated(
+                repository, monitor, now, comparison_quality_issue, audit,
+            )
     if previous is None:
         repository.update_watchlist_item(monitor["_id"], {
             "alert_last_evaluated_at": now,
             "alert_last_change_percent": None,
             "alert_last_email_status": "not_required",
+            "alert_last_evaluation_status": "baseline_established",
+            "alert_last_evaluation_reason": None,
         }, user_id=monitor["user_id"])
         _audit(audit, "price_alert_evaluated", {"monitor_id": str(monitor["_id"]), "status": "no_previous_snapshot"})
         return {"status": "not_required", "event_id": None, "change_percent": None}
@@ -95,6 +171,8 @@ def evaluate_price_alert(repository, monitor, snapshot, *, mail_service_factory,
         "alert_last_evaluated_at": now,
         "alert_last_change_percent": float(change),
         "alert_last_email_status": "not_required" if not crossed else monitor.get("alert_last_email_status"),
+        "alert_last_evaluation_status": "evaluated",
+        "alert_last_evaluation_reason": None,
     }, user_id=monitor["user_id"])
     _audit(audit, "price_alert_evaluated", {
         "monitor_id": str(monitor["_id"]), "change_percent": float(change),

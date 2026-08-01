@@ -66,20 +66,23 @@ def test_frozen_analysis_scope_drives_page_csv_and_workbook():
     assert sum(row[1] for row in book["Condition Breakdown"].iter_rows(min_row=2, values_only=True)) == 23
 
 
-def test_print_report_describes_mixed_storage_and_frozen_scope():
+def test_print_report_describes_scope_refinement_and_frozen_scope():
     client, analysis_id = _fixture()
     report = client.post(f"/analytics/{analysis_id}/export/report", data={})
     text = report.data.decode("utf-8")
     assert report.status_code == 200
     assert "Analysis scope" in text and "23 comparable listings" in text
-    assert "Mixed storage limitation" in text
-    assert "A lowest-price platform is not determined for this mixed-storage result set." in text
+    assert "Comparison scope needs refinement" in text
+    assert "Multiple storage capacities are included" in text
+    assert "Also choose one condition" in text
+    assert "Platform comparison: Not qualified" in text
+    assert "Product configuration" in text
     assert "24 collected · 23 analyzed" in text
     assert "frozen analysis scope" not in text
     assert "{'" not in text
 
 
-def test_condition_mix_does_not_hide_lowest_price_platform():
+def test_condition_mix_disqualifies_platform_price_comparison():
     payload = precision_app.build_analytics_payload([
         {
             "title": "iPhone 15 Used",
@@ -104,7 +107,8 @@ def test_condition_mix_does_not_hide_lowest_price_platform():
     assert payload["summary"]["mixed_storage"] is False
     assert payload["summary"]["mixed_conditions"] is True
     assert payload["summary"]["mixed_variants"] is False
-    assert payload["summary"]["best_platform"] == "eBay"
+    assert payload["summary"]["best_platform"] == ""
+    assert "choose one product condition" in payload["summary"]["platform_qualification_reason"]
 
 
 def test_print_report_filters_are_validated_and_recalculated_server_side():
@@ -123,7 +127,8 @@ def test_print_report_filters_are_validated_and_recalculated_server_side():
     assert "8 comparable listings" in text
     assert "Analytics Platform: Walmart" in text
     assert "iPhone 12 · 128GB" in text
-    assert "Lowest-price platform: Walmart" in text
+    assert "Platform comparison: Not qualified" in text
+    assert "include at least two marketplaces" in text
     assert "Browser forged record" not in text
     assert "999 comparable listings" not in text
     assert ">eBay<" not in text
@@ -133,6 +138,19 @@ def test_print_report_filters_are_validated_and_recalculated_server_side():
         data={"metadata": json.dumps({"filters": {"platform": "Injected platform"}})},
     )
     assert invalid.status_code == 400
+
+
+def test_platform_comparison_uses_median_not_single_lowest_listing():
+    records = [
+        {"title": "iPhone 15 128GB", "platform": "eBay", "price": 100, "normalized_price": 100, "analytics_eligible": True, "condition_display": "New"},
+        {"title": "iPhone 15 128GB", "platform": "eBay", "price": 900, "normalized_price": 900, "analytics_eligible": True, "condition_display": "New"},
+        {"title": "iPhone 15 128GB", "platform": "Walmart", "price": 450, "normalized_price": 450, "analytics_eligible": True, "condition_display": "New"},
+        {"title": "iPhone 15 128GB", "platform": "Walmart", "price": 460, "normalized_price": 460, "analytics_eligible": True, "condition_display": "New"},
+    ]
+    summary = precision_app.build_analytics_payload(records)["summary"]
+    assert summary["best_platform"] == "Walmart"
+    assert summary["platform_metric_label"] == "Lowest median-price platform"
+    assert summary["best_platform_price"] == 455.0
 
 
 def test_legacy_analysis_report_filters_fall_back_to_persisted_search_facets():
