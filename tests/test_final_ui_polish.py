@@ -77,6 +77,25 @@ def test_responsive_shell_has_explicit_wide_and_mobile_policies():
     assert 'class="app-sidebar workspace-sidebar border-b' in base
 
 
+def test_product_search_refine_filters_use_container_driven_wrapping_grid():
+    base = _template("product_base.html")
+    search = _template("source_search_roles.html")
+
+    assert ".refine-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))" in base
+    assert ".refine-filter-grid>*{min-width:0;max-width:100%}" in base
+    assert ".refine-filter-price-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)" in base
+    assert ".refine-filter-action-controls{display:flex;flex-wrap:wrap" in base
+    assert "@media (max-width:480px)" in base
+    assert ".refine-filter-action-controls>*{width:100%;flex-basis:auto}" in base
+
+    assert 'class="refine-filter-grid mt-4"' in search
+    assert 'class="refine-filter-price-fields"' in search
+    assert 'class="refine-filter-action-controls"' in search
+    assert "2xl:grid-cols-7" not in search
+    assert 'name="min_price"' in search and 'name="max_price"' in search
+    assert ">Reset</a>" in search and ">Apply filters</button>" in search
+
+
 def test_tailwind_configuration_has_balanced_closing_braces():
     base = _template("product_base.html")
     config_line = next(line.strip() for line in base.splitlines() if line.strip().startswith("<script>tailwind.config="))

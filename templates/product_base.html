@@ -144,6 +144,12 @@
     .workspace-content{max-width:90rem}.workspace-content--dense{max-width:108rem}
     .workspace-main .max-w-7xl{max-width:100%}
     .app-action-row{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}
+    .refine-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));align-items:end;gap:.75rem;min-width:0;max-width:100%}
+    .refine-filter-grid>*{min-width:0;max-width:100%}
+    .refine-filter-price-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.5rem;min-width:0}
+    .refine-filter-price-fields>*{min-width:0;max-width:100%}
+    .refine-filter-action-controls{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;min-width:0}
+    .refine-filter-action-controls>*{min-width:0;flex:1 1 auto}
     .app-dropdown>.app-overflow-summary,.app-dropdown[open]>.app-overflow-summary{display:inline-flex;width:2.75rem;height:2.75rem;min-width:2.75rem;min-height:2.75rem;align-items:center;justify-content:center;border:1px solid #cbd5e1;border-radius:.75rem;background:#fff;padding:0;color:#475569;box-shadow:none;filter:none;transform:none;cursor:pointer}
     .app-dropdown>.app-overflow-summary:hover{border-color:#94a3b8;background:#f1f5f9;color:#1e40af;box-shadow:none;transform:none}
     .app-compact-action{display:inline-flex;min-height:2.5rem;align-items:center;justify-content:center;border:1px solid #cbd5e1;border-radius:.625rem;background:#fff;padding:.5rem .75rem;font-size:.75rem;font-weight:800;line-height:1;color:#334155;transition:background-color var(--transition-fast),border-color var(--transition-fast),color var(--transition-fast)}
@@ -215,6 +221,11 @@
       .app-logo{height:2.5rem;max-width:11rem}
       .app-badge{padding:.18rem .45rem;font-size:.54rem}
       [id$="-echart"],[id*="-echart"]{min-height:240px}
+    }
+    @media (max-width:480px){
+      .refine-filter-grid{grid-template-columns:minmax(0,1fr)}
+      .refine-filter-action-controls{flex-direction:column;align-items:stretch}
+      .refine-filter-action-controls>*{width:100%;flex-basis:auto}
     }
     @media (min-width:768px){
       body[data-sidebar-collapsed="true"] .sidebar-label,

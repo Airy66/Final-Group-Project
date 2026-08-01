@@ -291,7 +291,8 @@ def test_search_ui_exposes_bulk_selection_and_separates_recent_history_language(
     assert "mt-4 overflow-x-auto app-table-wrap" in search_template
     assert "max-h-[680px]" not in search_template
     assert "Not qualified" in search_template
-    assert "2xl:grid-cols-7" in search_template
+    assert 'class="refine-filter-grid mt-4"' in search_template
+    assert "2xl:grid-cols-7" not in search_template
     assert "Price range" in search_template
     assert "data-facet-popover" in search_template
     assert "data-facet-summary" in search_template
