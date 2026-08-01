@@ -119,7 +119,7 @@ def test_environment_template_contains_placeholders_not_credentials():
             values[key] = value
     for key in (
         "EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "SERPAPI_API_KEY",
-        "GEMINI_API_KEY", "OPENAI_API_KEY", "MAIL_PASSWORD",
+        "GEMINI_API_KEY", "OPENAI_API_KEY", "BREVO_API_KEY", "BREVO_SENDER_EMAIL",
         "PRECISION_ADMIN_PASSWORD",
     ):
         assert values[key] == ""

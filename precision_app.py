@@ -47,7 +47,7 @@ from werkzeug.utils import secure_filename
 from services.ai_search import AISearchError, ground_market_summary, predict_price_gemini, search_prices, summarize_market_gemini as summarize_market
 from services.app_urls import application_email_url, canonical_app_base_url
 from services.database import MongoRepository, utcnow
-from services.mail_service import PasswordResetMailService
+from services.email_service import EmailService
 from services.price_alerts import VALID_DIRECTIONS, evaluate_price_alert, normalize_mail_error
 from services.runtime_config import env_flag, is_production_environment, validate_production_configuration, web_security_configuration
 from services.category_attributes import CATEGORY_PROFILES, PRODUCT_TYPE_LABELS, apply_category_filters, canonical_facet_value, category_scope, classify_query_intent, detect_product_category, enrich_listing_category, generate_available_facets, product_type_scope
@@ -3780,8 +3780,7 @@ def build_activity_records(user_id):
             "research_saved": "Research saved", "ai_discover": "AI price insight generated",
             "analysis_deleted": "Analysis deleted", "prediction_created": "Price forecast generated",
             "password_reset_requested": "Password reset requested",
-            "password_reset_email_printed": "Reset email printed",
-            "password_reset_email_queued": "Reset email queued",
+            "password_reset_email_delivered": "Reset email delivered",
             "password_reset_completed": "Password reset completed",
             "password_reset_invalid_attempt": "Invalid reset link attempted",
             "password_reset_throttled": "Password reset throttled",
@@ -3816,8 +3815,8 @@ def build_activity_records(user_id):
             detail = f"Generated a {details.get('generation_mode') or 'grounded'} insight for “{query or 'analysis'}” from {count or 0} record(s)."
         elif action_key == "password_reset_requested":
             detail = "A password reset was requested for this account."
-        elif action_key in {"password_reset_email_printed", "password_reset_email_queued"}:
-            detail = f"Password reset delivery was prepared using {details.get('delivery_mode') or 'configured mail'} mode."
+        elif action_key == "password_reset_email_delivered":
+            detail = f"Password reset delivery was accepted by {details.get('mail_provider') or 'the configured mail provider'}."
         elif action_key == "password_reset_completed":
             detail = "The account password was updated using a valid single-use reset link."
         elif action_key == "password_reset_invalid_attempt":
@@ -3831,7 +3830,7 @@ def build_activity_records(user_id):
         raw_status = str(details.get("status") or "").lower().replace(" ", "_")
         if any(term in action_key for term in ("failed", "error", "blocked", "invalid_attempt")) or raw_status in {"failed", "error", "provider_error"}:
             status = "Failed"
-        elif raw_status in {"success", "completed", "complete"} or action_key in {"records_collected", "search_query", "evidence_save", "save_evidence", "research_saved", "ai_discover", "prediction_created", "password_reset_email_printed", "password_reset_email_queued", "password_reset_completed"}:
+        elif raw_status in {"success", "completed", "complete"} or action_key in {"records_collected", "search_query", "evidence_save", "save_evidence", "research_saved", "ai_discover", "prediction_created", "password_reset_email_delivered", "password_reset_completed"}:
             status = "Completed"
         elif raw_status in {"no_results", "no_result"}:
             status = "No results"
@@ -5128,7 +5127,7 @@ def register():
             welcome_failed = False
             if app.config.get("REGISTRATION_WELCOME_EMAIL_ENABLED", True):
                 try:
-                    delivery = PasswordResetMailService().send_registration_welcome(
+                    EmailService().send_registration_welcome(
                         user.get("email"),
                         user.get("display_name"),
                         registration_login_url(),
@@ -5136,13 +5135,13 @@ def register():
                     )
                     repository.log_event(
                         user["_id"], "registration_welcome_email_delivered", role, user.get("display_name"),
-                        {"delivery_mode": os.getenv("EMAIL_MODE", "console").lower(), "delivery_status": delivery},
+                        {"mail_provider": os.getenv("MAIL_PROVIDER", "brevo_api").lower(), "delivery_status": "sent"},
                     )
                 except Exception as exc:
                     welcome_failed = True
                     repository.log_event(
                         user["_id"], "registration_welcome_email_failed", role, user.get("display_name"),
-                        {"delivery_mode": os.getenv("EMAIL_MODE", "console").lower(), "error_type": exc.__class__.__name__},
+                        {"mail_provider": os.getenv("MAIL_PROVIDER", "brevo_api").lower(), "error_type": exc.__class__.__name__},
                     )
                     app.logger.warning("Registration welcome email delivery failed (%s)", exc.__class__.__name__)
             if welcome_failed:
@@ -5174,10 +5173,10 @@ def forgot_password():
                 token = secrets.token_urlsafe(32)
                 ttl_minutes = password_reset_token_ttl_minutes()
                 repository.create_password_reset_token(user["_id"], reset_token_hash(token), now + timedelta(minutes=ttl_minutes))
-                repository.log_event(user["_id"], "password_reset_requested", user.get("role"), user.get("display_name"), {"delivery_mode": os.getenv("EMAIL_MODE", "console").lower()})
+                repository.log_event(user["_id"], "password_reset_requested", user.get("role"), user.get("display_name"), {"mail_provider": os.getenv("MAIL_PROVIDER", "brevo_api").lower()})
                 try:
-                    delivery = PasswordResetMailService().send_password_reset(user.get("email"), password_reset_url(token), ttl_minutes)
-                    repository.log_event(user["_id"], f"password_reset_email_{delivery}", user.get("role"), user.get("display_name"), {"delivery_mode": os.getenv("EMAIL_MODE", "console").lower()})
+                    EmailService().send_password_reset(user.get("email"), password_reset_url(token), ttl_minutes)
+                    repository.log_event(user["_id"], "password_reset_email_delivered", user.get("role"), user.get("display_name"), {"mail_provider": os.getenv("MAIL_PROVIDER", "brevo_api").lower(), "delivery_status": "sent"})
                 except Exception as exc:
                     repository.revoke_unused_password_reset_tokens(user["_id"])
                     repository.log_event(user["_id"], "password_reset_mail_failed", user.get("role"), user.get("display_name"), {"error_type": exc.__class__.__name__})
@@ -6364,7 +6363,7 @@ def refresh_monitor(monitor_id, owner_id=None, trigger="manual", force=False, sc
             # evaluator only reads the snapshot already collected above.
             safe_call(lambda: evaluate_price_alert(
                 repository, monitor, snapshot,
-                mail_service_factory=PasswordResetMailService,
+                mail_service_factory=EmailService,
                 monitor_url=price_alert_monitor_url(monitor["_id"]),
                 alerts_enabled=app.config.get("PRICE_ALERTS_ENABLED", True),
                 now=now_utc,
@@ -6581,11 +6580,11 @@ def test_watchlist_price_alert_email(watchlist_id):
     item = _owned_alert_monitor(watchlist_id)
     user = repository.get_user_by_id(session["user_id"])
     try:
-        delivery = PasswordResetMailService().send_price_alert_test(
+        EmailService().send_price_alert_test(
             user.get("email"), item.get("product_label") or item.get("keyword") or "Watchlist Monitor",
             price_alert_monitor_url(watchlist_id),
         )
-        repository.log_event(session["user_id"], "test_alert_email_sent", session.get("role"), session.get("username"), {"monitor_id": watchlist_id, "delivery_mode": delivery, "notification_type": "test"})
+        repository.log_event(session["user_id"], "test_alert_email_sent", session.get("role"), session.get("username"), {"monitor_id": watchlist_id, "mail_provider": os.getenv("MAIL_PROVIDER", "brevo_api").lower(), "delivery_status": "sent", "notification_type": "test"})
         flash("Test price alert email sent. No marketplace threshold was triggered.", "success")
     except Exception as exc:
         repository.log_event(session["user_id"], "test_alert_email_failed", session.get("role"), session.get("username"), {"monitor_id": watchlist_id, "error_code": normalize_mail_error(exc), "notification_type": "test"})

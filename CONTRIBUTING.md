@@ -1,540 +1,259 @@
 # Contributing to Precision Curator
 
-Thank you for contributing to Precision Curator.
+Thank you for helping improve Precision Curator. The project is in release preparation, so contributions should be focused, testable, secure, and consistent with the existing product workflow.
 
-Precision Curator is an academic Flask and MongoDB platform for marketplace search, price comparison, evidence preservation, analytics, monitoring, forecast validation, and price-alert delivery.
+By contributing, you agree that your contribution may be distributed under the repository's [MIT License](LICENSE).
 
----
+## Ground rules
 
-## 1. Development Principles
+- Preserve working functionality and existing user data.
+- Make the smallest change that completely solves the confirmed problem.
+- Keep unrelated refactors, formatting changes, and UI redesigns out of the same change.
+- Maintain the canonical `precision_app:app` entry point.
+- Keep authentication, authorization, ownership, membership, and CSRF decisions on the server.
+- Keep automated tests deterministic and independent of live external services.
+- Update documentation whenever configuration, behaviour, deployment, or data semantics change.
+- Never describe a check as passing unless it was actually run.
 
-Contributions should:
+Near release, do not introduce a new framework, duplicate application entry point, destructive migration, background system, or broad architecture rewrite without a demonstrated need and explicit review.
 
-- preserve existing completed functionality;
-- make focused and reviewable changes;
-- avoid unrelated changes in the same branch;
-- keep the application runnable;
-- preserve existing URLs and endpoint behaviour where reasonably possible;
-- maintain server-side authentication and authorization;
-- retain deterministic offline tests;
-- avoid unnecessary architectural rewrites close to release.
+## Branch and review workflow
 
-Do not create empty wrapper modules only to make the project appear more structured.
-
-Do not redesign the complete user interface unless a separately approved UI task requires it.
-
----
-
-## 2. Branch Workflow
-
-Use the current deployment branch as the base for release-bound work:
+Start from the current shared deployment branch and create one focused branch:
 
 ```bash
-git switch release/final-deployment
-git pull
-```
-
-Create a focused branch:
-
-```bash
-git switch -c feature/<short-name>
+git switch <deployment-branch>
+git pull --ff-only
+git switch -c fix/<short-description>
 ```
 
 Recommended prefixes:
 
 ```text
-feature/
-fix/
-security/
-ui/
-docs/
-test/
-release/
+feature/  fix/  security/  ui/  docs/  test/  release/
 ```
 
-Examples:
+Do not force-push a shared branch without team agreement. Preserve unrelated changes in an already dirty worktree.
 
-```text
-feature/scheduled-monitor-refresh
-fix/walmart-result-status
-security/session-hardening
-ui/watchlist-layout
-docs/deployment-guide
-test/provider-fixtures
-```
+A pull request or review handoff should state:
 
-Use one branch for one clear feature, fix, test, or documentation task.
+- the problem and expected behaviour;
+- changed files and affected routes/workflows;
+- environment-variable or database impact;
+- security and deployment impact;
+- tests and manual checks actually performed;
+- external services mocked or intentionally not tested;
+- known limitations and follow-up work.
 
-Do not force-push shared deployment branches without team agreement.
-
----
-
-## 3. Local Setup
-
-Create and activate a virtual environment.
+## Local setup
 
 Windows PowerShell:
 
 ```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-```
-
-macOS or Linux:
-
-```bash
-python -m venv venv
-source venv/bin/activate
-```
-
-Install runtime and development dependencies:
-
-```bash
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
 python -m pip install -r requirements-dev.txt
-```
-
-Copy the environment template:
-
-Windows PowerShell:
-
-```powershell
 Copy-Item .env.example .env
+python -m flask --app precision_app:app run
 ```
 
 macOS or Linux:
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
 cp .env.example .env
+python -m flask --app precision_app:app run
 ```
 
-Never commit the real `.env` file.
+Use `.env` only for local development and never commit it. Persistent development should use `MONGO_URI` and `MONGO_DATABASE`. In-memory storage is allowed only through explicit `DEMO_MODE=true`; production must remain fail-closed with `DEMO_MODE=false`.
 
----
+## Required checks
 
-## 4. Running Locally
-
-Use the canonical Flask application:
-
-```bash
-python -m flask --app precision_app:app run --host 127.0.0.1 --port 5000
-```
-
-Open:
-
-```text
-http://127.0.0.1:5000
-```
-
-`precision_app:app` is the canonical application entry point.
-
-`app.py` is retained only as a compatibility import and must not become a second independent Flask application.
-
----
-
-## 5. Required Checks Before Committing
-
-Run the full offline test suite:
+Before requesting review, run:
 
 ```bash
 python -m pytest tests src/tests -q -p no:cacheprovider
-```
-
-Run compilation and dependency checks:
-
-```bash
 python -m compileall precision_app.py services tools
 python -m pip check
 git diff --check
+git status --short
 ```
 
-Check the working tree:
+Run targeted tests first while developing, then the complete offline suite. Investigate failures instead of hiding, skipping, or weakening assertions without a valid behavioural reason.
 
-```bash
-git status
-```
+## Testing external integrations
 
-Do not report tests as passing unless they were actually executed successfully.
+Automated tests must not require live access to:
 
-Do not ignore unexplained test failures.
-
----
-
-## 6. External-Service Testing
-
-Automated tests must not depend on live availability of:
-
-- eBay;
-- Walmart;
-- SerpAPI;
-- AI providers;
-- SMTP;
 - MongoDB Atlas;
-- other external marketplace or network services.
+- eBay, Walmart, or SerpAPI;
+- Gemini, OpenAI, or another model provider;
+- Brevo or another email provider;
+- Render or another hosting platform.
 
-Use deterministic fixtures and mocks.
-
-Mock the actual current external-provider boundary rather than an obsolete import path.
-
-Tests should exercise the internal production pipeline where practical:
+Mock the production adapter boundary and exercise the internal pipeline wherever practical:
 
 ```text
-mocked provider response
-→ parsing
-→ normalization
-→ price validation
-→ comparability
-→ Search Run IDs
-→ displayed records
-→ KPIs and audit information
+provider response
+  -> parsing and validation
+  -> normalization and comparability
+  -> persistent workflow object
+  -> server-calculated metrics
+  -> rendered result and audit metadata
 ```
 
-Do not insert final rendered rows directly merely to make a test pass.
+Use clearly fake credentials in tests. Never use a real API key to make a test pass, and never insert pre-rendered final rows merely to bypass production logic.
 
-Use clearly fake test-only credentials where constructor validation requires a non-empty value.
+## Security requirements
 
-Never use a real API key to make an automated test pass.
+Never commit or log:
 
----
+- `.env` files or secret files;
+- API keys or email-provider credentials;
+- MongoDB connection strings or database passwords;
+- user passwords, administrator passwords, or password hashes copied from production;
+- reset tokens or complete password-reset URLs;
+- Session cookies, CSRF tokens, or private authentication tokens;
+- real user data or generated exports containing sensitive data.
 
-## 7. Security Requirements
+Do not weaken password hashing, reset-token expiry/revocation, secure Session configuration, CSRF validation, login controls, ownership checks, membership checks, workspace-role checks, administrator checks, safe redirects, source URL validation, or safe error handling.
 
-Do not commit:
+Roles, membership tiers, owner IDs, recipients, and record IDs supplied by a browser are untrusted. Re-read authoritative values from the authenticated Session and persistent account/record.
 
-- `.env` files;
-- API keys;
-- MongoDB connection strings;
-- SMTP credentials;
-- passwords;
-- password-reset tokens;
-- session cookies;
-- administrator passwords;
-- private authentication tokens;
-- generated exports containing sensitive data;
-- local virtual environments.
-
-Do not weaken:
-
-- email-and-password authentication;
-- password hashing;
-- server-side authorization;
-- membership checks;
-- workspace-role checks;
-- object ownership checks;
-- CSRF protection;
-- secure session configuration;
-- production secret validation;
-- development-route restrictions;
-- safe error handling;
-- source-link validation.
-
-Do not trust roles, membership tiers, owner IDs, or recipient email addresses submitted by the browser.
-
-Sensitive decisions must use persisted server-side account and database values.
-
----
-
-## 8. Authentication and Administration
+## Authentication and administration
 
 Do not:
 
-- add username-only login;
-- accept empty credentials;
-- trust a submitted role;
-- create a browser-controlled administrator session;
-- seed administrators during module import;
-- reset administrator passwords during application startup;
-- print administrator passwords.
+- add username-only or empty-credential login;
+- accept a browser-submitted role as authority;
+- create an administrator Session from request data;
+- seed or reset administrators during application import/startup;
+- print generated or supplied administrator passwords.
 
-Administrators must be created explicitly:
+Create administrators explicitly:
 
 ```bash
 python -m tools.create_admin --email administrator@example.com
 ```
 
-A password must be supplied securely through the supported administrator tool workflow.
+Administrator system access is separate from customer membership. Changes must not make administrator capability depend on Basic, Premium, or Professional membership.
 
----
+## MongoDB and persistence
 
-## 9. Database Changes
-
-Production uses MongoDB.
+All persistent workflows use the shared repository/database connection configured by `MONGO_URI` and `MONGO_DATABASE`.
 
 Database changes must:
 
-- preserve user ownership;
-- preserve existing collection semantics;
-- avoid unbounded queries;
-- use reasonable query limits;
-- retain UTC database timestamps;
-- render user-facing timestamps in Asia/Singapore where required;
+- preserve ownership and existing collection semantics;
+- retain UTC storage timestamps and the established user-facing timezone;
+- use bounded queries and appropriate indexes;
+- keep test and production databases separate;
 - avoid destructive startup migrations;
-- keep test and production databases separate.
+- fail safely without pretending an unsuccessful write succeeded.
 
-Do not:
+Do not add another `MongoClient`, hard-code localhost, silently fall back to memory, create a temporary Session account after registration failure, or return one user's records to another user.
 
-- seed users during module import;
-- silently switch production to memory fallback;
-- write production records during ordinary application import;
-- delete existing evidence without explicit authorization;
-- return one user’s saved records to another user.
+## Marketplace and comparison integrity
 
-Keep the existing repository layer unless a clear maintenance reason justifies a split.
+Marketplace responses change over time. Preserve truthful distinctions among success with results, success with no results, no comparable results, unusable prices, timeout, quota/rate limit, authentication failure, bot blocking, and provider error.
 
----
+Exclude records that are not safe comparable prices, including:
 
-## 10. Search and Marketplace Data Integrity
+- missing, zero, or negative prices;
+- instalments, subscriptions, deposits, or contract-only offers;
+- accessories and incompatible product models;
+- malformed records and unsafe source URLs.
 
-External marketplace responses may change between collection runs.
+Do not mix historical evidence into a new live Search Run without explicit provenance. Saved evidence must retain source, collection time, owner, and Search Run lineage.
 
-Do not force the following records into price calculations:
+Platform conclusions require one comparable product configuration, one condition, and at least two marketplaces. Qualified platform ranking uses platform median price; a single unusually low listing must not determine the winning marketplace. Descriptive cards may continue to show lowest, average, highest, and spread for the current result set.
 
-- zero-price records;
-- negative-price records;
-- missing-price records;
-- installment-only records;
-- accessories;
-- incompatible product models;
-- malformed records;
-- records with unsafe source URLs.
+## Analysis, evidence, and exports
 
-A successful provider request does not automatically mean that usable comparable listings exist.
+An Analysis Run must use its frozen included record IDs. Do not silently rebuild historical analysis from a later Search Run.
 
-Preserve truthful distinctions among:
+Charts, cards, tables, reports, and exports must describe the same selected scope. Export changes must preserve:
 
-- provider success with results;
-- provider success with no results;
-- provider success with no comparable results;
-- provider success with unusable price data;
-- timeout;
-- rate limit;
-- authentication failure;
-- provider error.
-
-Do not label successful zero-result responses as provider unavailable.
-
-Do not mix historical Walmart evidence into a new live eBay Search Run.
-
-Saved evidence must remain clearly timestamped and separately scoped.
-
----
-
-## 11. Analysis and Export Integrity
-
-Analyses must use the exact frozen included result IDs stored for that Analysis Run.
-
-Do not silently rebuild an old Analysis from a different Search Run.
-
-Charts, KPI cards, tables, reports, and exports must use the same selected scope.
-
-Export changes must preserve:
-
-- current user ownership;
-- current frozen record IDs;
+- user ownership and frozen record IDs;
 - safe CSV cell handling;
-- meaningful table schemas;
-- Asia/Singapore user-facing timestamps;
-- truthful source provenance.
+- meaningful, stable schemas;
+- source provenance and collection timestamps;
+- the established user-facing timezone.
 
-Do not place lifecycle actions such as Delete or Archive inside an Export menu.
+Keep lifecycle actions such as Archive and Delete separate from Export menus.
 
----
+## Watchlist, forecast, and alert integrity
 
-## 12. Watchlist, Forecast, and Alert Integrity
-
-A Watchlist Monitor represents a persistent frozen monitoring scope.
-
-Do not replace its scope with an unrelated latest Search Run.
+A Monitor is a persistent frozen scope, not an alias for the latest unrelated Search Run.
 
 Scheduled refresh must:
 
-- respect ownership;
-- skip paused, archived, or deleted Monitors;
-- prevent duplicate daily Snapshots;
-- use existing comparability rules;
-- create no zero-price or empty failure Snapshot;
-- preserve the previous valid Snapshot after failure;
-- avoid automatic AI forecast generation.
+- respect owner, active/paused state, and configured due time;
+- prevent duplicate daily Snapshots and overlapping refresh claims;
+- reuse the same normalization and comparability rules;
+- preserve the last valid Snapshot when collection fails;
+- avoid zero-price or empty failure Snapshots;
+- avoid automatically generating an AI forecast.
 
-Forecast changes must preserve:
+Forecast changes must preserve immutable Forecast Cycles, source Snapshot lineage, deterministic benchmark, optional AI prediction, later validation Snapshot, and accurate error metrics.
 
-- immutable Forecast Cycles;
-- Source Snapshot lineage;
-- Benchmark prediction;
-- AI-assisted prediction;
-- later validation Snapshot;
-- selected-cycle consistency;
-- accurate error metrics.
+Price Alerts evaluate existing valid Snapshots. They must not launch an additional marketplace search, send duplicate notifications, bypass cooldown/scope quality rules, or use a recipient supplied by the browser. Email failure must not delete the Snapshot.
 
-Price Alert changes must:
+## Email delivery
 
-- evaluate existing valid Snapshots;
-- perform no additional marketplace search;
-- prevent duplicate emails;
-- respect cooldown;
-- preserve the Snapshot if email delivery fails;
-- use the persisted account email.
+All welcome, password-reset, test-alert, and price-alert messages must use the shared mail service. Do not create separate transports for each email type.
 
-Test emails must remain clearly labelled as tests.
+The deployment uses Brevo Transactional Email over HTTPS. SMTP transports and port settings are not part of the supported configuration.
 
----
+Email changes must keep `services/email_service.py` as the single transport boundary, preserve the existing text/HTML and audit semantics, use a bounded timeout, and keep `APP_BASE_URL` as the only source for public application links. Mock Brevo HTTP calls in automated tests. Never log the API key, provider response body, raw reset token, or complete reset URL.
 
-## 13. Email Requirements
+Production emails must never contain localhost, passwords, API keys, database URIs, Session tokens, or raw provider payloads.
 
-Use the shared mail-delivery service.
+## UI and accessibility
 
-Do not create separate SMTP implementations for different email types.
+UI changes should preserve the established product design system and remain usable at desktop, tablet, and approximately 375-416px mobile widths.
 
-Email links must use the canonical configured `APP_BASE_URL`.
+- Keep one clear primary action for each workflow state.
+- Do not use colour as the only status indicator.
+- Preserve keyboard focus, labels, accessible names, and meaningful button behaviour.
+- Avoid fake controls, dead overflow menus, and buttons that only jump without performing their stated action.
+- Keep tables horizontally usable and navigation reachable on touch devices.
+- Do not redesign unrelated pages as part of a focused fix.
 
-Production emails must not contain:
+## Documentation and configuration
 
-- `localhost`;
-- `127.0.0.1`;
-- passwords;
-- API keys;
-- MongoDB connection strings;
-- raw provider payloads;
-- session tokens.
+Update README, `.env.example`, deployment files, tests, and operational notes when their contracts change. Documentation must use the implemented variable names and must distinguish available functionality from planned work.
 
-Password-reset emails may include a fallback full URL.
+Do not claim complete coverage, guaranteed lowest prices, guaranteed forecasts, payment processing, perfect security, commercial production certification, or a provider integration that has not been implemented and tested.
 
-Welcome and Price Alert HTML emails should use their action buttons without unnecessary raw URL duplication, while plain-text fallbacks retain usable links.
+## Commit messages
 
-Do not log full password-reset URLs or raw reset tokens.
-
----
-
-## 14. Development and Demonstration Tools
-
-Development-only tools must remain protected by:
-
-- a non-production environment;
-- an explicit enable flag;
-- administrator or developer authorization.
-
-Normal production configuration must disable:
-
-```env
-DEMO_TOOLS_ENABLED=false
-DEMO_MEMBERSHIP_UPGRADE_ENABLED=false
-SEARCH_DIAGNOSTICS_ENABLED=false
-```
-
-Do not rely only on hiding a navigation link.
-
-Disabled development routes should not perform database changes.
-
----
-
-## 15. Documentation Changes
-
-Documentation must match the current implementation.
-
-Update relevant documentation when changing:
-
-- environment variables;
-- application commands;
-- database requirements;
-- provider behaviour;
-- deployment configuration;
-- scheduled tasks;
-- membership or workspace-role behaviour;
-- security controls;
-- known limitations.
-
-Do not claim:
-
-- complete DDoS prevention;
-- complete global marketplace coverage;
-- guaranteed future prices;
-- guaranteed lowest prices;
-- real payment processing;
-- perfect security.
-
----
-
-## 16. Commit Messages
-
-Use concise and descriptive commit messages.
-
-Examples:
+Use concise, descriptive messages:
 
 ```text
-feat: add scheduled monitor refresh
-fix: preserve Product Search values during loading
-fix: distinguish unusable Walmart price data
-security: enforce user-scoped audit access
-style: polish final Analytics layout
-docs: update deployment documentation
-test: isolate Walmart provider fixtures
+fix: keep mobile workspace navigation scrollable
+feat: add Brevo transactional email adapter
+security: fail closed when Atlas is unavailable
+docs: finalize Render deployment guide
+test: cover qualified platform median comparison
 ```
 
-Avoid vague messages such as:
+Avoid messages such as `update files`, `fix stuff`, or `final changes`.
 
-```text
-update files
-fix stuff
-changes
-final version
-```
+## Release discipline
 
----
+For every release-bound change:
 
-## 17. Pull Request or Review Description
+1. inspect the existing implementation and dirty worktree;
+2. make the smallest safe change;
+3. run targeted tests;
+4. run the complete offline suite;
+5. run compilation and diff checks;
+6. document environment and deployment impact;
+7. preserve a recoverable stable commit.
 
-A reviewed change should explain:
-
-- the problem addressed;
-- expected behaviour;
-- files changed;
-- routes or workflows affected;
-- environment-variable changes;
-- database impact;
-- security impact;
-- tests executed;
-- external-service mocks used;
-- known limitations;
-- deployment impact.
-
-Do not hide failures or describe unexecuted tests as successful.
-
----
-
-## 18. Release-Stage Discipline
-
-Precision Curator is in the deployment-preparation stage.
-
-Near release, avoid:
-
-- broad MVC rewrites;
-- replacing the frontend framework;
-- changing all route names;
-- changing database models without a clear need;
-- adding Redis, Celery, or queues without a demonstrated requirement;
-- replacing working providers immediately before demonstration;
-- introducing unrelated user-facing features;
-- redesigning stable pages.
-
-Prefer the smallest safe change that solves the confirmed problem.
-
-After every release-bound change:
-
-1. run targeted tests;
-2. run the complete offline suite;
-3. run compilation checks;
-4. inspect the Git diff;
-5. preserve a recoverable stable commit.
-
----
-
-## 19. Academic Prototype
-
-Precision Curator is an academic prototype.
-
-No live payment is processed.
-
-External marketplace, AI, email, hosting, and database services remain third-party dependencies.
-
-Application-level security controls reduce risk but do not guarantee protection against every attack or service failure.
+External marketplace, AI, email, database, and hosting services remain third-party dependencies. Application safeguards reduce risk but do not eliminate service failure or guarantee every security property.

@@ -107,7 +107,7 @@ def test_rendered_post_forms_use_shared_token_field_and_meta_tag():
 
 def test_password_reset_request_and_completion_accept_valid_csrf(monkeypatch):
     client, user = _client()
-    monkeypatch.setattr(precision_app.PasswordResetMailService, "send_password_reset", lambda *_args, **_kwargs: "printed")
+    monkeypatch.setattr(precision_app.EmailService, "send_password_reset", lambda *_args, **_kwargs: "message-id")
     token = _csrf_token(client, "/forgot-password")
     requested = client.post(
         "/forgot-password",

@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 
 import precision_app
 from services.database import MongoRepository
-from services.mail_service import PasswordResetMailService
+from services.email_service import EmailService
 from services.price_alerts import evaluate_price_alert
 
 
@@ -221,7 +221,7 @@ def test_email_failure_preserves_snapshot_and_refresh_success(monkeypatch):
     monitor = _configure(repository, _monitor(repository, user), direction="drop")
     _snapshot(repository, monitor, 100, datetime(2026, 7, 1, tzinfo=timezone.utc))
     CapturingMail.fail = True
-    monkeypatch.setattr(precision_app, "PasswordResetMailService", CapturingMail)
+    monkeypatch.setattr(precision_app, "EmailService", CapturingMail)
     monkeypatch.setattr(precision_app, "_offline_monitor_records", lambda _monitor: ([
         {"title": "Alert Monitor", "platform": "eBay", "price": 90, "shipping": 0, "condition": "New"},
         {"title": "Alert Monitor", "platform": "eBay", "price": 90, "shipping": 0, "condition": "New"},
@@ -239,14 +239,14 @@ def test_test_email_is_labelled_and_creates_no_snapshot_event_or_provider_call(m
     def send(_self, recipient, monitor_name, monitor_url):
         captured.update(recipient=recipient, monitor_name=monitor_name, monitor_url=monitor_url)
         return "mocked"
-    monkeypatch.setattr(PasswordResetMailService, "send_price_alert_test", send)
+    monkeypatch.setattr(EmailService, "send_price_alert_test", send)
     monkeypatch.setattr(precision_app, "_retrieve_monitor_provider_records", lambda *_: (_ for _ in ()).throw(AssertionError("provider called")))
     response = client.post(f"/watchlist/{monitor['_id']}/price-alert/test", follow_redirects=True)
     assert response.status_code == 200 and captured["recipient"] == user["email"]
     assert "No marketplace threshold was triggered" in response.get_data(as_text=True)
     assert repository.count_price_snapshots(monitor["_id"]) == 0
     assert repository.list_price_alert_events(user["_id"], monitor["monitor_id"]) == []
-    text, html = PasswordResetMailService(mode="console")._price_alert_bodies("Monitor", "either", 5, None, None, None, datetime.now(timezone.utc), "https://app.test", True)
+    text, html = EmailService(enabled=False)._price_alert_bodies("Monitor", "either", 5, None, None, None, datetime.now(timezone.utc), "https://app.test", True)
     assert "This is a test notification. No marketplace threshold was triggered." in text + html
     assert text.count("This is a test notification. No marketplace threshold was triggered.") == 1
     assert html.count("This is a test notification. No marketplace threshold was triggered.") == 1
@@ -267,7 +267,7 @@ def test_email_content_ui_and_history_are_scoped(monkeypatch):
     _snapshot(repository, monitor, 100, base)
     current = _snapshot(repository, monitor, 90, base + timedelta(hours=1))
     _evaluate(repository, monitor, current, base + timedelta(hours=1))
-    text, html = PasswordResetMailService(mode="console")._price_alert_bodies("Monitor", "drop", 5, 100, 90, -10, base, "https://app.test", False)
+    text, html = EmailService(enabled=False)._price_alert_bodies("Monitor", "drop", 5, 100, 90, -10, base, "https://app.test", False)
     content = text + html
     assert "Previous comparable price" in content and "Current comparable price" in content and "-10.00%" in content
     assert "Price decrease detected" in text and "Price decrease detected" in html

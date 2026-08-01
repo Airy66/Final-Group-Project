@@ -3,6 +3,8 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from services.email_service import EmailConfigurationError, EmailDeliveryError
+
 
 VALID_DIRECTIONS = {"drop", "increase", "either"}
 
@@ -93,6 +95,10 @@ def _record_not_evaluated(repository, monitor, now, reason, audit):
 
 
 def normalize_mail_error(exc):
+    if isinstance(exc, EmailConfigurationError):
+        return "mail_configuration_error"
+    if isinstance(exc, EmailDeliveryError):
+        return exc.code
     if isinstance(exc, (TimeoutError, ConnectionError)):
         return "delivery_timeout"
     if isinstance(exc, (ValueError, RuntimeError)):
@@ -217,14 +223,14 @@ def evaluate_price_alert(repository, monitor, snapshot, *, mail_service_factory,
 
     user = repository.get_user_by_id(monitor["user_id"])
     try:
-        delivery = mail_service_factory().send_price_alert(
+        mail_service_factory().send_price_alert(
             user.get("email"), monitor.get("product_label") or monitor.get("keyword") or "Watchlist Monitor",
             direction, float(threshold), float(previous_price), float(current_price), float(change),
             snapshot.get("collected_at") or snapshot.get("created_at"), monitor_url,
         )
         repository.update_price_alert_event(event_id, {"email_status": "sent", "event_status": "email_sent"})
         repository.update_watchlist_item(monitor["_id"], {"alert_last_email_status": "sent"}, user_id=monitor["user_id"])
-        _audit(audit, "alert_email_sent", {"monitor_id": str(monitor["_id"]), "event_id": event_id, "delivery_mode": delivery})
+        _audit(audit, "alert_email_sent", {"monitor_id": str(monitor["_id"]), "event_id": event_id, "mail_provider": "brevo_api"})
         return {"status": "email_sent", "event_id": event_id, "change_percent": float(change)}
     except Exception as exc:
         code = normalize_mail_error(exc)

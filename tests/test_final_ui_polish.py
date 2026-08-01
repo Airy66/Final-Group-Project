@@ -2,7 +2,7 @@ from pathlib import Path
 
 import precision_app
 from services.database import MongoRepository
-from services.mail_service import PasswordResetMailService
+from services.email_service import EmailService
 from werkzeug.security import generate_password_hash
 
 
@@ -222,7 +222,7 @@ def test_watchlist_status_cards_editor_and_action_hierarchy():
 
 
 def test_unified_email_templates_keep_plain_text_and_persisted_plan_content():
-    service = PasswordResetMailService(mode="console")
+    service = EmailService(enabled=False)
     reset_text = service._text_body("https://app.test/reset", 30)
     reset_html = service._html_body("https://app.test/reset", 30)
     welcome_text = service._welcome_text_body("Person", "https://app.test/login", "professional")

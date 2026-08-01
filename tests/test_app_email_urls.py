@@ -10,7 +10,7 @@ from services.app_urls import (
     canonical_app_base_url,
     normalize_app_base_url,
 )
-from services.mail_service import PasswordResetMailService
+from services.email_service import EmailService
 from services.runtime_config import ProductionConfigurationError, validate_production_configuration
 
 
@@ -18,7 +18,7 @@ PUBLIC_ENV = {
     "APP_ENV": "production",
     "APP_BASE_URL": "https://precision-curator.onrender.com/app/",
     "FLASK_SECRET_KEY": "x" * 40,
-    "ALLOW_MEMORY_FALLBACK": "false",
+    "DEMO_MODE": "false",
 }
 
 
@@ -79,7 +79,7 @@ def test_canonical_email_urls_never_use_request_host(monkeypatch):
 def test_production_email_bodies_use_public_urls_without_localhost(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("APP_BASE_URL", "https://app.example.com/")
-    service = PasswordResetMailService(mode="console")
+    service = EmailService(enabled=False)
     reset_url = precision_app.password_reset_url("token-abc")
     login_url = precision_app.registration_login_url()
     monitor_url = precision_app.price_alert_monitor_url("monitor-123")
@@ -99,7 +99,7 @@ def test_production_email_bodies_use_public_urls_without_localhost(monkeypatch):
 
 
 def test_email_html_url_display_policy_and_test_alert_copy():
-    service = PasswordResetMailService(mode="console")
+    service = EmailService(enabled=False)
     reset_url = "https://app.example.com/reset-password/token-abc"
     login_url = "https://app.example.com/login"
     monitor_url = "https://app.example.com/watchlist?item_id=monitor-123"
@@ -126,13 +126,28 @@ def test_email_html_url_display_policy_and_test_alert_copy():
     assert "/reset-password/" not in test_text + test_html
 
 
-def test_console_reset_delivery_does_not_log_token_or_complete_url(capsys, caplog):
+def test_brevo_reset_delivery_does_not_log_token_or_complete_url(monkeypatch, caplog):
     token = "secret-reset-token"
     url = f"https://app.example.com/reset-password/{token}"
     caplog.set_level(logging.INFO)
 
-    PasswordResetMailService(mode="console").send_password_reset("user@example.com", url, 30)
-    output = capsys.readouterr().out
+    api_key = "secret-brevo-api-key"
+    monkeypatch.setenv("MAIL_ENABLED", "true")
+    monkeypatch.setenv("MAIL_PROVIDER", "brevo_api")
+    monkeypatch.setenv("BREVO_API_KEY", api_key)
+    monkeypatch.setenv("BREVO_SENDER_EMAIL", "sender@example.com")
+    monkeypatch.setenv("BREVO_SENDER_NAME", "Precision Curator")
 
-    assert token not in output + caplog.text
-    assert url not in output + caplog.text
+    class Response:
+        status_code = 201
+
+        @staticmethod
+        def json():
+            return {"messageId": "message-123"}
+
+    monkeypatch.setattr("services.email_service.requests.post", lambda *_args, **_kwargs: Response())
+    EmailService().send_password_reset("user@example.com", url, 30)
+
+    assert token not in caplog.text
+    assert url not in caplog.text
+    assert api_key not in caplog.text

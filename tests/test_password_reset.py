@@ -8,24 +8,28 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import precision_app
 from services.database import MongoRepository, utcnow
-from services import mail_service
+from services import email_service
 
 
 GENERIC_MESSAGE = "If an account exists for this email, a password reset link has been sent."
 CAPTURED_RESET_EMAILS = []
-REAL_SEND_PASSWORD_RESET = mail_service.PasswordResetMailService.send_password_reset
+REAL_SEND_PASSWORD_RESET = email_service.EmailService.send_password_reset
 
 
 def _client(monkeypatch, username="Reset User", email="reset@example.com", password="OldPassword1", capture_email=True):
-    monkeypatch.setenv("EMAIL_MODE", "console")
+    monkeypatch.setenv("MAIL_PROVIDER", "brevo_api")
+    monkeypatch.setenv("MAIL_ENABLED", "true")
+    monkeypatch.setenv("BREVO_API_KEY", "test-brevo-api-key")
+    monkeypatch.setenv("BREVO_SENDER_EMAIL", "sender@example.test")
+    monkeypatch.setenv("BREVO_SENDER_NAME", "Precision Curator")
     monkeypatch.setenv("APP_BASE_URL", "http://127.0.0.1:5000")
     monkeypatch.setenv("PASSWORD_RESET_TOKEN_TTL_MINUTES", "30")
     CAPTURED_RESET_EMAILS.clear()
     if capture_email:
         def capture(_service, recipient, reset_url, ttl_minutes):
             CAPTURED_RESET_EMAILS.append((recipient, reset_url, ttl_minutes))
-            return "printed"
-        monkeypatch.setattr(mail_service.PasswordResetMailService, "send_password_reset", capture)
+            return "message-id"
+        monkeypatch.setattr(email_service.EmailService, "send_password_reset", capture)
     precision_app.app.config.update(TESTING=True, SECRET_KEY="password-reset-tests")
     precision_app.repository = MongoRepository(uri="", database_name="password_reset_tests")
     user = precision_app.repository.create_user(username, email, generate_password_hash(password), "consumer")
@@ -82,7 +86,6 @@ def test_known_and_unknown_email_share_generic_response_and_unknown_creates_noth
 def test_development_mail_uses_base_url_and_only_hash_is_persisted(monkeypatch, capsys):
     client, user = _client(monkeypatch)
     monkeypatch.setenv("APP_BASE_URL", "http://local.test/base/")
-    monkeypatch.setattr(mail_service.smtplib, "SMTP", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("SMTP must not be called")))
     response, url, token, output = _request_reset(client, user["email"], capsys)
     stored = precision_app.repository.list_password_reset_tokens(user["_id"])[0]
     assert response.status_code == 200
@@ -183,108 +186,35 @@ def test_security_logs_never_contain_token_or_password(monkeypatch, capsys):
     logs = json.dumps(precision_app.repository.list_audit_logs(user["_id"], limit=50), default=str)
     assert token not in logs and password not in logs
     events = {row.get("event_type") for row in precision_app.repository.list_audit_logs(user["_id"], limit=50)}
-    assert {"password_reset_requested", "password_reset_email_printed", "password_reset_completed"}.issubset(events)
+    assert {"password_reset_requested", "password_reset_email_delivered", "password_reset_completed"}.issubset(events)
     access_record = logging.LogRecord("werkzeug", logging.INFO, __file__, 1, f'GET /reset-password/{token} HTTP/1.1', (), None)
     precision_app._ResetTokenLogFilter().filter(access_record)
     assert token not in access_record.getMessage()
     assert "/reset-password/[redacted]" in access_record.getMessage()
 
 
-class _FakeSocket:
-    def __init__(self, calls):
-        self.calls = calls
-
-    def settimeout(self, value):
-        self.calls.append(("socket_timeout", value))
-
-
-class _FakeSMTP:
-    calls = []
-    message = None
-
-    def __init__(self, host, port, timeout):
-        self.calls.append(("connect", host, port, timeout))
-        self.sock = _FakeSocket(self.calls)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_args):
-        return False
-
-    def starttls(self):
-        self.calls.append(("starttls",))
-
-    def login(self, username, password):
-        self.calls.append(("login", username, password))
-
-    def send_message(self, message):
-        type(self).message = message
-        self.calls.append(("send_message",))
-
-
-def test_smtp_uses_configured_timeout_and_multipart_text_html(monkeypatch):
-    _FakeSMTP.calls = []
-    _FakeSMTP.message = None
-    monkeypatch.setenv("EMAIL_MODE", "smtp")
-    monkeypatch.setenv("MAIL_HOST", "smtp.example.test")
-    monkeypatch.setenv("MAIL_PORT", "587")
-    monkeypatch.setenv("MAIL_USERNAME", "mailer")
-    monkeypatch.setenv("MAIL_PASSWORD", "smtp-secret")
-    monkeypatch.setenv("MAIL_FROM_ADDRESS", "support@example.test")
-    monkeypatch.setenv("MAIL_USE_TLS", "true")
-    monkeypatch.setenv("MAIL_USE_SSL", "false")
-    monkeypatch.setenv("MAIL_TIMEOUT_SECONDS", "9")
-    monkeypatch.setattr(mail_service.smtplib, "SMTP", _FakeSMTP)
-    monkeypatch.setattr(mail_service.smtplib, "SMTP_SSL", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("SSL should not be used")))
-    result = mail_service.PasswordResetMailService().send_password_reset("user@example.test", "https://app.example.test/reset-password/test-token", 30)
-    assert result == "queued"
-    assert ("connect", "smtp.example.test", 587, 9.0) in _FakeSMTP.calls
-    assert ("socket_timeout", 9.0) in _FakeSMTP.calls and ("starttls",) in _FakeSMTP.calls
-    plain = _FakeSMTP.message.get_body(preferencelist=("plain",)).get_content()
-    html = _FakeSMTP.message.get_body(preferencelist=("html",)).get_content()
-    assert "https://app.example.test/reset-password/test-token" in plain
-    assert "Reset your password" in html and "Reset password" in html
-    assert "expires in 30 minutes" in html and "https://app.example.test/reset-password/test-token" in html
-    assert "tracking" not in html.lower() and "<img" not in html.lower()
-
-
-def test_smtps_uses_configured_timeout_without_starttls(monkeypatch):
-    _FakeSMTP.calls = []
-    monkeypatch.setenv("EMAIL_MODE", "smtp")
-    monkeypatch.setenv("MAIL_HOST", "smtp.example.test")
-    monkeypatch.setenv("MAIL_PORT", "465")
-    monkeypatch.setenv("MAIL_FROM_ADDRESS", "support@example.test")
-    monkeypatch.setenv("MAIL_USE_SSL", "true")
-    monkeypatch.setenv("MAIL_USE_TLS", "true")
-    monkeypatch.setenv("MAIL_TIMEOUT_SECONDS", "11")
-    monkeypatch.setattr(mail_service.smtplib, "SMTP_SSL", _FakeSMTP)
-    monkeypatch.setattr(mail_service.smtplib, "SMTP", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("STARTTLS SMTP should not be used")))
-    mail_service.PasswordResetMailService().send_password_reset("user@example.test", "https://app.example.test/reset-password/test-token", 30)
-    assert ("connect", "smtp.example.test", 465, 11.0) in _FakeSMTP.calls
-    assert ("socket_timeout", 11.0) in _FakeSMTP.calls
-    assert ("starttls",) not in _FakeSMTP.calls
-
-
-def test_smtp_timeout_is_generic_safe_and_revokes_token(monkeypatch):
+def test_brevo_timeout_is_generic_safe_and_revokes_token(monkeypatch, caplog):
     client, user = _client(monkeypatch, capture_email=False)
     raw_token = "fixed-raw-reset-token"
-    smtp_password = "never-log-this-smtp-password"
-    monkeypatch.setenv("EMAIL_MODE", "smtp")
-    monkeypatch.setenv("MAIL_HOST", "smtp.example.test")
-    monkeypatch.setenv("MAIL_FROM_ADDRESS", "support@example.test")
-    monkeypatch.setenv("MAIL_PASSWORD", smtp_password)
-    monkeypatch.setenv("MAIL_TIMEOUT_SECONDS", "3")
+    api_key = "never-log-this-brevo-key"
+    monkeypatch.setenv("BREVO_API_KEY", api_key)
     monkeypatch.setattr(precision_app.secrets, "token_urlsafe", lambda _size: raw_token)
-    monkeypatch.setattr(mail_service.PasswordResetMailService, "send_password_reset", REAL_SEND_PASSWORD_RESET)
-    monkeypatch.setattr(mail_service.smtplib, "SMTP", lambda *_args, **_kwargs: (_ for _ in ()).throw(TimeoutError("SMTP timed out with technical details")))
+    monkeypatch.setattr(email_service.EmailService, "send_password_reset", REAL_SEND_PASSWORD_RESET)
+    monkeypatch.setattr(
+        email_service.requests,
+        "post",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            email_service.requests.Timeout(f"Brevo timed out {api_key} {raw_token}")
+        ),
+    )
     response = client.post("/forgot-password", data={"email": user["email"]})
     unknown = client.post("/forgot-password", data={"email": "unknown@example.test"})
     assert response.status_code == 200 and unknown.status_code == 200
     assert GENERIC_MESSAGE in response.get_data(as_text=True) and GENERIC_MESSAGE in unknown.get_data(as_text=True)
-    assert "SMTP" not in response.get_data(as_text=True) and "timed out" not in response.get_data(as_text=True)
+    assert "Brevo" not in response.get_data(as_text=True) and "timed out" not in response.get_data(as_text=True)
     token_record = precision_app.repository.list_password_reset_tokens(user["_id"])[0]
     assert token_record["revoked_at"] is not None and token_record["status"] == "revoked"
     logs = json.dumps(precision_app.repository.list_audit_logs(user["_id"], limit=20), default=str)
     assert "password_reset_mail_failed" in logs
-    assert raw_token not in logs and smtp_password not in logs and "technical details" not in logs
+    assert raw_token not in logs and api_key not in logs
+    assert raw_token not in caplog.text and api_key not in caplog.text

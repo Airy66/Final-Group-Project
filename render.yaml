@@ -50,6 +50,16 @@ services:
         value: gemini-3.1-flash-lite
       - key: GEMINI_TIMEOUT_MS
         value: "45000"
+      - key: MAIL_PROVIDER
+        value: brevo_api
+      - key: MAIL_ENABLED
+        value: "true"
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: Precision Curator
   - type: cron
     name: precision-curator-daily-monitor-refresh
     runtime: python
@@ -91,3 +101,13 @@ services:
         sync: false
       - key: SERPAPI_MARKETPLACE_ENABLED
         value: "true"
+      - key: MAIL_PROVIDER
+        value: brevo_api
+      - key: MAIL_ENABLED
+        value: "true"
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: Precision Curator
