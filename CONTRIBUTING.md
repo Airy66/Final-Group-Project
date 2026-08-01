@@ -1,6 +1,6 @@
 # Contributing to Precision Curator
 
-Thank you for helping improve Precision Curator. The project is in release preparation, so contributions should be focused, testable, secure, and consistent with the existing product workflow.
+Thank you for helping improve Precision Curator. The project is release-bound for a public academic SaaS demonstration, so contributions must be focused, testable, secure, and compatible with the Render deployment workflow.
 
 By contributing, you agree that your contribution may be distributed under the repository's [MIT License](LICENSE).
 
@@ -15,7 +15,7 @@ By contributing, you agree that your contribution may be distributed under the r
 - Update documentation whenever configuration, behaviour, deployment, or data semantics change.
 - Never describe a check as passing unless it was actually run.
 
-Near release, do not introduce a new framework, duplicate application entry point, destructive migration, background system, or broad architecture rewrite without a demonstrated need and explicit review.
+Do not introduce a new framework, duplicate application entry point, destructive migration, background system, or broad architecture rewrite without a demonstrated need, an upgrade path, and explicit review.
 
 ## Branch and review workflow
 
@@ -84,6 +84,20 @@ git status --short
 ```
 
 Run targeted tests first while developing, then the complete offline suite. Investigate failures instead of hiding, skipping, or weakening assertions without a valid behavioural reason.
+
+## Render deployment contract
+
+`precision_app:app` is the only production WSGI entry point. Deployment changes must preserve the Gunicorn command, `/health` endpoint, fail-closed Atlas startup, and public HTTPS URL generation unless the replacement is reviewed and documented.
+
+- Never run schema-destructive work or administrator creation during application import or startup.
+- Keep secrets in Render Environment settings. Values declared with `sync: false` in `render.yaml` must be entered manually when added to an existing Blueprint.
+- Keep `APP_BASE_URL` set to the canonical public origin; do not derive email links from the request Host header.
+- Keep the Web Service and Monitor Cron Job on the same code revision and Atlas database.
+- Treat the Cron Job as optional paid infrastructure. The site must describe Daily Refresh truthfully when it is not provisioned.
+- Scheduled commands must be bounded, idempotent, safe to retry, and exit when complete.
+- Do not write durable application state to Render's ephemeral filesystem.
+
+A release handoff must include the Render deploy result, `/health` result, sanitized startup target, post-restart Atlas persistence check, Brevo transactional status, and any external provider limitation observed during smoke testing.
 
 ## Testing external integrations
 
@@ -207,11 +221,11 @@ Price Alerts evaluate existing valid Snapshots. They must not launch an addition
 
 All welcome, password-reset, test-alert, and price-alert messages must use the shared mail service. Do not create separate transports for each email type.
 
-The deployment uses Brevo Transactional Email over HTTPS. SMTP transports and port settings are not part of the supported configuration.
+The deployment uses Brevo Transactional Email over HTTPS. SMTP transports and port settings are not part of the supported configuration. `BREVO_API_KEY` must contain an API v3 key, not an SMTP key; the Brevo Transactional platform and sender must both be active.
 
 Email changes must keep `services/email_service.py` as the single transport boundary, preserve the existing text/HTML and audit semantics, use a bounded timeout, and keep `APP_BASE_URL` as the only source for public application links. Mock Brevo HTTP calls in automated tests. Never log the API key, provider response body, raw reset token, or complete reset URL.
 
-Production emails must never contain localhost, passwords, API keys, database URIs, Session tokens, or raw provider payloads.
+Production emails must never contain localhost, passwords, API keys, database URIs, Session tokens, or raw provider payloads. Release smoke tests should check Brevo's Transactional Logs for accepted and delivered events and must not paste reset links or provider credentials into issues or review notes.
 
 ## UI and accessibility
 
@@ -255,5 +269,6 @@ For every release-bound change:
 5. run compilation and diff checks;
 6. document environment and deployment impact;
 7. preserve a recoverable stable commit.
+8. deploy to Render and run the post-deploy smoke checks when the change affects runtime behaviour or configuration.
 
 External marketplace, AI, email, database, and hosting services remain third-party dependencies. Application safeguards reduce risk but do not eliminate service failure or guarantee every security property.
