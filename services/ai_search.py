@@ -183,17 +183,37 @@ def decision_support_summary(decision_context):
     if not context.get("qualified"):
         mixed_configuration = bool(context.get("mixed_configuration"))
         mixed_condition = bool(context.get("mixed_condition"))
-        if mixed_configuration and mixed_condition:
-            next_step = "Choose one product configuration and one condition, then explain the comparison again."
+        platform_counts = {
+            str(name): int(count or 0)
+            for name, count in (context.get("platform_counts") or {}).items()
+            if str(name).strip()
+        }
+        limited_platforms = [name for name, count in platform_counts.items() if count < 2]
+        if platform_counts and (len(platform_counts) < 2 or limited_platforms):
+            scope = ", ".join(f"{name}: {count}" for name, count in sorted(platform_counts.items())) or "fewer than two represented marketplaces"
+            distortion = f"The current marketplace sample is not balanced ({scope}), so platform-level pricing cannot be qualified."
+            actions = []
+            if limited_platforms:
+                actions.append(f"collect another comparable record for {', '.join(sorted(limited_platforms))}")
+            else:
+                actions.append("include comparable records from a second marketplace")
+            if mixed_configuration:
+                actions.append("choose one product configuration")
+            if mixed_condition:
+                actions.append("choose one product condition")
+            action_text = ", then ".join(actions)
+            next_step = f"{action_text[:1].upper()}{action_text[1:]}, then regenerate the interpretation."
+        elif mixed_configuration and mixed_condition:
+            next_step = "Choose one product configuration and one condition, then regenerate the interpretation."
             distortion = "Differences in variant and condition may be driving the visible spread more than marketplace pricing."
         elif mixed_configuration:
-            next_step = "Choose one product configuration, then explain the comparison again."
+            next_step = "Choose one product configuration, then regenerate the interpretation."
             distortion = "Differences between product variants may be driving the visible spread more than marketplace pricing."
         elif mixed_condition:
-            next_step = "Choose one product condition, then explain the comparison again."
+            next_step = "Choose one product condition, then regenerate the interpretation."
             distortion = "Differences in product condition may be driving the visible spread more than marketplace pricing."
         else:
-            next_step = "Include comparable records from at least two marketplaces, then explain the comparison again."
+            next_step = "Include comparable records from at least two marketplaces, then regenerate the interpretation."
             distortion = "The current scope does not support a cross-marketplace conclusion."
         return (
             "Decision readiness\nNot ready for a marketplace-level conclusion.\n\n"

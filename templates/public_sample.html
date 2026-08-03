@@ -1,220 +1,222 @@
-﻿{% extends "product_base.html" %}
-{% block title %}Sample Analytics{% endblock %}
+{% extends "product_base.html" %}
+{% block title %}Sample Market Analysis · Precision Curator{% endblock %}
 {% block public_content %}
 <section class="border-b border-slate-200 bg-[#f5f7fa]">
   <div class="mx-auto max-w-7xl px-5 py-14 lg:py-16">
-    <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+    <div class="grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)] lg:items-center">
       <div class="max-w-3xl">
-        <p class="text-xs font-bold uppercase tracking-[0.25em] text-blue-700">Public sample</p>
-        <h1 class="mt-2 font-display text-4xl font-extrabold text-slate-950 sm:text-5xl">Sample analytics for market comparison</h1>
-        <p class="mt-4 max-w-2xl text-lg leading-8 text-slate-600">A public preview of how Precision Curator organizes price evidence, platform share, and comparison signals before you enter the workspace.</p>
-        <div class="mt-5 flex flex-wrap gap-3">
-          <a href="{{ url_for('login') }}" class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700">Enter workspace</a>
-          <a href="{{ url_for('home') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Back to homepage</a>
+        <p class="text-xs font-bold uppercase tracking-[0.22em] text-blue-700">Public analysis preview</p>
+        <h1 class="mt-2 font-display text-4xl font-extrabold text-slate-950 sm:text-5xl">A market comparison you can explain.</h1>
+        <p class="mt-4 max-w-2xl text-lg leading-8 text-slate-600">See how comparable marketplace records become a scoped conclusion, with the evidence and limitations kept visible.</p>
+        <div class="mt-6 flex flex-wrap gap-3">
+          <a href="{{ url_for('login') }}" class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700">Analyze live marketplace data</a>
+          <a href="{{ url_for('home') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Return to homepage</a>
         </div>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div class="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">Sample keyword</p>
-            <p class="mt-2 text-lg font-bold text-slate-950">{{ demo_keyword }}</p>
-          </div>
-          <div class="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-700">Coverage summary</p>
-            <p class="mt-2 text-lg font-bold text-slate-950">{{ coverage_note }}</p>
-          </div>
-        </div>
-        <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-700">
-          This public sample uses demonstration records only. It mirrors the dashboard structure without requiring a login.
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="border-t border-slate-200 bg-white">
-  <div class="mx-auto max-w-7xl px-5 py-14">
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-      <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Total records</p>
-        <p class="mt-3 text-3xl font-extrabold text-slate-950">{{ summary.total_records }}</p>
-        <p class="mt-2 text-sm text-slate-500">Rows included in the sample set.</p>
-      </article>
-      <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">Platforms</p>
-        <p class="mt-3 text-3xl font-extrabold text-slate-950">{{ summary.platform_count }}</p>
-        <p class="mt-2 text-sm text-slate-500">eBay, Walmart, and Demo Source.</p>
-      </article>
-      <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">Average price</p>
-        <p class="mt-3 text-3xl font-extrabold text-slate-950">${{ '%.2f'|format(summary.average_price) }}</p>
-        <p class="mt-2 text-sm text-slate-500">Across all displayed sample records.</p>
-      </article>
-      <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700">Lowest price</p>
-        <p class="mt-3 text-3xl font-extrabold text-slate-950">${{ '%.2f'|format(summary.lowest_price) }}</p>
-        <p class="mt-2 text-sm text-slate-500">Lowest observed offer in the sample set.</p>
-      </article>
-      <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Lowest observed platform</p>
-        <p class="mt-3 text-3xl font-extrabold text-slate-950">{{ summary.best_platform }}</p>
-        <p class="mt-2 text-sm text-slate-500">Computed from the sample rows.</p>
-      </article>
-    </div>
-  </div>
-</section>
-
-<section class="bg-slate-50">
-  <div class="mx-auto max-w-7xl px-5 py-14">
-    <div class="mb-6 flex items-end justify-between gap-4">
-      <div>
-        <p class="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">Visual preview</p>
-        <h2 class="mt-2 font-display text-3xl font-bold text-slate-950">The same analytics language, in a public sample</h2>
-      </div>
-    </div>
-    <div class="grid gap-6 xl:grid-cols-3">
-      <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <aside class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm" aria-label="Sample scope">
         <div class="flex items-center justify-between gap-4">
-          <div>
-            <p class="text-sm font-semibold text-slate-900">Platform average comparison</p>
-            <p class="mt-1 text-sm text-slate-500">Average normalized price by platform.</p>
-          </div>
-          <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Comparison</span>
+          <p class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Comparison scope</p>
+          <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Comparison ready</span>
         </div>
-        <div class="mt-6 space-y-4">
-          {% for row in platform_stats %}
-          <div>
-            <div class="mb-2 flex items-center justify-between text-sm">
-              <span class="font-semibold text-slate-700">{{ row.platform }}</span>
-              <span class="text-slate-500">${{ '%.2f'|format(row.average_price) }}</span>
-            </div>
-            <div class="h-3 overflow-hidden rounded-full bg-slate-100">
-              <div class="h-full rounded-full {% if row.platform == 'eBay' %}bg-blue-500{% elif row.platform == 'Walmart' %}bg-cyan-500{% else %}bg-violet-500{% endif %}" style="width: {{ ((row.average_price / summary.highest_price) * 100) | round(0) }}%"></div>
-            </div>
+        <h2 class="mt-4 text-2xl font-bold text-slate-950">{{ demo_keyword }}</h2>
+        <div class="mt-5 grid grid-cols-2 gap-3 text-sm">
+          <div class="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Condition</p>
+            <p class="mt-1 font-bold text-slate-900">New</p>
           </div>
-          {% endfor %}
-        </div>
-      </article>
-      <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="flex items-center justify-between gap-4">
-          <div>
-            <p class="text-sm font-semibold text-slate-900">Platform record share</p>
-            <p class="mt-1 text-sm text-slate-500">Share of sample records by platform.</p>
-          </div>
-          <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">Coverage</span>
-        </div>
-        <div class="mt-6 space-y-4">
-          {% for row in platform_stats %}
-          <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-            <div class="flex items-center justify-between text-sm font-semibold text-slate-700">
-              <span>{{ row.platform }}</span>
-              <span>{{ row.share }}%</span>
-            </div>
-            <div class="mt-3 h-4 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
-              <div class="h-full rounded-full {% if row.platform == 'eBay' %}bg-blue-400{% elif row.platform == 'Walmart' %}bg-cyan-400{% else %}bg-violet-400{% endif %}" style="width: {{ row.share }}%"></div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </article>
-      <article class="rounded-3xl border border-slate-200 bg-gradient-to-br from-indigo-50 via-white to-blue-50 p-6 shadow-sm">
-        <div class="flex items-center justify-between gap-4">
-          <div>
-            <p class="text-sm font-semibold text-slate-900">Price range preview</p>
-            <p class="mt-1 text-sm text-slate-500">Low, average, and high values in one view.</p>
-          </div>
-          <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Range</span>
-        </div>
-        <div class="mt-8 rounded-3xl bg-white/70 p-5 ring-1 ring-slate-200">
-          <div class="relative h-3 rounded-full bg-slate-100">
-            <div class="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-blue-500 via-cyan-500 to-violet-500" style="width: 100%"></div>
-            <div class="absolute -top-2 left-0 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white shadow" style="left: 0%">L</div>
-            <div class="absolute -top-2 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white shadow" style="left: {{ ((summary.average_price - summary.lowest_price) / price_span * 100) | round(0) }}%">A</div>
-            <div class="absolute -top-2 left-full flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full bg-violet-600 text-[11px] font-bold text-white shadow" style="left: 100%">H</div>
-          </div>
-          <div class="mt-5 flex items-center justify-between text-sm text-slate-600">
-            <span>Low ${{ '%.2f'|format(summary.lowest_price) }}</span>
-            <span>Avg ${{ '%.2f'|format(summary.average_price) }}</span>
-            <span>High ${{ '%.2f'|format(summary.highest_price) }}</span>
+          <div class="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Coverage</p>
+            <p class="mt-1 font-bold text-slate-900">{{ coverage_note }}</p>
           </div>
         </div>
-      </article>
+        <p class="mt-4 border-t border-slate-200 pt-4 text-sm leading-6 text-slate-600"><strong class="text-slate-800">Illustrative dataset.</strong> These are not live marketplace listings and should not be used for a purchase decision.</p>
+      </aside>
     </div>
   </div>
 </section>
 
-<section class="bg-white">
-  <div class="mx-auto max-w-7xl px-5 py-14">
-    <div class="grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
-      <article class="rounded-3xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-7 shadow-sm">
-        <p class="text-xs font-bold uppercase tracking-[0.25em] text-blue-700">Sample takeaway</p>
-        <h2 class="mt-2 font-display text-2xl font-bold text-slate-950">A concise market note</h2>
-        <p class="mt-4 text-base leading-8 text-slate-600">{{ sample_insight }}</p>
-      </article>
-      <article class="rounded-3xl border border-slate-200 bg-slate-50 p-7 shadow-sm">
-        <p class="text-xs font-bold uppercase tracking-[0.25em] text-slate-500">Workflow preview</p>
-        <h2 class="mt-2 font-display text-2xl font-bold text-slate-950">How the sample analysis flows</h2>
-        <div class="mt-6 grid gap-4 sm:grid-cols-2">
-          {% for step in workflow_steps %}
-          <div class="rounded-2xl border border-white bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-            <div class="flex items-center gap-3">
-              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">{{ loop.index }}</div>
-              <h3 class="text-base font-bold text-slate-950">{{ step.title }}</h3>
-            </div>
-            <p class="mt-3 text-sm leading-6 text-slate-600">{{ step.description }}</p>
-          </div>
-          {% endfor %}
-        </div>
-      </article>
-    </div>
-  </div>
-</section>
-
-<section class="bg-slate-50">
-  <div class="mx-auto max-w-7xl px-5 py-14">
-    <div class="mb-6 flex items-end justify-between gap-4">
-      <div>
-        <p class="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600">Sample records</p>
-        <h2 class="mt-2 font-display text-3xl font-bold text-slate-950">Representative records in the public preview</h2>
+<main>
+  <section class="bg-white">
+    <div class="mx-auto max-w-7xl px-5 py-12">
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {% for label,value,detail,accent in [
+          ('Comparable records', summary.total_records, 'Same product configuration and condition.', 'border-t-blue-500'),
+          ('Marketplaces covered', summary.platform_count, 'Balanced across eBay and Walmart.', 'border-t-indigo-500'),
+          ('Overall median price', 'USD %.2f'|format(summary.median_price), 'The midpoint of all sample prices.', 'border-t-cyan-500'),
+          ('Observed price range', 'USD %.2f'|format(summary.price_range), 'From USD %.2f to USD %.2f.'|format(summary.lowest_price, summary.highest_price), 'border-t-violet-500')
+        ] %}
+        <article class="rounded-xl border border-slate-200 border-t-2 {{ accent }} bg-white p-5 shadow-sm">
+          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{{ label }}</p>
+          <p class="mt-3 text-2xl font-extrabold text-slate-950">{{ value }}</p>
+          <p class="mt-2 text-sm leading-6 text-slate-500">{{ detail }}</p>
+        </article>
+        {% endfor %}
       </div>
     </div>
-    <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-        <thead class="bg-slate-100">
-          <tr class="text-slate-600">
-            <th class="px-5 py-4 font-semibold">Platform</th>
-            <th class="px-5 py-4 font-semibold">Product title</th>
-            <th class="px-5 py-4 font-semibold">Price</th>
-            <th class="px-5 py-4 font-semibold">Condition</th>
-            <th class="px-5 py-4 font-semibold">Source type</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          {% for item in items[:5] %}
-          <tr class="transition hover:bg-indigo-50/40">
-            <td class="px-5 py-4 font-semibold text-slate-900">{{ item.platform }}</td>
-            <td class="px-5 py-4 text-slate-700">{{ item.title }}</td>
-            <td class="px-5 py-4 text-slate-700">{{ item.total_currency }} {{ '%.2f'|format(item.normalized_price) }}</td>
-            <td class="px-5 py-4 text-slate-700">{{ item.condition or '—' }}</td>
-            <td class="px-5 py-4"><span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{{ item.source_type or 'Sample source' }}</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
+  </section>
 
-<section class="bg-gradient-to-br from-indigo-600 to-blue-700">
+  <section class="border-y border-slate-200 bg-slate-50">
+    <div class="mx-auto max-w-7xl px-5 py-12">
+      <div class="rounded-xl border border-blue-200 bg-white shadow-sm">
+        <div class="border-b border-blue-100 bg-blue-50/70 px-6 py-4">
+          <p class="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">Decision summary</p>
+          <h2 class="mt-1 text-2xl font-bold text-slate-950">{{ summary.best_platform }} has the lower median price in this sample.</h2>
+        </div>
+        <div class="grid divide-y divide-slate-200 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
+          <div class="p-6">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Key finding</p>
+            <p class="mt-3 leading-7 text-slate-700">Its median is <strong class="text-slate-950">USD {{ '%.2f'|format(summary.best_platform_median) }}</strong>, which is USD {{ '%.2f'|format(summary.median_gap) }} below the other marketplace.</p>
+          </div>
+          <div class="p-6">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Why this measure</p>
+            <p class="mt-3 leading-7 text-slate-700">Platform medians reduce the influence of one unusually low or high listing.</p>
+          </div>
+          <div class="p-6">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Review before acting</p>
+            <p class="mt-3 leading-7 text-slate-700">Confirm seller, shipping, availability, and listing details before choosing an offer.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="bg-white">
+    <div class="mx-auto max-w-7xl px-5 py-14">
+      <div class="mb-7">
+        <p class="text-xs font-bold uppercase tracking-[0.22em] text-indigo-600">Evidence at a glance</p>
+        <h2 class="mt-2 font-display text-3xl font-bold text-slate-950">Three views, three different questions.</h2>
+        <p class="mt-2 max-w-2xl text-base leading-7 text-slate-600">Compare typical price levels, inspect the spread, and check whether marketplace coverage is balanced.</p>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+        <article class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">Platform comparison</p>
+              <h3 class="mt-1 text-xl font-bold text-slate-950">Median price by marketplace</h3>
+              <p class="mt-1 text-sm text-slate-500">Lower medians indicate a lower typical listed price in this sample.</p>
+            </div>
+            <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Median</span>
+          </div>
+          <div class="mt-8 space-y-6">
+            {% for row in platform_stats %}
+            <div>
+              <div class="mb-2 flex items-center justify-between gap-4 text-sm">
+                <span class="font-bold text-slate-800">{{ row.platform }}</span>
+                <span class="font-semibold text-slate-600">USD {{ '%.2f'|format(row.median_price) }}</span>
+              </div>
+              <div class="h-9 overflow-hidden rounded-lg bg-slate-100">
+                <div class="flex h-full items-center rounded-lg px-3 text-xs font-bold text-white {% if row.platform == 'eBay' %}bg-blue-600{% else %}bg-cyan-600{% endif %}" style="width: {{ row.bar_width }}%">{{ row.count }} records</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </article>
+
+        <article class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-indigo-700">Sample balance</p>
+            <h3 class="mt-1 text-xl font-bold text-slate-950">Marketplace coverage</h3>
+            <p class="mt-1 text-sm text-slate-500">Equal coverage makes the comparison easier to interpret.</p>
+          </div>
+          <div class="mt-7 flex items-center gap-6">
+            <div class="relative h-32 w-32 shrink-0 rounded-full" style="background: conic-gradient(#2563eb 0 50%, #0891b2 50% 100%);">
+              <div class="absolute inset-5 grid place-items-center rounded-full bg-white text-center">
+                <span><strong class="block text-2xl text-slate-950">{{ summary.total_records }}</strong><span class="text-xs text-slate-500">records</span></span>
+              </div>
+            </div>
+            <div class="min-w-0 flex-1 space-y-3">
+              {% for row in platform_stats %}
+              <div class="flex items-center justify-between gap-3 text-sm">
+                <span class="flex items-center gap-2 font-semibold text-slate-700"><span class="h-2.5 w-2.5 rounded-full {% if row.platform == 'eBay' %}bg-blue-600{% else %}bg-cyan-600{% endif %}"></span>{{ row.platform }}</span>
+                <span class="text-slate-500">{{ row.count }} · {{ row.share }}%</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          <p class="mt-6 rounded-lg bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Balanced sample: three records per marketplace.</p>
+        </article>
+      </div>
+
+      <article class="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-violet-700">Price distribution</p>
+            <h3 class="mt-1 text-xl font-bold text-slate-950">Where each record sits in the observed range</h3>
+            <p class="mt-1 text-sm text-slate-500">Each dot represents one illustrative listing.</p>
+          </div>
+          <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">USD {{ '%.2f'|format(summary.lowest_price) }}–{{ '%.2f'|format(summary.highest_price) }}</span>
+        </div>
+        <div class="mt-8 space-y-7">
+          {% for platform in ['eBay', 'Walmart'] %}
+          <div class="grid gap-3 sm:grid-cols-[90px_minmax(0,1fr)] sm:items-center">
+            <p class="text-sm font-bold text-slate-700">{{ platform }}</p>
+            <div class="relative h-10">
+              <div class="absolute left-0 right-0 top-1/2 h-px bg-slate-300"></div>
+              {% for item in distribution_items if item.platform == platform %}
+              <span class="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow {% if platform == 'eBay' %}bg-blue-600{% else %}bg-cyan-600{% endif %}" style="left: {{ item.position }}%" title="{{ item.total_currency }} {{ '%.2f'|format(item.normalized_price) }}"></span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="mt-3 flex justify-between border-t border-slate-100 pt-3 text-xs font-semibold text-slate-500">
+          <span>USD {{ '%.2f'|format(summary.lowest_price) }}</span>
+          <span>USD {{ '%.2f'|format(summary.median_price) }} median</span>
+          <span>USD {{ '%.2f'|format(summary.highest_price) }}</span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="border-t border-slate-200 bg-slate-50">
+    <div class="mx-auto max-w-7xl px-5 py-14">
+      <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.22em] text-indigo-600">Underlying evidence</p>
+          <h2 class="mt-2 font-display text-3xl font-bold text-slate-950">Records behind the preview</h2>
+          <p class="mt-2 text-sm text-slate-600">Showing 5 of {{ summary.total_records }} illustrative records. Not live marketplace inventory.</p>
+        </div>
+        <span class="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600">iPhone 14 · 128GB · New</span>
+      </div>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <table class="min-w-[760px] w-full divide-y divide-slate-200 text-left text-sm">
+          <thead class="bg-slate-100">
+            <tr class="text-slate-600">
+              <th class="px-5 py-4 font-semibold">Marketplace</th>
+              <th class="px-5 py-4 font-semibold">Product</th>
+              <th class="px-5 py-4 font-semibold">Price</th>
+              <th class="px-5 py-4 font-semibold">Condition</th>
+              <th class="px-5 py-4 font-semibold">Record type</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for item in items[:5] %}
+            <tr class="transition hover:bg-blue-50/40">
+              <td class="px-5 py-4 font-semibold text-slate-900">{{ item.platform }}</td>
+              <td class="px-5 py-4 text-slate-700">{{ item.title }}</td>
+              <td class="px-5 py-4 font-semibold text-slate-800">{{ item.total_currency }} {{ '%.2f'|format(item.normalized_price) }}</td>
+              <td class="px-5 py-4 text-slate-700">{{ item.condition or '—' }}</td>
+              <td class="px-5 py-4"><span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{{ item.source_type }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<section class="bg-slate-950">
   <div class="mx-auto max-w-7xl px-5 py-12 text-white">
-    <div class="flex flex-col gap-4 rounded-3xl border border-white/20 bg-white/10 p-6 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex flex-col gap-5 rounded-xl border border-slate-700 bg-slate-900 p-7 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p class="text-sm font-semibold text-blue-100">Ready to continue?</p>
-        <h2 class="mt-1 text-2xl font-bold">Open the workspace to run the full analysis flow.</h2>
+        <p class="text-sm font-semibold text-blue-300">Continue with current marketplace records</p>
+        <h2 class="mt-1 text-2xl font-bold">Run a live comparison in your workspace.</h2>
       </div>
       <div class="flex flex-wrap gap-3">
-        <a href="{{ url_for('login') }}" class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-indigo-700 shadow-sm transition hover:bg-blue-50">Enter workspace</a>
-        <a href="{{ url_for('home') }}" class="inline-flex items-center justify-center rounded-2xl border border-white/30 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">Back to homepage</a>
+        <a href="{{ url_for('login') }}" class="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500">Analyze live marketplace data</a>
+        <a href="{{ url_for('home') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-600 px-5 py-3 text-sm font-semibold text-slate-200 transition hover:bg-slate-800">Return to homepage</a>
       </div>
     </div>
   </div>

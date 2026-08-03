@@ -4936,70 +4936,60 @@ def upgrade_membership():
 def sample_analysis():
     """Public, read-only example: no search, comparison, or persistence actions."""
     sample_records = [
-        {"platform": "eBay", "title": "iPhone sample 256GB - eBay listing", "price": 699.00, "normalized_price": 699.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Marketplace"},
-        {"platform": "eBay", "title": "iPhone sample 256GB - renewed listing", "price": 729.00, "normalized_price": 729.00, "currency": "USD", "availability": "In stock", "condition": "Refurbished", "source_type": "Marketplace"},
-        {"platform": "Walmart", "title": "iPhone sample 256GB - store listing", "price": 679.00, "normalized_price": 679.00, "currency": "USD", "availability": "Limited stock", "condition": "New", "source_type": "Marketplace"},
-        {"platform": "Walmart", "title": "iPhone sample 256GB - online listing", "price": 689.00, "normalized_price": 689.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Marketplace"},
-        {"platform": "Demo Source", "title": "iPhone sample 256GB - demo record A", "price": 689.00, "normalized_price": 689.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Demo Source"},
-        {"platform": "Demo Source", "title": "iPhone sample 256GB - demo record B", "price": 709.00, "normalized_price": 709.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Demo Source"},
+        {"platform": "eBay", "title": "Apple iPhone 14 128GB - Midnight", "price": 699.00, "normalized_price": 699.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Illustrative record"},
+        {"platform": "eBay", "title": "Apple iPhone 14 128GB - Blue", "price": 709.00, "normalized_price": 709.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Illustrative record"},
+        {"platform": "eBay", "title": "Apple iPhone 14 128GB - Starlight", "price": 729.00, "normalized_price": 729.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Illustrative record"},
+        {"platform": "Walmart", "title": "Apple iPhone 14 128GB - Midnight", "price": 679.00, "normalized_price": 679.00, "currency": "USD", "availability": "Limited stock", "condition": "New", "source_type": "Illustrative record"},
+        {"platform": "Walmart", "title": "Apple iPhone 14 128GB - Blue", "price": 689.00, "normalized_price": 689.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Illustrative record"},
+        {"platform": "Walmart", "title": "Apple iPhone 14 128GB - Starlight", "price": 699.00, "normalized_price": 699.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Illustrative record"},
     ]
     items = normalize_price_items(sample_records)
-    available_items = [item for item in items if str(item.get("availability", "")).lower() not in {"out of stock", "unavailable", "not available"}]
-    best = min(available_items, key=lambda item: item["normalized_price"]) if available_items else None
     prices = [item["normalized_price"] for item in items]
     platform_stats = []
     by_platform = {}
     for item in items:
-        bucket = by_platform.setdefault(item["platform"], {"count": 0, "total": 0.0, "available": 0})
-        bucket["count"] += 1
-        bucket["total"] += float(item["normalized_price"])
-        if str(item.get("availability", "")).lower() not in {"out of stock", "unavailable", "not available"}:
-            bucket["available"] += 1
+        by_platform.setdefault(item["platform"], []).append(float(item["normalized_price"]))
     total_records = len(items)
-    for platform, values in by_platform.items():
-        average_price = round(values["total"] / values["count"], 2)
-        share = round((values["count"] / total_records) * 100, 1) if total_records else 0
-        platform_stats.append({
-            "platform": platform,
-            "count": values["count"],
-            "average_price": average_price,
-            "share": share,
-            "available": values["available"],
-            "is_best": best and best["platform"] == platform,
-        })
-    platform_stats.sort(key=lambda row: row["average_price"])
     lowest_price = round(min(prices), 2)
     highest_price = round(max(prices), 2)
     price_span = max(highest_price - lowest_price, 1)
+    for platform, platform_prices in by_platform.items():
+        median_price = round(float(pd.Series(platform_prices, dtype="float64").median()), 2)
+        share = round((len(platform_prices) / total_records) * 100, 1) if total_records else 0
+        platform_stats.append({
+            "platform": platform,
+            "count": len(platform_prices),
+            "median_price": median_price,
+            "lowest_price": round(min(platform_prices), 2),
+            "highest_price": round(max(platform_prices), 2),
+            "share": share,
+            "bar_width": round(55 + ((median_price - lowest_price) / price_span) * 40, 1),
+        })
+    platform_stats.sort(key=lambda row: row["median_price"])
+    winner = platform_stats[0]
+    distribution_items = [
+        {**item, "position": round(((float(item["normalized_price"]) - lowest_price) / price_span) * 100, 1)}
+        for item in items
+    ]
     summary = {
         "lowest_price": lowest_price,
-        "average_price": round(sum(prices) / len(prices), 2),
+        "median_price": round(float(pd.Series(prices, dtype="float64").median()), 2),
         "highest_price": highest_price,
-        "best_platform": best["platform"] if best else "Not available",
+        "price_range": round(highest_price - lowest_price, 2),
+        "best_platform": winner["platform"],
+        "best_platform_median": winner["median_price"],
+        "median_gap": round(platform_stats[1]["median_price"] - winner["median_price"], 2),
         "total_records": total_records,
         "platform_count": len(by_platform),
     }
-    workflow_steps = [
-        {"title": "Search", "description": "Collect sample price records from available sources."},
-        {"title": "Compare", "description": "Review price differences and platform coverage."},
-        {"title": "Save Evidence", "description": "Preserve selected records for later review."},
-        {"title": "Analyze", "description": "Summarise price range, average price, and the lowest observed offer."},
-        {"title": "Review Results", "description": "Inspect sample records and workflow output."},
-    ]
-    sample_insight = (
-        f"The sample records show a price range from {summary['lowest_price']:.2f} to {summary['highest_price']:.2f}, "
-        f"with {summary['best_platform']} containing the lowest observed offer among the displayed sample records."
-    )
     return render_template(
         "public_sample.html",
         items=items,
         summary=summary,
         platform_stats=platform_stats,
-        workflow_steps=workflow_steps,
-        sample_insight=sample_insight,
-        demo_keyword="iPhone sample",
-        coverage_note=f"{summary['total_records']} demonstration records across {summary['platform_count']} platforms",
-        price_span=price_span,
+        distribution_items=distribution_items,
+        demo_keyword="iPhone 14 · 128GB",
+        coverage_note=f"{summary['total_records']} comparable records · {summary['platform_count']} marketplaces",
     )
 
 
@@ -8099,11 +8089,13 @@ def ai_discover():
         return jsonify({"error": "Please search sources first before using AI Discover.", "summary_source": None, "record_count": 0}), 400
     query = record.get("keyword", "current market") if record else "current market"
     comparison_summary = calculate_summary(items, category_key=record.get("selected_category_key") or None)
+    platform_counts = dict(Counter(str(item.get("platform") or "Unknown") for item in items))
     decision_context = {
         "qualified": bool(comparison_summary.get("best_platform")),
         "best_platform": comparison_summary.get("best_platform"),
         "platform_metric_label": comparison_summary.get("platform_metric_label"),
-        "robust_platform_sample": comparison_summary.get("platform_metric_label") == "Lowest median-price platform",
+        "robust_platform_sample": len(platform_counts) >= 2 and all(count >= 2 for count in platform_counts.values()),
+        "platform_counts": platform_counts,
         "mixed_configuration": bool(comparison_summary.get("mixed_configuration")),
         "mixed_condition": bool(comparison_summary.get("mixed_condition")),
         "qualification_reason": comparison_summary.get("platform_qualification_reason"),
@@ -8139,6 +8131,7 @@ def ai_discover():
                     "comparable_result_count": len(items), "record_count": len(items),
                     "decision_status": "qualified" if decision_context["qualified"] else "needs_refinement",
                     "platforms": sorted({item.get("platform") for item in items if item.get("platform")} ),
+                    "platform_counts": platform_counts,
                     "generated_at": display_sgt_datetime(generated_at), "fallback_reason": fallback_reason})
 
 

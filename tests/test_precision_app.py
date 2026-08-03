@@ -276,13 +276,15 @@ def test_homepage_and_register_show_three_membership_plans():
     assert 'name="membership_tier" value="premium"' in register_body
     assert "app-choice-input" in register_body
     assert 'name="role" value="administrator"' not in register_body
-    assert "Role controls workspace context. Membership controls feature access across the account." in register_body
     assert "/ month" in register_body and "Source Audit" in register_body
-    assert "Role-based workspace" in register_body
-    assert "Minimum 8 characters. Letters and numbers recommended." in register_body
-    assert "Choose your primary workspace role." in register_body
-    assert "Role controls workspace context. Membership controls feature access." in register_body
-    assert "one account-wide membership tier" in register_body
+    assert "Choose your workspace" in register_body
+    assert "Use at least 8 characters." in register_body
+    assert "Choose your workspace." in register_body
+    assert "Each account has one workspace designed around how you use the product." in register_body
+    assert "Choose an access level." in register_body
+    assert "Demo pricing · no payment collected" in register_body
+    assert "Administrator accounts are assigned internally." not in register_body
+    assert "Administrators can update role assignments" not in register_body
     assert "For simple product discovery and essential price comparison." in register_body
     assert "For saved workflows, watchlist tracking, analytics, and AI-assisted forecasting." in register_body
     assert "For advanced research, source audit, provenance, activity logs, and exportable reports." in register_body
@@ -541,6 +543,22 @@ def test_membership_pages_do_not_return_500():
         assert response.status_code < 500
 
 
+def test_public_sample_uses_scoped_median_comparison():
+    response = client().get("/sample-analysis")
+    body = response.data.decode("utf-8", errors="ignore")
+
+    assert response.status_code == 200
+    assert "Walmart has the lower median price in this sample." in body
+    assert "USD 689.00" in body
+    assert "Median price by marketplace" in body
+    assert "Balanced sample: three records per marketplace." in body
+    assert "Illustrative dataset." in body
+    assert "not live marketplace listings" in body
+    assert "How the sample analysis flows" not in body
+    assert "Lowest observed platform" not in body
+    assert "Platform average comparison" not in body
+
+
 def test_public_routes_and_login_role_redirect():
     test_client = client()
     assert test_client.get("/").status_code == 200
@@ -595,6 +613,7 @@ def test_missing_ai_key_is_readable(monkeypatch):
     assert payload["generation_mode"] == "scope_guidance"
     assert payload["summary_source"] == "Decision guidance"
     assert payload["decision_status"] == "needs_refinement"
+    assert payload["platform_counts"]
     assert "Decision readiness" in payload["summary"]
     assert "Recommended next step" in payload["summary"]
     activity = precision_app.repository.list_activity_logs(limit=1)[0]
@@ -658,6 +677,20 @@ def test_decision_guidance_does_not_call_ai_for_an_unqualified_scope(monkeypatch
     assert "Key interpretation\nDifferences in variant and condition" in summary
     assert "Recommended next step\nChoose one product configuration and one condition" in summary
     assert not any(character.isdigit() for character in summary)
+
+
+def test_decision_guidance_prioritizes_platform_sample_imbalance():
+    summary = ai_search.decision_support_summary({
+        "qualified": False,
+        "platform_counts": {"eBay": 4, "Walmart": 1},
+        "mixed_configuration": False,
+        "mixed_condition": True,
+    })
+    assert "current marketplace sample is not balanced" in summary
+    assert "eBay: 4" in summary and "Walmart: 1" in summary
+    assert "Collect another comparable record for Walmart" in summary
+    assert "choose one product condition" in summary
+    assert "regenerate the interpretation" in summary
 
 
 def test_qualified_ai_explanation_rejects_numeric_kpi_restatement(monkeypatch):

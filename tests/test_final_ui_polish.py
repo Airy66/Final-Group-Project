@@ -224,6 +224,18 @@ def test_analytics_chart_families_and_scope_copy_are_truthful():
     assert "Lollipop" in source and "type: 'scatter'" in source
     assert "renderPriceCurve();" in source
     assert "renderPreview();" in source
+    assert 'data-role-chart-priority="{{ role }}"' in source
+    assert "Start with the price curve" in source
+    assert "Start with platform benchmarks" in source
+    assert "Start with distribution and provenance" in source
+    assert 'data-advanced-tab="sources"' in source
+    assert 'id="analysis-confidence"' in source
+    assert "Limited sample" in source and "Directional sample" in source and "Broader sample" in source
+    assert 'id="condition-chart-state"' in source
+    assert "Single condition in the current scope" in source
+    assert "validChartImages" in source and "visibleChartImage" in source
+    assert "this is not a time trend" in source
+    assert "use the bars to inspect placement, not to infer a population distribution" in source
 
 
 def test_watchlist_status_cards_editor_and_action_hierarchy():

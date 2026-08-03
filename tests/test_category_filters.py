@@ -183,3 +183,16 @@ def test_product_roles_separate_complete_products_accessories_plans_and_installm
         "complete_product", "accessory", "service_or_plan", "installment", "replacement_part"
     ]
     assert all(row["classification_source"] and row["classification_confidence"] >= 0 for row in rows)
+
+
+def test_warranty_attribute_does_not_turn_a_complete_device_into_a_service_plan():
+    device = enrich_listing_category(
+        {"title": "Apple iPhone 16 128GB New Sealed 12 month Apple Warranty"},
+        "smartphone",
+    )
+    explicit_plan = enrich_listing_category(
+        {"title": "Extended warranty plan for Apple iPhone 16"},
+        "smartphone",
+    )
+    assert device["product_role"] == "complete_product"
+    assert explicit_plan["product_role"] == "service_or_plan"

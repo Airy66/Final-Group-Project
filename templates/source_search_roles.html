@@ -45,10 +45,32 @@
 
 {% if search_record_id %}
 <section class="mt-5" id="result-context">
-  <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm"><div class="flex items-center gap-3"><span class="material-symbols-outlined grid h-9 w-9 place-items-center rounded-lg {{ 'bg-blue-50 text-blue-700' if items else 'bg-slate-100 text-slate-400' }}">{{ 'inventory_2' if items else 'search_off' }}</span><div><p class="font-display text-lg font-bold text-slate-950">{% if comparison_enabled %}{{ items|length }} comparable listing{{ '' if items|length == 1 else 's' }} in the collected result set{% else %}{{ items|length }} matched listing{{ '' if items|length == 1 else 's' }}{% endif %}</p><p class="mt-0.5 text-sm text-slate-500">{{ 'Multiple product categories found' if category_mode == 'multi_category' else 'Multiple product types found' if category_mode == 'multi_product_type' else category_profile.display_name }} · {{ 'eBay and Walmart' if search_scope == 'both' else search_scope|capitalize }}</p></div></div>{% if items and comparison_enabled %}<form method="post" action="{{ url_for('create_search_ai_insight', search_run_id=search_run_id) }}"><input type="hidden" name="search_record_id" value="{{ search_record_id }}"><button id="ai-button" type="submit" aria-label="AI Discover: Explain this comparison" {% if not can_ai_discover %}disabled title="This feature requires Premium membership."{% endif %} class="app-button-secondary inline-flex items-center gap-2"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">auto_awesome</span><span>Explain this comparison</span></button></form>{% endif %}</div>
+  <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm"><div class="flex items-center gap-3"><span class="material-symbols-outlined grid h-9 w-9 place-items-center rounded-lg {{ 'bg-blue-50 text-blue-700' if items else 'bg-slate-100 text-slate-400' }}">{{ 'inventory_2' if items else 'search_off' }}</span><div><p class="font-display text-lg font-bold text-slate-950">{% if comparison_enabled %}{{ items|length }} comparable listing{{ '' if items|length == 1 else 's' }} in the collected result set{% else %}{{ items|length }} matched listing{{ '' if items|length == 1 else 's' }}{% endif %}</p><p class="mt-0.5 text-sm text-slate-500">{{ 'Multiple product categories found' if category_mode == 'multi_category' else 'Multiple product types found' if category_mode == 'multi_product_type' else category_profile.display_name }} · {{ 'eBay and Walmart' if search_scope == 'both' else search_scope|capitalize }}</p></div></div>{% if items and comparison_enabled %}<form method="post" action="{{ url_for('create_search_ai_insight', search_run_id=search_run_id) }}"><input type="hidden" name="search_record_id" value="{{ search_record_id }}"><button id="ai-button" type="submit" aria-label="AI Discover: Explain this comparison" aria-controls="ai-panel" aria-expanded="{{ 'true' if (insight or stale_ai_insight) else 'false' }}" {% if not can_ai_discover %}disabled title="This feature requires Premium membership."{% endif %} class="app-button-secondary inline-flex items-center gap-2"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">auto_awesome</span><span>{{ 'Regenerate interpretation' if insight else 'Explain this comparison' }}</span></button></form>{% endif %}</div>
   <p class="mt-2 text-xs text-slate-500">Results reflect listings returned and retained for this search, not the full inventory of each marketplace.</p>
   {% if not comparison_enabled %}<p class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">{% if category_mode == 'multi_product_type' %}Choose one product type to enable reliable price comparison and analysis.{% else %}Choose one product category to enable reliable price comparison and analysis.{% endif %}</p>{% endif %}
 </section>
+{% if comparison_enabled and search_record_id and items %}
+<section id="ai-panel" class="mt-3 rounded-xl border border-blue-200 bg-blue-50/60 p-5 shadow-sm {{ 'hidden' if not (insight or stale_ai_insight) }}" aria-live="polite" aria-busy="false" tabindex="-1">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="flex items-center gap-3"><span class="material-symbols-outlined grid h-10 w-10 place-items-center rounded-lg bg-blue-600 text-xl text-white" aria-hidden="true">auto_awesome</span><div>
+      <p class="text-[11px] font-bold uppercase tracking-wider text-blue-700">Decision support</p>
+      <h2 class="mt-0.5 font-display text-xl font-bold text-slate-950">AI comparison insight</h2>
+    </div></div><span id="ai-source" class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-100" title="{{ 'Generated with Gemini from the displayed records.' if ai_insight and ai_insight.summary_source == 'Gemini API' else 'Server-calculated guidance for the current comparison scope.' if ai_insight and ai_insight.summary_source == 'Decision guidance' else 'Generated locally from server-calculated comparison facts.' }}"><span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>{{ 'AI-generated' if ai_insight and ai_insight.summary_source == 'Gemini API' else 'Decision guidance' if ai_insight and ai_insight.summary_source == 'Decision guidance' else 'Rule-based' }}</span>
+  </div>
+  <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(16rem,0.55fr)]">
+    <div class="rounded-lg bg-white p-4 ring-1 ring-inset ring-blue-100">
+      <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Key finding</p>
+      <p id="ai-summary" class="mt-2 whitespace-pre-line text-sm font-medium leading-7 text-slate-800">{{ 'Search again to explain the updated comparison.' if stale_ai_insight else ((insight or 'Select Explain this comparison for decision guidance based on the current scope.')|replace('*', '')) }}</p>
+    </div>
+    <div class="rounded-lg bg-blue-100/55 p-4">
+      <p class="text-[11px] font-bold uppercase tracking-wider text-blue-800">Review before acting</p>
+      <p class="mt-2 text-sm leading-6 text-slate-700">Confirm product configuration, condition, seller, shipping, and availability in the records below.</p>
+    </div>
+  </div>
+  <div class="mt-4 border-t border-blue-100 pt-3 text-xs text-slate-500"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Evidence scope</p><p id="ai-scope" class="mt-1 font-semibold text-slate-700">{{ items|length }} comparable records{% if result_platform_counts %} · {% for platform, count in result_platform_counts.items() %}{{ platform }} {{ count }}{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}</p></div>
+  <p class="mt-3 inline-flex items-center gap-1 text-xs text-slate-500"><span class="material-symbols-outlined text-[15px]">info</span>AI output may be inaccurate. Verify the underlying listings.</p>
+</section>
+{% endif %}
 {% if items %}<section class="mt-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" data-facet-area>
   <div><p class="text-xs font-bold uppercase tracking-widest text-primary">Refine results</p><p class="mt-1 text-sm text-slate-500">Filter the listings already collected for this search.</p></div>
   {% if general_comparison_mode %}<p class="mt-2 text-sm text-slate-500">General comparison mode is active. Category-specific attributes are not available for this result set.</p>{% endif %}
@@ -84,7 +106,7 @@
 endif %}
 
 {% if summary and items %}
-{% if summary.scope_refinement_notice %}<p class="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800"><strong>Refine the comparison scope.</strong> {{ summary.scope_refinement_notice }}</p>{% endif %}
+{% if summary.scope_refinement_notice and not insight %}<p class="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800"><strong>Refine the comparison scope.</strong> {{ summary.scope_refinement_notice }}</p>{% endif %}
 {% if summary.accessories_excluded %}<p class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Accessory-like records were excluded from device-level price summary.</p>{% endif %}
 <section class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Comparable price summary">
   {% for label,value,icon,accent,is_price in [('Lowest comparable price',summary.lowest_price,'south','emerald',true),('Average comparable price',summary.average_price,'equalizer','blue',true),('Highest comparable price',summary.highest_price,'north','violet',true),('Comparable price spread',summary.potential_saving,'swap_horiz','cyan',true),(summary.platform_metric_label,summary.best_platform,'storefront','indigo',false)] %}
@@ -93,18 +115,6 @@ endif %}
     {% if loop.last %}<p class="mt-2 text-xs leading-5 text-slate-500">{{ summary.platform_metric_detail if value else summary.platform_qualification_reason }}</p>{% endif %}
   </article>
   {% endfor %}
-</section>
-{% endif %}
-
-{% if comparison_enabled and search_record_id and items %}<section id="ai-panel" class="mt-5 rounded-xl border border-blue-200 bg-blue-50/60 p-5 shadow-sm {{ 'hidden' if not (insight or stale_ai_insight) }}" aria-live="polite" aria-busy="false">
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div class="flex items-center gap-3"><span class="material-symbols-outlined grid h-10 w-10 place-items-center rounded-lg bg-blue-600 text-xl text-white">auto_awesome</span><div>
-      <p class="text-[11px] font-bold uppercase tracking-wider text-blue-700">Interpretation</p>
-      <h2 class="mt-0.5 font-display text-xl font-bold text-slate-950">AI Comparison Insight</h2>
-    </div></div><span id="ai-source" class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-100" title="{{ 'Generated with Gemini from the displayed records.' if ai_insight and ai_insight.summary_source == 'Gemini API' else 'Server-calculated guidance for the current comparison scope.' if ai_insight and ai_insight.summary_source == 'Decision guidance' else 'Generated locally from server-calculated comparison facts.' }}"><span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>{{ 'AI-generated' if ai_insight and ai_insight.summary_source == 'Gemini API' else 'Decision guidance' if ai_insight and ai_insight.summary_source == 'Decision guidance' else 'Rule-based' }}</span>
-  </div>
-  <p id="ai-summary" class="mt-4 whitespace-pre-line text-sm leading-7 text-slate-700">{{ 'Search again to explain the updated comparison.' if stale_ai_insight else ((insight or 'Select Explain this comparison for decision guidance based on the current scope.')|replace('*', '')) }}</p>
-  <div class="mt-4 flex flex-col gap-2 border-t border-blue-100 pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between"><p id="ai-scope" class="font-semibold">{% if ai_insight %}Based on {{ ai_insight.result_ids|length }} current comparable listings for {{ canonical_model.product_family }} {{ canonical_model.generation }}{% if canonical_model.edition != 'Base' %} {{ canonical_model.edition }}{% endif %}{% endif %}</p><p class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[15px]">info</span>AI output may be inaccurate. Verify price, condition, and availability.</p></div>
 </section>
 {% endif %}
 
@@ -232,7 +242,8 @@ endif %}
 </form>
 {% if excluded_items %}
 <details class="mt-6 rounded-2xl border border-amber-200 bg-amber-50/60 p-5" id="excluded-listings">
-  <summary class="cursor-pointer font-display text-lg font-bold text-slate-900">Excluded results ({{ excluded_items|length }})</summary>
+  <summary class="cursor-pointer font-display text-lg font-bold text-slate-900">Excluded results available for review ({{ excluded_items|length }})</summary>
+  <p class="mt-2 text-xs text-amber-800">This table shows retained exclusion details. Provider candidates rejected before persistence are summarized in the selection funnel above and may not appear here.</p>
   <p class="mt-1 text-sm text-slate-600">These records are kept separate from comparable results and cannot be selected for comparison or analysis.</p>
   <div class="mt-3 overflow-x-auto"><table class="app-table w-full min-w-[700px] text-left text-sm"><thead class="bg-white text-xs uppercase tracking-widest text-slate-500"><tr><th class="p-3">Platform</th><th class="p-3">Product title</th><th class="p-3">Price</th><th class="p-3">Exclusion reason</th><th class="p-3">Source link</th></tr></thead><tbody>{% for item in excluded_items %}<tr class="border-t border-amber-100"><td class="p-3 font-semibold">{{ item.platform }}</td><td class="p-3">{{ item.title }}</td><td class="p-3">{{ item.raw_price_text }}</td><td class="p-3 text-amber-800">{{ item.exclusion_reason or item.price_quality_status or 'Not comparable' }}</td><td class="p-3">{% if is_safe_url(item.source_url) %}<a href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer" class="font-bold text-primary hover:underline">Open listing â†—</a>{% else %}<span class="text-slate-400">Source unavailable</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
 </details>
@@ -324,7 +335,7 @@ function beginSourceSearch(form) {
   const canSaveEvidence = {{ 'true' if can_save_evidence else 'false' }};
   const canAnalytics = {{ 'true' if can_analytics else 'false' }};
   const canAiDiscover = {{ 'true' if can_ai_discover else 'false' }};
-  const aiButtonDefaultLabel = 'Explain this comparison';
+  let aiButtonDefaultLabel = {{ ('Regenerate interpretation' if insight else 'Explain this comparison') | tojson }};
   const aiButtonLoadingLabel = 'Interpreting...';
   const cleanInsightText = (value) => String(value || '').replace(/\*+/g, '').replace(/[ \t]+\n/g, '\n').trim();
   const setAiSourceLabel = (node, rawSource) => {
@@ -535,9 +546,11 @@ function beginSourceSearch(form) {
       aiButton.classList.toggle('opacity-70', loading);
       label.textContent = loading ? aiButtonLoadingLabel : aiButtonDefaultLabel;
       if (panel) panel.setAttribute('aria-busy', loading ? 'true' : 'false');
+      if (summary) summary.classList.toggle('animate-pulse', loading);
     };
     if (!panel || !summary || !source || !scope) return;
     panel.classList.remove('hidden');
+    aiButton.setAttribute('aria-expanded', 'true');
     if (!canAiDiscover) {
       summary.textContent = 'AI Discover requires Premium membership.';
       setAiSourceLabel(source, 'Locked');
@@ -568,7 +581,9 @@ function beginSourceSearch(form) {
       }
       summary.textContent = cleanInsightText(data.summary || 'No summary returned.');
       setAiSourceLabel(source, data.summary_source || 'Rule-based fallback');
-      scope.textContent = `Based on ${data.comparable_result_count || 0} comparable records from this search · ${(data.platforms || []).join(', ') || 'No platform'} · Generated ${data.generated_at || '—'}`;
+      const platformScope = Object.entries(data.platform_counts || {}).map(([platform, count]) => `${platform} ${count}`).join(' · ');
+      scope.textContent = `${data.comparable_result_count || 0} comparable records${platformScope ? ` · ${platformScope}` : ''}`;
+      aiButtonDefaultLabel = 'Regenerate interpretation';
     } catch (error) {
       summary.textContent = error.message || 'AI Discover is currently unavailable. Try again later or use the visible analytics.';
       setAiSourceLabel(source, 'Error');

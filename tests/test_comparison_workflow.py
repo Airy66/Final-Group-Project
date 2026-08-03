@@ -301,7 +301,12 @@ def test_search_ui_exposes_bulk_selection_and_separates_recent_history_language(
     assert "Generated with Gemini from the displayed records." in search_template
     assert "AI output may be inaccurate" in search_template
     assert "cleanInsightText" in search_template
-    assert search_template.index('aria-label="Comparable price summary"') < search_template.index('id="ai-panel"') < search_template.index('id="results-form"')
+    assert search_template.index('id="result-context"') < search_template.index('id="ai-panel"') < search_template.index('data-facet-area')
+    assert "Key finding" in search_template and "Review before acting" in search_template
+    assert 'aria-controls="ai-panel"' in search_template
+    assert "Regenerate interpretation" in search_template
+    assert "How these results were selected" not in search_template
+    assert 'id="ai-freshness"' not in search_template
     assert search_template.count('id="bulk-action-bar"') == 1
     assert search_template.count('id="bulk-selected-label"') == 1
     assert "comparisonMax" not in search_template
@@ -536,7 +541,7 @@ def test_broad_smartphone_auto_selects_category_and_excludes_accessories():
     assert record["selected_category_key"] == "smartphones"
     assert record["comparison_enabled"] is True
     assert "3 comparable listings in the collected result set" in body
-    assert "Excluded results (2)" in body
+    assert "Excluded results available for review (2)" in body
     assert "Accessory rather than the requested product" in body
     assert "Comparable full price" not in body
     assert {entry["product_role"] for entry in record["result_categories"].values()} == {"complete_product", "accessory"}
