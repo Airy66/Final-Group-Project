@@ -218,6 +218,8 @@ def test_analytics_chart_families_and_scope_copy_are_truthful():
     assert "Comparable Price Curve" in source
     assert "Comparable listing prices ordered from lowest to highest." in source
     assert "Listing rank" in source
+    assert "position: 'insideEndTop'" in source
+    assert "formatter: `Median ${usd(median)}`" in source
     assert "Price Trend" not in source
     assert "type: 'pie'" in source and "radius: ['55%', '78%']" in source
     assert "Price distribution histogram" in source

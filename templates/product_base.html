@@ -332,10 +332,6 @@
           {% if current_user.role == 'researcher' %}<a title="Activity Logs" href="{{ url_for('logs') }}" {% if is_logs %}aria-current="page"{% endif %} class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_logs else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">receipt_long</span><span class="sidebar-link-text">Activity Logs</span>{% if professional_locked %}<span class="sidebar-badge sidebar-plan-marker sidebar-plan-marker--professional" title="Requires Professional plan" aria-label="Requires Professional plan">PRO</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>{% endif %}
         {% endif %}
       </nav>
-      {% if current_user.role == 'administrator' %}<div class="sidebar-support mt-8 hidden rounded-2xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800 md:block">
-        <strong class="block">Workspace status</strong>
-        <span class="mt-1 block opacity-75">Ready for review.</span>
-      </div>{% endif %}
     </aside>
     <main class="workspace-main overflow-x-hidden px-4 py-4 md:px-6 md:py-6 lg:px-6 lg:py-8">
       {% set dense_workspace = request.endpoint in ['search','search_results','saved','watchlist','audit','analytics','analytics_compatibility','logs','administrator_dashboard'] or feature is defined %}

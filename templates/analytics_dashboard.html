@@ -575,7 +575,20 @@
           symbolSize: 7,
           data: prices,
           lineStyle: { width: 3 },
-          markLine: { symbol: 'none', lineStyle: { color: '#7c3aed', type: 'dashed', width: 2 }, label: { formatter: `Median ${usd(median)}`, color: '#6d28d9' }, data: [{ yAxis: median }] },
+          markLine: {
+            symbol: 'none',
+            lineStyle: { color: '#7c3aed', type: 'dashed', width: 2 },
+            label: {
+              position: 'insideEndTop',
+              distance: 8,
+              formatter: `Median ${usd(median)}`,
+              color: '#6d28d9',
+              backgroundColor: 'rgba(255,255,255,.92)',
+              borderRadius: 4,
+              padding: [3, 6],
+            },
+            data: [{ yAxis: median }],
+          },
         }],
       });
     };
