@@ -422,6 +422,64 @@ def test_mixed_gucci_product_types_require_selection_and_scope_ai(monkeypatch):
     assert all("makeup" not in title.lower() and "powder" not in title.lower() and "lipstick" not in title.lower() for title in captured["titles"])
 
 
+def test_refine_platform_and_condition_override_stored_filters_and_scope_ai(monkeypatch):
+    client, user = make_client("Refine Filter Owner")
+    search_id = precision_app.repository.create_search(user["_id"], "iPhone 13", "both", role="consumer", data_mode="api")
+    source_rows = [
+        {"title": "Apple iPhone 13 128GB Blue", "platform": "eBay", "price": 500, "condition": "New"},
+        {"title": "Apple iPhone 13 128GB Midnight", "platform": "eBay", "price": 510, "condition": "New"},
+        {"title": "Apple iPhone 13 128GB Used", "platform": "eBay", "price": 440, "condition": "Used"},
+        {"title": "Apple iPhone 13 128GB Blue", "platform": "Walmart", "price": 520, "condition": "New"},
+        {"title": "Apple iPhone 13 128GB Midnight", "platform": "Walmart", "price": 530, "condition": "New"},
+        {"title": "Apple iPhone 13 128GB Used", "platform": "Walmart", "price": 450, "condition": "Used"},
+    ]
+    rows = precision_app.repository.save_external_results(
+        search_id,
+        user["_id"],
+        [{**row, "match_type": "exact_match", "source_type": "marketplace"} for row in source_rows],
+    )
+    tokens = [f"external:{row['_id']}" for row in rows]
+    precision_app.repository.attach_result_tokens(search_id, tokens)
+    precision_app.repository.complete_search(search_id, len(rows))
+
+    condition_page = client.post(
+        f"/search/results/{search_id}",
+        data={"platform": "", "condition": "New", "min_price": "", "max_price": "", "sort": "normalized_price_asc"},
+        follow_redirects=True,
+    )
+    condition_soup = BeautifulSoup(condition_page.data, "html.parser")
+    record = precision_app.repository.get_search(search_id, user["_id"])
+    assert condition_page.status_code == 200
+    assert record["active_filters"]["condition"] == "New"
+    assert record["active_filters"]["platform"] == ""
+    assert condition_soup.select_one('select[name="condition"] option[selected]').get("value") == "New"
+
+    captured = {}
+    def fake_summary(_query, items, **_kwargs):
+        captured["items"] = items
+        return "Condition-scoped insight", "rule_based_fallback", None
+
+    monkeypatch.setattr(precision_app, "summarize_market", fake_summary)
+    insight = client.post("/api/ai-discover", json={"search_record_id": search_id})
+    assert insight.status_code == 200
+    assert len(captured["items"]) == 4
+    assert {item["platform"] for item in captured["items"]} == {"eBay", "Walmart"}
+    assert all(item["condition_normalized"] == "New" for item in captured["items"])
+
+    platform_page = client.post(
+        f"/search/results/{search_id}",
+        data={"platform": "eBay", "condition": "", "min_price": "", "max_price": "", "sort": "normalized_price_asc"},
+        follow_redirects=True,
+    )
+    platform_soup = BeautifulSoup(platform_page.data, "html.parser")
+    record = precision_app.repository.get_search(search_id, user["_id"])
+    assert platform_page.status_code == 200
+    assert record["active_filters"]["platform"] == "eBay"
+    assert record["active_filters"]["condition"] == ""
+    assert platform_soup.select_one('select[name="platform"] option[selected]').get("value") == "eBay"
+    assert {option.get("value") for option in platform_soup.select('select[name="platform"] option')} == {"", "eBay", "Walmart"}
+
+
 def test_channel_query_remains_unchanged_when_exact_results_are_strong():
     client, user = make_client("Channel Suggestion Owner")
     search_id = precision_app.repository.create_search(user["_id"], "channel", "ebay", role="consumer", data_mode="api")

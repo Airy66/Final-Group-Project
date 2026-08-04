@@ -7319,12 +7319,23 @@ def search(search_run_id=None):
             query, search_scope, search_record_id = record["keyword"], _normalize_search_scope(record.get("selected_source", "both")), str(record["_id"])
             public_search_run_id = str(record.get("search_run_id") or search_record_id)
             stored_filters = record.get("filters") or {}
-            platform = stored_filters.get("platform", platform)
-            min_price, max_price = stored_filters.get("min_price"), stored_filters.get("max_price")
-            sort_option = stored_filters.get("sort", sort_option)
-            storage_filter = stored_filters.get("storage", storage_filter)
-            condition_filter = stored_filters.get("condition", condition_filter)
-            include_related_variants = stored_filters.get("match_mode") == "related" or bool(stored_filters.get("include_related_variants"))
+            # A restored Search Run supplies defaults only. Explicit filter
+            # submissions, including blank values used to clear a filter, must
+            # take precedence over the previously persisted state.
+            if "platform" not in params:
+                platform = stored_filters.get("platform", platform)
+            if "min_price" not in params:
+                min_price = stored_filters.get("min_price")
+            if "max_price" not in params:
+                max_price = stored_filters.get("max_price")
+            if "sort" not in params:
+                sort_option = stored_filters.get("sort", sort_option)
+            if "storage" not in params:
+                storage_filter = stored_filters.get("storage", storage_filter)
+            if "condition" not in params:
+                condition_filter = stored_filters.get("condition", condition_filter)
+            if "match_mode" not in params and "include_related_variants" not in params:
+                include_related_variants = stored_filters.get("match_mode") == "related" or bool(stored_filters.get("include_related_variants"))
             search_diagnostics = record.get("source_diagnostics") or _new_search_diagnostics(query, search_scope)
             search_diagnostics.setdefault("search_run_mode", "existing_search_run")
             search_diagnostics["page_load_mode"] = "reused_search_run"
@@ -7971,7 +7982,7 @@ def search(search_run_id=None):
         return redirect(url_for("search_results", search_run_id=current_run.get("search_run_id") or search_record_id))
     canonical_model = parse_canonical_product_model(query) if query else {}
     spelling_suggestion = _search_spelling_suggestion(query, items, source_statuses) if search_record_id else None
-    return render_template("source_search_roles.html", query=query, search_scope=search_scope, result_view=result_view, platform_filter=result_view, category=category, min_price=params.get("min_price", min_price or ""), max_price=params.get("max_price", max_price or ""), sort_option=sort_option, platforms=platforms, categories=facets["categories"], items=items, excluded_items=excluded_items, summary=summary, insight=insight, ai_insight=ai_insight, stale_ai_insight=stale_ai_insight, error=error, notice=notice, search_record_id=search_record_id, search_run_id=public_search_run_id or search_record_id, max_total=max_total, show_platform_filter=(search_scope == "both"), result_platforms=result_platforms, result_platform_counts=result_platform_counts, include_related_variants=include_related_variants, query_is_product_like=_is_product_like_query(query), search_diagnostics=search_diagnostics, show_search_diagnostics=_search_ui_diagnostics_enabled(), walmart_unavailable=walmart_unavailable, walmart_chip_label=walmart_chip_label, source_mode_note=search_diagnostics["source_mode_note"], stored_walmart_visible=stored_walmart_visible, live_walmart_visible=live_walmart_visible, stored_walmart_count=search_diagnostics.get("stored_walmart_count", 0), comparison_max=COMPARISON_MAX_RECORDS, available_storage_variants=available_storage_variants, available_conditions=available_conditions, storage_filter=storage_filter, condition_filter=condition_filter, canonical_model=canonical_model, category_profile=category_profile, category_key=category_key, category_mode=category_mode, search_mode=search_mode, comparison_enabled=comparison_enabled, category_options=category_options, selected_category_key=selected_category_key, product_type_options=product_type_options, selected_product_type=selected_product_type, technical_facets_limited=technical_facets_limited, spelling_suggestion=spelling_suggestion, source_messages=source_messages, query_intent_status=query_intent_status, available_facets=available_facets, selected_facets=selected_facets, available_filter_platforms=available_filter_platforms, general_comparison_mode=(comparison_enabled and category_key in {"generic", "food_and_grocery"}))
+    return render_template("source_search_roles.html", query=query, search_scope=search_scope, result_view=result_view, platform=platform, platform_filter=result_view, category=category, min_price=params.get("min_price", min_price or ""), max_price=params.get("max_price", max_price or ""), sort_option=sort_option, platforms=platforms, categories=facets["categories"], items=items, excluded_items=excluded_items, summary=summary, insight=insight, ai_insight=ai_insight, stale_ai_insight=stale_ai_insight, error=error, notice=notice, search_record_id=search_record_id, search_run_id=public_search_run_id or search_record_id, max_total=max_total, show_platform_filter=(search_scope == "both"), result_platforms=result_platforms, result_platform_counts=result_platform_counts, include_related_variants=include_related_variants, query_is_product_like=_is_product_like_query(query), search_diagnostics=search_diagnostics, show_search_diagnostics=_search_ui_diagnostics_enabled(), walmart_unavailable=walmart_unavailable, walmart_chip_label=walmart_chip_label, source_mode_note=search_diagnostics["source_mode_note"], stored_walmart_visible=stored_walmart_visible, live_walmart_visible=live_walmart_visible, stored_walmart_count=search_diagnostics.get("stored_walmart_count", 0), comparison_max=COMPARISON_MAX_RECORDS, available_storage_variants=available_storage_variants, available_conditions=available_conditions, storage_filter=storage_filter, condition_filter=condition_filter, canonical_model=canonical_model, category_profile=category_profile, category_key=category_key, category_mode=category_mode, search_mode=search_mode, comparison_enabled=comparison_enabled, category_options=category_options, selected_category_key=selected_category_key, product_type_options=product_type_options, selected_product_type=selected_product_type, technical_facets_limited=technical_facets_limited, spelling_suggestion=spelling_suggestion, source_messages=source_messages, query_intent_status=query_intent_status, available_facets=available_facets, selected_facets=selected_facets, available_filter_platforms=available_filter_platforms, general_comparison_mode=(comparison_enabled and category_key in {"generic", "food_and_grocery"}))
 
 
 @app.post("/api/search")
