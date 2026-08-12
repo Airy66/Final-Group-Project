@@ -5,7 +5,7 @@ from google import genai
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
-model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 if not api_key:
     raise RuntimeError("GEMINI_API_KEY is missing in .env")

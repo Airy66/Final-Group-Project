@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-  <script>tailwind.config={theme:{extend:{colors:{primary:'#2563eb',ink:'#172033',surface:'#f6f8fc'},fontFamily:{body:['Inter'],display:['Manrope']},boxShadow:{soft:'0 18px 45px rgba(30,64,175,.08)'}}}}}</script>
+  <script>tailwind.config={theme:{extend:{colors:{primary:'#2563eb',ink:'#172033',surface:'#f6f8fc'},fontFamily:{body:['Inter'],display:['Manrope']},boxShadow:{soft:'0 18px 45px rgba(30,64,175,.08)'}}}}</script>
   <script>
     window.csrfFetch = function(input, options) {
       const requestOptions = Object.assign({}, options || {});
@@ -65,20 +65,16 @@
     .app-button-primary:hover{transform:translateY(-1px);background:#1d4ed8;box-shadow:0 11px 22px rgba(37,99,235,.22)}
     .app-button-secondary{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border:1px solid #bfdbfe;border-radius:1rem;background:#fff;padding:.9rem 1.25rem;font-weight:800;color:#1d4ed8;transition:transform var(--transition-fast),background-color var(--transition-fast),box-shadow var(--transition-fast)}
     .app-button-secondary:hover{transform:translateY(-2px);background:#eff6ff;box-shadow:0 12px 26px rgba(37,99,235,.12)}
-    .app-export-button{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:1rem;border:1px solid #bfdbfe;background:linear-gradient(135deg,#ffffff,#eff6ff);padding:.9rem 1.15rem;font-weight:900;color:#1d4ed8;box-shadow:0 12px 24px rgba(37,99,235,.12);transition:transform var(--transition-fast),box-shadow var(--transition-fast),border-color var(--transition-fast),background-color var(--transition-fast)}
-    .app-export-button:hover{transform:translateY(-2px);border-color:#93c5fd;background:linear-gradient(135deg,#eff6ff,#dbeafe);box-shadow:0 16px 34px rgba(37,99,235,.18)}
-    .app-export-summary{display:inline-flex;align-items:center;gap:.5rem;border:1px solid #1d4ed8;border-radius:1rem;background:linear-gradient(135deg,#1d4ed8,#4f46e5);padding:.9rem 1.15rem;font-weight:900;color:#fff;box-shadow:0 16px 30px rgba(29,78,216,.24);transition:transform var(--transition-fast),box-shadow var(--transition-fast),filter var(--transition-fast)}
-    .app-export-summary:hover{transform:translateY(-2px);box-shadow:0 20px 38px rgba(29,78,216,.3);filter:saturate(1.08)}
+    .app-export-button,.app-export-summary{display:inline-flex;min-width:7.25rem;min-height:2.75rem;align-items:center;justify-content:center;gap:.5rem;list-style:none;border:1px solid #1d4ed8;border-radius:.75rem;background:#2563eb;padding:.7rem 1rem;font-size:.875rem;font-weight:800;line-height:1;color:#fff;box-shadow:0 4px 10px rgba(37,99,235,.16);cursor:pointer;transition:background-color var(--transition-fast),border-color var(--transition-fast),box-shadow var(--transition-fast)}
+    .app-export-button:hover,.app-export-summary:hover{border-color:#1e40af;background:#1d4ed8;box-shadow:0 6px 14px rgba(37,99,235,.2)}
+    .app-export-summary::-webkit-details-marker{display:none}
     .app-dropdown{position:relative;display:inline-block}
-    .app-dropdown > summary{list-style:none;display:inline-flex;align-items:center;gap:.45rem;border:1px solid #cbd5e1;border-radius:1rem;background:linear-gradient(135deg,#0f172a,#1d4ed8);padding:.82rem 1.1rem;font-weight:800;color:#fff;box-shadow:0 14px 28px rgba(15,23,42,.16);transition:transform var(--transition-fast),box-shadow var(--transition-fast),filter var(--transition-fast),background-color var(--transition-fast);cursor:pointer}
     .app-dropdown > summary::-webkit-details-marker{display:none}
-    .app-dropdown > summary:hover{transform:translateY(-2px);box-shadow:0 18px 36px rgba(15,23,42,.2);filter:saturate(1.05)}
-    .app-dropdown[open] > summary{background:linear-gradient(135deg,#111827,#312e81)}
-    .app-dropdown-panel{position:absolute;right:0;z-index:20;margin-top:.75rem;min-width:18rem;overflow:hidden;border:1px solid #dbeafe;border-radius:1.35rem;background:linear-gradient(180deg,#ffffff,#f8fbff);padding:.45rem;box-shadow:0 24px 60px rgba(15,23,42,.14)}
+    .app-dropdown-panel{position:absolute;right:0;z-index:20;margin-top:.5rem;min-width:18rem;overflow:hidden;border:1px solid #e2e8f0;border-radius:.75rem;background:#fff;padding:.4rem;box-shadow:0 16px 36px rgba(15,23,42,.14)}
     .app-dropdown-panel{transform-origin:top right;animation:dropdown-in 180ms ease both}@keyframes dropdown-in{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
-    .app-dropdown-item{display:flex;align-items:center;justify-content:space-between;gap:.85rem;border-radius:1rem;padding:.85rem 1rem;font-size:.93rem;font-weight:800;color:#334155;transition:background-color var(--transition-fast),color var(--transition-fast),transform var(--transition-fast),box-shadow var(--transition-fast)}
-    .app-dropdown-item:hover{background:linear-gradient(135deg,#eff6ff,#dbeafe);color:#1d4ed8;transform:translateX(2px);box-shadow:inset 0 0 0 1px rgba(191,219,254,.8)}
-    .app-dropdown-item.is-locked{color:#94a3b8;background:linear-gradient(135deg,#f8fafc,#f1f5f9)}
+    .app-dropdown-item{display:flex;align-items:center;justify-content:space-between;gap:.85rem;border-radius:.5rem;padding:.75rem .875rem;font-size:.875rem;font-weight:700;color:#334155;transition:background-color var(--transition-fast),color var(--transition-fast)}
+    .app-dropdown-item:hover{background:#eff6ff;color:#1d4ed8}
+    .app-dropdown-item.is-locked{color:#94a3b8;background:#f8fafc}
     .app-dropdown-badge{display:inline-flex;align-items:center;border-radius:999px;padding:.22rem .52rem;font-size:.67rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}
     .app-dropdown-badge-premium{background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1px solid #93c5fd;color:#1d4ed8}
     .app-dropdown-badge-pro{background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1px solid #c4b5fd;color:#6d28d9}
@@ -130,6 +126,10 @@
     .app-nav-item .material-symbols-outlined{justify-self:center}
     .app-nav-item .sidebar-link-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .sidebar-badge{justify-self:end;min-width:0;max-width:3.25rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+    .sidebar-plan-marker{display:inline-grid;height:1.35rem;min-width:2.15rem;place-items:center;justify-self:end;border:1px solid transparent;border-radius:.45rem;padding:0 .32rem;font-size:.55rem;font-weight:900;letter-spacing:.06em;line-height:1}
+    .sidebar-plan-marker--premium{border-color:#60a5fa;background:#dbeafe;color:#1d4ed8}
+    .sidebar-plan-marker--professional{border-color:#a78bfa;background:#ede9fe;color:#6d28d9}
+    .app-nav-item[aria-current="page"] .sidebar-plan-marker{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.16);color:#fff}
     input:not([type="hidden"]),select{min-height:2.75rem}
     button:not(.sidebar-collapse-button){min-height:2.75rem}
     .workspace-main button[aria-label]{min-width:2.75rem}
@@ -144,15 +144,23 @@
     .workspace-content{max-width:90rem}.workspace-content--dense{max-width:108rem}
     .workspace-main .max-w-7xl{max-width:100%}
     .app-action-row{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}
-    .app-overflow-summary{display:inline-flex;min-width:2.75rem;min-height:2.75rem;align-items:center;justify-content:center;border:1px solid #cbd5e1;border-radius:.625rem;background:#fff;color:#475569}
-    .app-overflow-summary:hover{background:#f8fafc;color:#1d4ed8}
-    .app-dropdown>.analysis-more-summary,.app-dropdown[open]>.analysis-more-summary{height:2.25rem;width:2.25rem;min-height:0;border:1px solid #dce4ef;border-radius:.5rem;background:#fff;padding:0;color:#475569;box-shadow:none;filter:none;transform:none}.app-dropdown>.analysis-more-summary:hover{background:#f8fafc;color:#1d4ed8;transform:none;box-shadow:none}
+    .refine-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));align-items:end;gap:.75rem;min-width:0;max-width:100%}
+    .refine-filter-grid>*{min-width:0;max-width:100%}
+    .refine-filter-price-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.5rem;min-width:0}
+    .refine-filter-price-fields>*{min-width:0;max-width:100%}
+    .refine-filter-action-controls{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;min-width:0}
+    .refine-filter-action-controls>*{min-width:0;flex:1 1 auto}
+    .app-dropdown>.app-overflow-summary,.app-dropdown[open]>.app-overflow-summary{display:inline-flex;width:2.75rem;height:2.75rem;min-width:2.75rem;min-height:2.75rem;align-items:center;justify-content:center;border:1px solid #cbd5e1;border-radius:.75rem;background:#fff;padding:0;color:#475569;box-shadow:none;filter:none;transform:none;cursor:pointer}
+    .app-dropdown>.app-overflow-summary:hover{border-color:#94a3b8;background:#f1f5f9;color:#1e40af;box-shadow:none;transform:none}
+    .app-compact-action{display:inline-flex;min-height:2.5rem;align-items:center;justify-content:center;border:1px solid #cbd5e1;border-radius:.625rem;background:#fff;padding:.5rem .75rem;font-size:.75rem;font-weight:800;line-height:1;color:#334155;transition:background-color var(--transition-fast),border-color var(--transition-fast),color var(--transition-fast)}
+    .app-compact-action:hover{border-color:#94a3b8;background:#f8fafc;color:#1d4ed8}
+    .app-compact-action--primary{border-color:#2563eb;background:#2563eb;color:#fff}.app-compact-action--primary:hover{border-color:#1d4ed8;background:#1d4ed8;color:#fff}
     .app-sidebar .sidebar-section-label{padding-left:1rem;color:#8ea1b8;font-size:.65rem;letter-spacing:.13em}.app-sidebar .sidebar-nav{gap:.25rem}.app-sidebar .sidebar-nav a{border-radius:.625rem;color:#d7e2ef}.app-sidebar .sidebar-nav a:hover{transform:none;background:#1a2b40;color:#fff}.app-sidebar .sidebar-nav a.bg-blue-600,.app-sidebar .sidebar-nav a.bg-indigo-600,.app-sidebar .sidebar-nav a.bg-violet-600{background:#2563d9;box-shadow:none;color:#fff}.app-sidebar .sidebar-nav a .material-symbols-outlined{color:inherit}.app-sidebar .sidebar-badge{box-shadow:none}.app-sidebar #sidebar-toggle{border-radius:.5rem;color:#a5b5c8}.app-sidebar #sidebar-toggle:hover{background:#1a2b40;color:#fff}
     .workspace-main .rounded-3xl{border-radius:.75rem}.workspace-main .rounded-2xl{border-radius:.625rem}.workspace-main .rounded-\[1\.75rem\]{border-radius:.75rem}.workspace-main .shadow-soft,.workspace-main .shadow-sm{box-shadow:0 1px 2px rgba(15,23,42,.035)}
     .workspace-main > .mx-auto > section:not(.workspace-context){border-color:#dce4ef}.workspace-main table thead{background:#f8fafc}.workspace-main table tbody tr{border-color:#e7edf4}.workspace-main table tbody tr:hover{background:#f8fbff}
     .workspace-context{border:1px solid #dce4ef;border-left-width:3px;border-radius:.75rem;background:#fff;padding:1.75rem;box-shadow:0 1px 2px rgba(15,23,42,.03)}
     .workspace-context--consumer{border-left-color:#2563eb;background:#f8fbff}.workspace-context--retailer{border-left-color:#c26825;background:#fffaf5}.workspace-context--researcher{border-left-color:#6d5bd0;background:#fbfaff}.workspace-context--administrator{border-left-color:#475569;background:#f8fafc}
-    .workspace-main .app-badge,.workspace-main .app-dropdown-badge{box-shadow:none}.workspace-main .app-export-button{border-radius:.625rem;box-shadow:none}.workspace-main .app-export-button:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(37,99,235,.10)}
+    .workspace-main .app-badge,.workspace-main .app-dropdown-badge{box-shadow:none}.workspace-main .app-export-button,.workspace-main .app-export-summary{box-shadow:none}.workspace-main .app-export-button:hover,.workspace-main .app-export-summary:hover{box-shadow:0 4px 10px rgba(37,99,235,.14)}
     .sidebar-link-text,.sidebar-label{transition:opacity .2s ease-in-out}
     .sidebar-nav a{transition:transform .2s ease,background-color .2s ease,color .2s ease,box-shadow .2s ease}
     .sidebar-nav a:hover{transform:translateX(2px);background:#eef4ff;box-shadow:none}
@@ -167,10 +175,10 @@
     [id$="-echart"],[id*="-echart"]{min-height:260px}
     @media (min-width: 768px){
       .workspace-shell{display:block;align-items:stretch}
-      .workspace-sidebar{position:fixed;inset:0 auto 0 0;z-index:50;width:15rem;overflow-y:auto;padding:0!important;transition:width 200ms ease}
+      .workspace-sidebar{position:fixed;inset:0 auto 0 0;z-index:50;width:16rem;overflow-y:auto;padding:0!important;transition:width 200ms ease}
       .workspace-sidebar .sidebar-nav{padding:.5rem}
-      .workspace-main{margin-left:15rem}
-      .app-header{left:15rem;margin-left:0}
+      .workspace-main{margin-left:16rem}
+      .app-header{left:16rem;margin-left:0}
       body[data-sidebar-collapsed="true"] .workspace-sidebar{width:4.5rem}
       body[data-sidebar-collapsed="true"] .workspace-main{margin-left:4.5rem}body[data-sidebar-collapsed="true"] .app-header{left:4.5rem;margin-left:0}
     }
@@ -184,14 +192,16 @@
     @media (max-width: 767px){
       .app-brand{width:auto;border-right:0;padding:0 1rem}.app-header .app-logo{height:2rem}
       .workspace-shell{overflow-x:hidden}
-      .workspace-main{margin-left:0}.app-header{left:0;margin-left:0}.workspace-sidebar{position:relative;inset:auto;width:100%;overflow-x:auto;overflow-y:hidden;padding:.5rem .5rem .75rem!important}
-      .workspace-sidebar .sidebar-nav{display:flex;flex-direction:row;flex-wrap:nowrap;gap:.5rem;min-width:max-content;width:max-content}
-      .workspace-sidebar .sidebar-nav a{min-height:2.75rem;white-space:nowrap}
+      .workspace-main{margin-left:0}.app-header{left:0;margin-left:0}.workspace-sidebar{position:relative;inset:auto;width:100%;overflow:visible;padding:.5rem!important}
+      .workspace-sidebar .sidebar-nav{display:flex;width:100%;min-width:0;max-width:100%;flex-direction:row;flex-wrap:nowrap;gap:.5rem;overflow-x:auto;overflow-y:hidden;padding:.125rem 0 .4rem;scroll-padding-inline:.25rem;scroll-snap-type:x proximity;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+      .workspace-sidebar .sidebar-nav>a{flex:0 0 auto;min-height:2.75rem;white-space:nowrap;scroll-snap-align:start}
+      .workspace-sidebar .sidebar-section-label{display:none}
       .workspace-sidebar .sidebar-badge{min-width:auto;max-width:3rem}
       #sidebar-toggle,.sidebar-support{display:none!important}
       .workspace-main{width:100%;padding-left:1rem!important;padding-right:1rem!important}
-      .workspace-sidebar::-webkit-scrollbar{height:4px}
-      .workspace-sidebar{scrollbar-width:thin;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+      .workspace-sidebar .sidebar-nav::-webkit-scrollbar{height:4px}
+      .workspace-sidebar .sidebar-nav::-webkit-scrollbar-thumb{border-radius:999px;background:#64748b}
+      .workspace-sidebar .sidebar-nav{scrollbar-width:thin;scrollbar-color:#64748b transparent}
       .app-hero,.app-page-header{padding:1.25rem;border-radius:1.25rem}.app-page-header{align-items:flex-start;flex-direction:column;gap:1.25rem}.app-page-header__title{font-size:1.875rem}.app-page-header__actions{width:100%;flex-wrap:wrap}
       .app-section,.app-section-alt{padding:3.25rem 1rem}
       .app-dropdown-panel{left:0;right:auto;min-width:min(18rem,calc(100vw - 2rem))}
@@ -212,16 +222,23 @@
       .app-badge{padding:.18rem .45rem;font-size:.54rem}
       [id$="-echart"],[id*="-echart"]{min-height:240px}
     }
-    body[data-sidebar-collapsed="true"] .sidebar-label,
-    body[data-sidebar-collapsed="true"] .sidebar-section-label,
-    body[data-sidebar-collapsed="true"] .sidebar-badge,
-    body[data-sidebar-collapsed="true"] .sidebar-support,
-    body[data-sidebar-collapsed="true"] .sidebar-link-text{display:none}
-    body[data-sidebar-collapsed="true"] .sidebar-nav{align-items:center}
-    body[data-sidebar-collapsed="true"] .sidebar-nav a{justify-content:center;padding-left:0.85rem;padding-right:0.85rem}
-    body[data-sidebar-collapsed="true"] .app-nav-item{display:flex}
-    body[data-sidebar-collapsed="true"] .sidebar-brand{gap:.25rem;padding-inline:.375rem}body[data-sidebar-collapsed="true"] .sidebar-brand img,body[data-sidebar-collapsed="true"] .sidebar-brand-fallback,body[data-sidebar-collapsed="true"] .sidebar-collapse-button{width:1.75rem;height:1.75rem;flex-basis:1.75rem}
-    body[data-sidebar-collapsed="true"] .sidebar-toggle-icon{transform:rotate(180deg)}
+    @media (max-width:480px){
+      .refine-filter-grid{grid-template-columns:minmax(0,1fr)}
+      .refine-filter-action-controls{flex-direction:column;align-items:stretch}
+      .refine-filter-action-controls>*{width:100%;flex-basis:auto}
+    }
+    @media (min-width:768px){
+      body[data-sidebar-collapsed="true"] .sidebar-label,
+      body[data-sidebar-collapsed="true"] .sidebar-section-label,
+      body[data-sidebar-collapsed="true"] .sidebar-badge,
+      body[data-sidebar-collapsed="true"] .sidebar-support,
+      body[data-sidebar-collapsed="true"] .sidebar-link-text{display:none}
+      body[data-sidebar-collapsed="true"] .sidebar-nav{align-items:center}
+      body[data-sidebar-collapsed="true"] .sidebar-nav a{justify-content:center;padding-left:0.85rem;padding-right:0.85rem}
+      body[data-sidebar-collapsed="true"] .app-nav-item{display:flex}
+      body[data-sidebar-collapsed="true"] .sidebar-brand{gap:.25rem;padding-inline:.375rem}body[data-sidebar-collapsed="true"] .sidebar-brand img,body[data-sidebar-collapsed="true"] .sidebar-brand-fallback,body[data-sidebar-collapsed="true"] .sidebar-collapse-button{width:1.75rem;height:1.75rem;flex-basis:1.75rem}
+      body[data-sidebar-collapsed="true"] .sidebar-toggle-icon{transform:rotate(180deg)}
+    }
     @media (prefers-reduced-motion: reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
     @keyframes float-slow{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
     @keyframes float-delayed{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}
@@ -246,7 +263,7 @@
           <span>{{ tier_label(current_tier) }} Plan</span>
         </a>
         {% endif %}
-        {% if current_user.roles and current_user.roles|length > 1 %}<form action="{{ url_for('role_switch') }}" method="post" class="header-utility header-workspace hidden sm:flex"><label class="sr-only" for="role-switch">Workspace</label><span class="material-symbols-outlined text-[18px] text-slate-400">workspaces</span><select id="role-switch" name="role" onchange="this.form.submit()" class="app-select min-w-[145px] text-sm font-bold">{% for value in current_user.roles %}<option value="{{ value }}" {{ 'selected' if current_user.active_role == value }}>{{ role_names[value] }}</option>{% endfor %}</select></form>{% elif developer_role_preview %}<form action="{{ url_for('role_switch') }}" method="post" class="header-utility header-workspace hidden sm:flex"><label class="sr-only" for="role-switch">Workspace</label><span class="material-symbols-outlined text-[18px] text-slate-400">workspaces</span><select id="role-switch" name="role" onchange="this.form.submit()" class="app-select min-w-[145px] text-sm font-bold">{% for value,label in role_names.items() %}<option value="{{ value }}" {{ 'selected' if current_user.active_role == value }}>{{ label }}</option>{% endfor %}</select></form>{% else %}<div class="header-utility hidden gap-2 sm:flex"><span class="material-symbols-outlined text-[18px] text-slate-400">workspaces</span><span><span class="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Workspace</span><strong class="block text-xs text-slate-800">{{ role_names[current_user.active_role or current_user.role] }}</strong></span></div>{% endif %}
+        <div class="header-utility hidden gap-2 sm:flex"><span class="material-symbols-outlined text-[18px] text-slate-400">workspaces</span><span><span class="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Workspace</span><strong class="block text-xs text-slate-800">{{ role_names[current_user.active_role or current_user.role] }}</strong></span></div>
         <details class="app-dropdown">
           <summary class="user-menu-summary" aria-label="Open account menu"><span class="sr-only">Account</span>
             <span class="user-avatar h-10 w-10 text-sm">
@@ -265,7 +282,7 @@
             <div class="border-b border-slate-100 px-3 py-2.5"><p class="overflow-hidden text-ellipsis whitespace-nowrap text-sm font-bold text-slate-900" title="{{ current_user.display_name or current_user.username }}">{{ current_user.display_name or current_user.username }}</p><p class="mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-slate-500">{{ current_user.email or role_names[current_user.active_role or current_user.role] }}</p></div>
             <a href="{{ url_for('profile') }}" class="app-dropdown-item"><span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">account_circle</span>My Profile</span></a>
             {% if current_user.role == 'administrator' %}
-            <a href="{{ url_for('administrator_dashboard') }}" class="app-dropdown-item"><span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">workspace_premium</span>Membership</span><span class="text-xs font-bold text-indigo-500">System</span></a>
+            <a href="{{ url_for('administrator_dashboard') }}" class="app-dropdown-item"><span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">admin_panel_settings</span>Access</span><span class="text-xs font-bold text-indigo-500">System</span></a>
             {% else %}
             <a href="{{ url_for('membership') }}" class="app-dropdown-item"><span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">workspace_premium</span>Membership</span><span class="text-xs font-bold text-blue-500">{{ tier_label(current_tier) }}</span></a>
             {% endif %}
@@ -280,7 +297,7 @@
     </div>
   </header>
   <div class="app-page workspace-shell">
-    <aside class="app-sidebar workspace-sidebar overflow-hidden border-b border-slate-200 p-2 md:border-b-0 md:border-r md:p-2">
+    <aside class="app-sidebar workspace-sidebar border-b border-slate-200 p-2 md:border-b-0 md:border-r md:p-2">
       <div class="sidebar-brand"><a href="{{ url_for('dashboard_redirect') }}" class="sidebar-brand-link"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="Precision Curator logo" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="sidebar-brand-fallback" aria-hidden="true" hidden>PC</span><span class="sidebar-brand-name sidebar-label">Precision Curator</span></a>
         <button id="sidebar-toggle" type="button" title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true" class="sidebar-collapse-button inline-flex shrink-0 items-center justify-center rounded-lg text-slate-300 transition duration-200 hover:bg-slate-700 hover:text-white">
           <span class="material-symbols-outlined sidebar-toggle-icon text-[20px]">chevron_left</span>
@@ -301,25 +318,23 @@
           <a href="{{ url_for('audit') }}" class="flex items-center gap-3 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_audit else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined text-[20px]">history</span><span class="sidebar-link-text">Evidence History</span></a>
           <a href="{{ url_for('logs') }}" class="flex items-center gap-3 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_logs else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined text-[20px]">list_alt</span><span class="sidebar-link-text">Activity Logs</span></a>
         {% else %}
-          <div class="sidebar-section-label px-4 pt-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Core workflow</div>
-          <a title="Dashboard" href="{{ url_for('dashboard_redirect') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_dashboard else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">space_dashboard</span><span class="sidebar-link-text">Dashboard</span><span class="sidebar-badge"></span></a>
-          <a title="Product Search" href="{{ url_for('search', search_record_id=session.get('last_search_record_id')) if session.get('last_search_record_id') else url_for('search') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_search else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">search</span><span class="sidebar-link-text">Product Search</span><span class="sidebar-badge"></span></a>
-          <div class="sidebar-section-label px-4 pt-4 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Evidence & tracking</div>
-          <a href="{{ url_for('watchlist') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if request.endpoint == 'watchlist' else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">visibility</span><span class="sidebar-link-text" title="Watchlist">Watchlist</span>{% if current_tier == 'basic' %}<span class="sidebar-badge app-badge app-badge-premium shrink-0" title="Premium feature" aria-label="Premium feature">Premium</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>
-          <a href="{{ url_for('saved') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_saved else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">bookmark</span><span class="sidebar-link-text" title="Saved Research">Saved Research</span>{% if current_tier == 'basic' %}<span class="sidebar-badge app-badge app-badge-premium shrink-0" title="Premium feature" aria-label="Premium feature">Premium</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>
-          <div class="sidebar-section-label px-4 pt-4 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Analysis</div>
-          <a href="{{ url_for('analytics_compatibility') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-violet-600 text-white shadow-sm' if is_analytics else 'hover:bg-violet-50 hover:text-violet-700' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">analytics</span><span class="sidebar-link-text" title="Analytics">Analytics</span>{% if current_tier == 'basic' %}<span class="sidebar-badge app-badge app-badge-premium shrink-0" title="Premium feature" aria-label="Premium feature">Premium</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>
-          <a href="{{ url_for('audit') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_audit else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">policy</span><span class="sidebar-link-text" title="Source Audit">Source Audit</span>{% if current_tier == 'professional' %}<span class="sidebar-badge"></span>{% else %}<span class="sidebar-badge app-badge app-badge-pro shrink-0" title="Professional feature" aria-label="Professional feature"><span aria-hidden="true">Pro</span><span class="sr-only">Professional feature</span></span>{% endif %}</a>
-          {% if current_user.role == 'researcher' %}<a href="{{ url_for('logs') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_logs else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">list_alt</span><span class="sidebar-link-text">Logs</span>{% if current_tier == 'professional' %}<span class="sidebar-badge"></span>{% else %}<span class="sidebar-badge app-badge app-badge-pro shrink-0">Professional</span>{% endif %}</a>{% if demo_tools_enabled and (current_user.role == 'administrator' or current_user.is_developer) %}<a href="{{ url_for('demo') }}" class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_demo else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined text-[20px]">science</span><span class="sidebar-link-text">Test Data</span><span class="sidebar-badge"></span></a>{% endif %}{% endif %}
+          {% set premium_locked = current_tier == 'basic' %}
+          {% set professional_locked = current_tier != 'professional' %}
+          <div class="sidebar-section-label px-4 pt-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">{{ 'Research' if current_user.role == 'researcher' else 'Core workflow' }}</div>
+          <a title="Dashboard" href="{{ url_for('dashboard_redirect') }}" {% if is_dashboard %}aria-current="page"{% endif %} class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_dashboard else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">space_dashboard</span><span class="sidebar-link-text">Dashboard</span><span class="sidebar-badge"></span></a>
+          <a title="Product Search" href="{{ url_for('search', search_record_id=session.get('last_search_record_id')) if session.get('last_search_record_id') else url_for('search') }}" {% if is_search %}aria-current="page"{% endif %} class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_search else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">search</span><span class="sidebar-link-text">Product Search</span><span class="sidebar-badge"></span></a>
+          <div class="sidebar-section-label px-4 pt-4 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Evidence & research</div>
+          <a title="Saved Research" href="{{ url_for('saved') }}" {% if is_saved %}aria-current="page"{% endif %} class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_saved else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">bookmarks</span><span class="sidebar-link-text">Saved Research</span>{% if premium_locked %}<span class="sidebar-badge sidebar-plan-marker sidebar-plan-marker--premium" title="Requires Premium plan" aria-label="Requires Premium plan">PREM</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>
+          <a title="Watchlist" href="{{ url_for('watchlist') }}" {% if request.endpoint == 'watchlist' %}aria-current="page"{% endif %} class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if request.endpoint == 'watchlist' else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">monitoring</span><span class="sidebar-link-text">Watchlist</span>{% if premium_locked %}<span class="sidebar-badge sidebar-plan-marker sidebar-plan-marker--premium" title="Requires Premium plan" aria-label="Requires Premium plan">PREM</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>
+          <div class="sidebar-section-label px-4 pt-4 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">{{ 'Analysis & provenance' if current_user.role == 'researcher' else 'Analysis' }}</div>
+          <a title="Analytics" href="{{ url_for('analytics_compatibility') }}" {% if is_analytics %}aria-current="page"{% endif %} class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_analytics else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">analytics</span><span class="sidebar-link-text">Analytics</span>{% if premium_locked %}<span class="sidebar-badge sidebar-plan-marker sidebar-plan-marker--premium" title="Requires Premium plan" aria-label="Requires Premium plan">PREM</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>
+          <a title="Source Audit" href="{{ url_for('audit') }}" {% if is_audit %}aria-current="page"{% endif %} class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_audit else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">policy</span><span class="sidebar-link-text">Source Audit</span>{% if professional_locked %}<span class="sidebar-badge sidebar-plan-marker sidebar-plan-marker--professional" title="Requires Professional plan" aria-label="Requires Professional plan">PRO</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>
+          {% if current_user.role == 'researcher' %}<a title="Activity Logs" href="{{ url_for('logs') }}" {% if is_logs %}aria-current="page"{% endif %} class="app-nav-item min-w-0 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-semibold {{ 'bg-blue-600 text-white shadow-sm' if is_logs else 'hover:bg-blue-50 hover:text-primary' }}"><span class="material-symbols-outlined shrink-0 text-[20px]">receipt_long</span><span class="sidebar-link-text">Activity Logs</span>{% if professional_locked %}<span class="sidebar-badge sidebar-plan-marker sidebar-plan-marker--professional" title="Requires Professional plan" aria-label="Requires Professional plan">PRO</span>{% else %}<span class="sidebar-badge"></span>{% endif %}</a>{% endif %}
         {% endif %}
       </nav>
-      {% if current_user.role == 'administrator' %}<div class="sidebar-support mt-8 hidden rounded-2xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800 md:block">
-        <strong class="block">Workspace status</strong>
-        <span class="mt-1 block opacity-75">Ready for review.</span>
-      </div>{% endif %}
     </aside>
     <main class="workspace-main overflow-x-hidden px-4 py-4 md:px-6 md:py-6 lg:px-6 lg:py-8">
-      {% set dense_workspace = request.endpoint in ['search','search_results','saved','watchlist','audit','analytics','analytics_compatibility','administrator_dashboard'] %}
+      {% set dense_workspace = request.endpoint in ['search','search_results','saved','watchlist','audit','analytics','analytics_compatibility','logs','administrator_dashboard'] or feature is defined %}
       <div class="workspace-content mx-auto w-full {{ 'workspace-content--dense' if dense_workspace }}">
         {% if request.endpoint in ['consumer_dashboard','retailer_dashboard','researcher_dashboard','administrator_dashboard'] %}
           <section id="workflow-guide-shell" class="mb-6 hidden">
@@ -383,7 +398,7 @@
 
     <nav class="flex items-center gap-1 text-[13px] font-bold text-slate-600 sm:gap-2">
       <a href="{{ url_for('home') }}" class="public-nav-link hidden md:inline-flex">Home</a>
-      <a href="{{ url_for('home') }}#features" class="public-nav-link hidden lg:inline-flex">Features</a>
+      <a href="{{ url_for('home') }}#features" class="public-nav-link hidden lg:inline-flex">Product</a>
       <a href="{{ url_for('home') }}#roles" class="public-nav-link hidden lg:inline-flex">Roles</a>
       <a href="{{ url_for('home') }}#membership" class="public-nav-link hidden sm:inline-flex">Pricing</a>
       <a href="{{ url_for('home') }}#faq" class="public-nav-link hidden lg:inline-flex">FAQ</a>
@@ -442,7 +457,9 @@
       if (!scrollTopBtn) return;
       const visible = window.scrollY > 320;
       scrollTopBtn.classList.toggle('is-visible', visible);
+      if (!visible && document.activeElement === scrollTopBtn) scrollTopBtn.blur();
       scrollTopBtn.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      scrollTopBtn.tabIndex = visible ? 0 : -1;
     };
     scrollTopBtn?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
     window.addEventListener('scroll', updateScrollTop, { passive: true });

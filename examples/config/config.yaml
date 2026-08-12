@@ -20,12 +20,11 @@ export_formats:
 - png
 - html
 notification:
-  email_password: ''
+  email_provider: brevo_api
   email_recipients: []
-  email_smtp_port: 587
-  email_smtp_server: ''
-  email_username: ''
   enabled: false
+  sender_email: ''
+  sender_name: Precision Curator
   slack_webhook_url: ''
 scraping:
   headers:

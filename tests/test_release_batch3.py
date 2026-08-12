@@ -54,19 +54,19 @@ def test_production_configuration_remains_fail_closed():
     with pytest.raises(ProductionConfigurationError):
         validate_production_configuration({
             "APP_ENV": "production",
-            "ALLOW_MEMORY_FALLBACK": "false",
+            "DEMO_MODE": "false",
         })
     with pytest.raises(ProductionConfigurationError):
         validate_production_configuration({
             "APP_ENV": "production",
             "FLASK_SECRET_KEY": "x" * 40,
-            "ALLOW_MEMORY_FALLBACK": "true",
+            "DEMO_MODE": "true",
         })
     with pytest.raises(ProductionConfigurationError):
         validate_production_configuration({
             "APP_ENV": "production",
             "FLASK_SECRET_KEY": "x" * 40,
-            "ALLOW_MEMORY_FALLBACK": "false",
+            "DEMO_MODE": "false",
             "DEMO_TOOLS_ENABLED": "true",
         })
 
@@ -119,12 +119,13 @@ def test_environment_template_contains_placeholders_not_credentials():
             values[key] = value
     for key in (
         "EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "SERPAPI_API_KEY",
-        "GEMINI_API_KEY", "OPENAI_API_KEY", "MAIL_PASSWORD",
+        "GEMINI_API_KEY", "OPENAI_API_KEY", "BREVO_API_KEY", "BREVO_SENDER_EMAIL",
         "PRECISION_ADMIN_PASSWORD",
     ):
         assert values[key] == ""
     assert values["FLASK_SECRET_KEY"].startswith("replace-with-")
-    assert values["MONGODB_URI"].startswith("mongodb://localhost")
+    assert values["MONGO_URI"].startswith("mongodb+srv://")
+    assert values["MONGO_DATABASE"] == "precision_curator_production"
 
 
 def test_readme_documents_canonical_commands_and_release_boundaries():
@@ -152,7 +153,9 @@ def test_render_blueprint_uses_canonical_entry_and_health_path():
     blueprint = (ROOT / "render.yaml").read_text(encoding="utf-8")
     assert "gunicorn precision_app:app" in blueprint
     assert "healthCheckPath: /health" in blueprint
-    assert "ALLOW_MEMORY_FALLBACK" in blueprint
+    assert "DEMO_MODE" in blueprint
+    assert "MONGO_URI" in blueprint
+    assert "MONGO_DATABASE" in blueprint
     assert "value: \"false\"" in blueprint
 
 

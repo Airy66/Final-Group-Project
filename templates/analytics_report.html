@@ -18,7 +18,7 @@
 <section class="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
   <h2 class="font-display text-2xl font-bold text-slate-950">Key takeaways</h2>
   <div class="mt-4 grid gap-4 md:grid-cols-3">
-    <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Best visible option</p><p class="mt-2 text-base font-semibold text-slate-900">{{ analytics_payload.summary.best_platform or 'Unavailable' }}</p></div>
+    <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase tracking-widest text-slate-400">{{ analytics_payload.summary.platform_metric_label or 'Platform comparison' }}</p><p class="mt-2 text-base font-semibold text-slate-900">{{ analytics_payload.summary.best_platform or 'Not qualified' }}</p><p class="mt-1 text-xs leading-5 text-slate-500">{{ analytics_payload.summary.platform_metric_detail if analytics_payload.summary.best_platform else analytics_payload.summary.platform_qualification_reason }}</p></div>
     <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Market pattern</p><p class="mt-2 text-sm text-slate-700">{% if analytics_payload.summary.price_range and analytics_payload.summary.price_range > 0 %}Spread is USD {{ '%.2f'|format(analytics_payload.summary.price_range) }}.{% else %}Prices are clustered tightly.{% endif %}</p></div>
     <div class="rounded-2xl bg-slate-50 p-4"><p class="text-xs font-bold uppercase tracking-widest text-slate-400">Suggested next action</p><p class="mt-2 text-sm text-slate-700">Review source links and save the strongest record before exporting.</p></div>
   </div>

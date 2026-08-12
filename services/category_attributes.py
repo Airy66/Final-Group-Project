@@ -135,7 +135,10 @@ def classify_product_role(title, source_category=None, source_aspects=None, pric
     text = _text(title, source_category, _aspect_text(source_aspects), price_text)
     if re.search(r"\b(per month|/month|monthly payment|installment|finance(?:d|ing)?)\b", text):
         return {"role": "installment", "source": "price_or_title", "confidence": 0.98}
-    if re.search(r"\b(service plan|protection plan|warranty|subscription|activation|phone plan|data plan)\b", text):
+    # A warranty mentioned as an attribute of a complete device (for example
+    # "iPhone 16 ... 12 month Apple warranty") is not itself a service-plan
+    # listing. Only explicit warranty products or coverage offers belong here.
+    if re.search(r"\b(service plan|protection plan|extended warranty|warranty (?:plan|coverage|service|only|for)|subscription|activation|phone plan|data plan)\b", text):
         return {"role": "service_or_plan", "source": "title", "confidence": 0.95}
     if re.search(r"\b(replacement|repair part|spare part|screen assembly|motherboard|logic board|ear cushion|replacement cable|battery only)\b", text):
         return {"role": "replacement_part", "source": "title", "confidence": 0.92}

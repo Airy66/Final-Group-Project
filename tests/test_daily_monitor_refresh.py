@@ -21,6 +21,7 @@ def _setup(monkeypatch, name="Monitor Owner"):
         "MONITOR_SCHEDULED_RUN_LIMIT": 5,
         "MONITOR_REFRESH_TIMEZONE": "Asia/Singapore",
         "MONITOR_DAILY_REFRESH_HOUR": 8,
+        "MONITOR_MANUAL_REFRESH_COOLDOWN_SECONDS": 180,
         "MONITOR_TEST_PROVIDER_CALLS": True,
     }.items():
         monkeypatch.setitem(precision_app.app.config, key, value)
@@ -220,6 +221,30 @@ def test_manual_and_scheduled_paths_use_shared_refresh_service(monkeypatch):
     assert calls[-1] == (monitor["_id"], user["_id"], "scheduled")
 
 
+def test_manual_refresh_cooldown_prevents_duplicate_snapshots_and_failed_runs_release_lock(monkeypatch):
+    _client, repository, user = _setup(monkeypatch)
+    monitor = _monitor(repository, user)
+    now = datetime(2026, 7, 19, 1, 0, tzinfo=timezone.utc)
+    calls = []
+    monkeypatch.setattr(precision_app, "_retrieve_monitor_provider_records", lambda _item: (calls.append("success") or _provider_result()))
+
+    first = precision_app.refresh_monitor(monitor["_id"], user["_id"], trigger="manual", now=now, request_id="first")
+    duplicate = precision_app.refresh_monitor(monitor["_id"], user["_id"], trigger="manual", now=now + timedelta(seconds=1), request_id="second")
+    assert first["status"] == "success"
+    assert duplicate["status"] == "skipped" and duplicate["error_code"] == "manual_refresh_cooldown"
+    assert duplicate["retry_after_seconds"] > 0
+    assert calls == ["success"]
+    assert repository.count_price_snapshots(monitor["_id"]) == 1
+
+    later = now + timedelta(seconds=181)
+    monkeypatch.setattr(precision_app, "_retrieve_monitor_provider_records", lambda _item: ([], {"ebay": {"status": "failed"}}))
+    failed = precision_app.refresh_monitor(monitor["_id"], user["_id"], trigger="manual", now=later, request_id="failed")
+    assert failed["status"] == "failed"
+    monkeypatch.setattr(precision_app, "_retrieve_monitor_provider_records", lambda _item: _provider_result(price=110))
+    retry = precision_app.refresh_monitor(monitor["_id"], user["_id"], trigger="manual", now=later + timedelta(seconds=1), request_id="retry")
+    assert retry["status"] == "success"
+
+
 def test_dry_run_and_cli_limit_and_monitor_selection_are_safe(monkeypatch, capsys):
     _client, repository, user = _setup(monkeypatch)
     first = _monitor(repository, user, "First")
@@ -262,7 +287,7 @@ def test_watchlist_ui_status_actions_loading_and_archived_controls(monkeypatch):
     monitor = _monitor(repository, user)
     page = client.get("/watchlist", query_string={"item_id": monitor["_id"]})
     body = page.get_data(as_text=True)
-    for label in ("Daily Refresh", "Last refreshed", "Next refresh", "Last status", "Collect latest snapshot", "Enable", "View snapshots", "Export"):
+    for label in ("Daily Refresh", "Last refreshed", "Next refresh", "Last status", "Collect first snapshot", "Enable", "View snapshots", "Export"):
         assert label in body
     assert "No automatic monitor is active." in body and "Enable daily refresh on one Monitor." in body
     assert "data-monitor-action" in body and "form.dataset.submitting === 'true'" in body

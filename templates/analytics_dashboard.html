@@ -6,6 +6,8 @@
 {% set role_label = 'Consumer' if role == 'consumer' else ('Retailer' if role == 'retailer' else 'Researcher') %}
 {% set role_accent = 'blue' if role == 'consumer' else ('emerald' if role == 'retailer' else 'violet') %}
 {% set role_note = 'This view helps you understand saved product prices and simple comparison results.' if role == 'consumer' else ('This view highlights platform coverage, market spread, and pricing signals for sourcing decisions.' if role == 'retailer' else 'This view supports evidence review, traceability, and exportable research analysis.') %}
+{% set role_focus_title = 'Start with the price curve' if role == 'consumer' else ('Start with platform benchmarks' if role == 'retailer' else 'Start with distribution and provenance') %}
+{% set role_focus_detail = 'Check the typical price range, then review the ranked listings before choosing an offer.' if role == 'consumer' else ('Compare platform medians and coverage before acting on any unusually low listing.' if role == 'retailer' else 'Inspect distribution, source composition, and record-level evidence before drawing a conclusion.') %}
 {% set export_id = analysis_record._id if analysis_record else record._id %}
 
 <section class="border-b border-slate-200 bg-slate-50/80">
@@ -16,12 +18,13 @@
         <h1 class="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Market analysis</h1>
         <p class="mt-2 text-lg text-slate-700">{{ display_query or 'Current search' }}</p>
         <p class="mt-3 text-sm text-slate-600">{{ record_count }} comparable listings analyzed · {{ analytics_payload.platform_distribution.labels|join(' and ') }}{% if accessories_excluded %} · {{ accessories_excluded }} listings excluded{% endif %}{% if record.created_at %}<br>Collected {{ display_sgt_datetime(record.created_at) }}{% endif %}</p>
+        <p class="mt-3 inline-flex items-center gap-2 rounded-full bg-{{ role_accent }}-50 px-3 py-1.5 text-xs font-bold text-{{ role_accent }}-700"><span class="material-symbols-outlined text-[16px]">tune</span>{{ role_label }} analysis focus</p>
         {% if accessories_excluded %}<details class="mt-2 text-sm text-slate-500"><summary class="cursor-pointer font-semibold text-primary">Why were listings excluded?</summary><p class="mt-1">Listings with installment prices, accessory-only products, or incomplete price data were excluded from this analysis.</p></details>{% endif %}
         {% if single_platform_message %}<p class="mt-3 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800"><span class="material-symbols-outlined mr-1.5 text-[16px]">info</span>{{ single_platform_message }}</p>{% endif %}
       </div>
       <div class="flex flex-wrap items-center gap-3 xl:pt-1">
         <details class="app-dropdown relative z-30">
-          <summary class="app-export-summary">Export <span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span></summary>
+          <summary class="app-export-summary"><span class="material-symbols-outlined text-[18px]">download</span><span>Export</span><span class="material-symbols-outlined text-[18px]">expand_more</span></summary>
           <div class="app-dropdown-panel">
             {% if current_user and membership_rank(current_user.membership_tier or current_user.plan) >= membership_rank('premium') %}
             <a class="app-dropdown-item" href="{{ url_for('analytics_export_results_csv', search_record_id=export_id) }}"><span>Analysis records (CSV)</span><span class="app-dropdown-badge app-dropdown-badge-premium">Premium</span></a>
@@ -44,7 +47,7 @@
   </div>
 </section>
 
-{% if summary.mixed_storage %}<p class="mx-auto mt-5 max-w-7xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><strong>Mixed storage comparison.</strong> Aggregate values cover {{ summary.storage_variants|join(', ') }}. A Best Platform is not calculated across different capacities; use the Storage filter in Search for a qualified comparison.</p>{% endif %}
+{% if summary.scope_refinement_notice %}<p class="mx-auto mt-5 max-w-7xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><strong>Comparison scope needs refinement.</strong> {{ summary.scope_refinement_notice }}</p>{% endif %}
 
 <section class="mx-auto mt-6 grid max-w-7xl gap-3 px-4 sm:grid-cols-2 xl:grid-cols-4 sm:px-6 lg:px-8" aria-label="Analysis summary">
   {% for label,value,icon,accent,value_id in [
@@ -60,8 +63,12 @@
 </section>
 
 <section class="mx-auto mt-4 max-w-7xl px-4 sm:px-6 lg:px-8" aria-label="Analysis takeaway">
-  <div class="rounded-xl border border-blue-200 bg-blue-50/70 px-5 py-4">
-    <div class="flex gap-3"><span class="material-symbols-outlined mt-0.5 text-[20px] text-blue-700">insights</span><div class="min-w-0"><p class="text-xs font-bold uppercase tracking-wider text-blue-700">Recommended reading</p><p id="insight-recommendation" class="mt-1 text-sm font-semibold leading-6 text-slate-800">Prices span USD {{ '%.2f'|format(summary.minimum_price) }} to USD {{ '%.2f'|format(summary.maximum_price) }} across {{ summary.platform_count }} platform{{ '' if summary.platform_count == 1 else 's' }}.</p><div id="insight-chip-list" class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-600"></div><div class="sr-only"><span id="insight-detail-filters"></span><span id="insight-detail-best"></span><span id="insight-detail-quality"></span></div></div></div>
+  <div class="rounded-xl border border-{{ role_accent }}-200 bg-{{ role_accent }}-50/60 px-5 py-4">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div class="flex min-w-0 gap-3"><span class="material-symbols-outlined mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-[20px] text-{{ role_accent }}-700 ring-1 ring-inset ring-{{ role_accent }}-100">insights</span><div class="min-w-0"><p class="text-[11px] font-bold uppercase tracking-wider text-{{ role_accent }}-700">{{ role_label }} analysis summary</p><h2 class="mt-1 text-base font-bold text-slate-950">{{ role_focus_title }}</h2><p id="insight-recommendation" class="mt-1 text-sm font-medium leading-6 text-slate-700">{{ role_focus_detail }}</p></div></div>
+      <div class="shrink-0 rounded-lg bg-white px-3 py-2 ring-1 ring-inset ring-{{ role_accent }}-100"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Evidence strength</p><p id="analysis-confidence" class="mt-0.5 text-sm font-bold text-slate-800">{{ 'Limited sample' if record_count < 5 else ('Directional sample' if record_count < 10 else 'Broader sample') }}</p></div>
+    </div>
+    <div id="insight-chip-list" class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-600"></div><div class="sr-only"><span id="insight-detail-filters"></span><span id="insight-detail-best"></span><span id="insight-detail-quality"></span></div>
   </div>
 </section>
 
@@ -86,13 +93,15 @@
   </div>
 </section>
 
-<section class="mx-auto mt-6 max-w-7xl px-4 sm:px-6 lg:px-8" aria-labelledby="comparable-price-curve-title">
+<div class="flex flex-col" data-role-chart-priority="{{ role }}">
+<section class="mx-auto mt-6 w-full max-w-7xl px-4 sm:px-6 lg:px-8" aria-labelledby="comparable-price-curve-title" style="order: {{ 1 if role == 'consumer' else 2 }}">
   <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-primary">Price order</p>
         <h2 id="comparable-price-curve-title" class="text-xl font-semibold text-slate-950">Comparable Price Curve</h2>
         <p class="mt-1 text-sm text-slate-500">Comparable listing prices ordered from lowest to highest.</p>
+        <p id="price-curve-context" class="mt-2 text-xs font-semibold text-slate-600"></p>
       </div>
       <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">Listing rank</span>
     </div>
@@ -105,8 +114,8 @@
   </article>
 </section>
 
-<section class="mx-auto mt-6 grid max-w-7xl gap-4 px-4 xl:grid-cols-12 sm:px-6 lg:px-8">
-  <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-7">
+<section class="mx-auto mt-6 grid w-full max-w-7xl gap-4 px-4 xl:grid-cols-12 sm:px-6 lg:px-8" style="order: {{ 2 if role == 'consumer' else (1 if role == 'retailer' else 3) }}">
+  <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-7" style="order: {{ 1 if role == 'consumer' else (2 if role == 'retailer' else 4) }}">
     <div class="flex items-center justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Listings</p>
@@ -118,18 +127,19 @@
     <p id="ranked-count" class="mt-2 text-xs font-semibold text-slate-500">Showing up to 8 comparable listings</p>
     <div id="trend-chart" class="mt-4 h-[330px]" role="img" aria-label="Horizontal bars ranking comparable listing prices."></div>
   </article>
-  <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-5">
+  <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-5" style="order: {{ 2 if role == 'consumer' else (1 if role == 'retailer' else 3) }}">
     <div class="flex items-center justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Comparison</p>
         <h2 class="text-xl font-semibold text-slate-950">Average vs median by platform</h2>
         <p class="mt-1 text-sm text-slate-500">See how the typical price shifts between platforms without the noise of extreme outliers.</p>
+        <p id="platform-comparison-context" class="mt-2 text-xs font-semibold text-slate-600"></p>
       </div>
       <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Platform compare</span>
     </div>
     <div id="platform-comparison-chart" class="mt-4 h-[330px]" role="img" aria-label="Grouped bars comparing average and median prices by platform."></div>
   </article>
-  <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-6">
+  <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-6" style="order: {{ 3 if role != 'researcher' else 1 }}">
     <div class="flex items-center justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Coverage</p>
@@ -149,7 +159,7 @@
     {% endif %}
     <div id="platform-share-chart" class="mt-3 h-[300px]" role="img" aria-label="Donut chart showing the share of comparable listings by platform."></div>
   </article>
-  <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-6">
+  <article class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-6" style="order: {{ 4 if role != 'researcher' else 2 }}">
     <div class="flex items-center justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Breakdown</p>
@@ -159,10 +169,11 @@
       <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Lollipop</span>
     </div>
     <div id="condition-chart" class="mt-3 h-[300px]" role="img" aria-label="Lollipop chart showing comparable listing counts by condition."></div>
+    <div id="condition-chart-state" class="mt-4 hidden rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center"><span class="material-symbols-outlined text-2xl text-slate-400">category</span><p id="condition-chart-state-title" class="mt-2 text-sm font-bold text-slate-800">Condition breakdown unavailable</p><p id="condition-chart-state-detail" class="mt-1 text-xs leading-5 text-slate-500"></p></div>
   </article>
 </section>
 
-<section class="mx-auto mt-6 max-w-7xl px-4 sm:px-6 lg:px-8">
+<section class="mx-auto mt-6 w-full max-w-7xl px-4 sm:px-6 lg:px-8" style="order: {{ 3 if role != 'researcher' else 1 }}">
   <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
   <div class="flex flex-wrap items-end justify-between gap-4">
     <div>
@@ -173,6 +184,8 @@
     <div class="flex flex-wrap gap-2" role="tablist" aria-label="Advanced analysis tabs">
       <button type="button" class="advanced-tab app-tab is-active" data-advanced-tab="distribution">Distribution</button>
       <button type="button" class="advanced-tab app-tab" data-advanced-tab="composition">Composition</button>
+      <button type="button" class="advanced-tab app-tab" data-advanced-tab="categories">Categories</button>
+      <button type="button" class="advanced-tab app-tab" data-advanced-tab="sources">Sources</button>
     </div>
   </div>
   <div class="mt-5">
@@ -184,6 +197,7 @@
               <p class="text-xs font-bold uppercase tracking-[0.25em] text-primary">Distribution</p>
               <h3 class="font-display text-xl font-bold text-slate-950">Price distribution histogram</h3>
               <p class="text-xs text-slate-500">Binned normalized prices with count and share tooltips.</p>
+              <p id="histogram-context" class="mt-2 text-xs font-semibold text-slate-600"></p>
             </div>
             <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">Histogram</span>
           </div>
@@ -270,6 +284,8 @@
     </div>
   </div>
 </section>
+
+</div>
 
 <section class="mx-auto mt-6 max-w-7xl px-4 pb-8 sm:px-6 lg:px-8">
   <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -465,12 +481,16 @@
     };
     const buildRecommendedNextStepText = (metrics) => {
       if (!metrics.totalRecords) return 'No records match the current filters. Reset filters or broaden the search keyword.';
+      if (metrics.totalRecords < 5) return `Treat these ${metrics.totalRecords} records as directional evidence. Review the underlying listings before drawing a market-level conclusion.`;
       if (metrics.platformsCovered < 2) return 'Only one platform is visible, so cross-platform comparison is limited. Broaden the platform filter before exporting a conclusion.';
       if (metrics.warningCount > 0) return 'Review warning or low-confidence records before saving evidence or exporting a report.';
       const spreadRatio = metrics.medianPrice ? metrics.priceRange / metrics.medianPrice : 0;
       if (spreadRatio > 0.25 || metrics.priceRange > 100) return 'Inspect condition, seller, and variant details before choosing the strongest evidence.';
-      return 'This view supports cross-platform comparison across the visible platforms. Review platform share and condition breakdown before saving evidence.';
+      if (reportMeta.role === 'Retailer') return 'Compare platform medians and coverage, then monitor the selected market position over time in Watchlist.';
+      if (reportMeta.role === 'Researcher') return 'Review distribution, source composition, and record-level provenance before saving or exporting a finding.';
+      return 'Review the typical price range and ranked listings before choosing an offer.';
     };
+    const evidenceStrength = (count) => count < 5 ? 'Limited sample' : (count < 10 ? 'Directional sample' : 'Broader sample');
     const comparisonStatus = (metrics) => metrics.platformsCovered < 2 ? 'Cross-platform limited' : 'Comparison ready';
     const renderInsightChips = (metrics) => {
       const chips = [
@@ -504,6 +524,7 @@
       setText('summary-platforms-covered', metrics.platformsCovered);
       setText('summary-average-price', usd(metrics.averagePrice));
       setText('summary-price-range', usd(metrics.priceRange));
+      setText('analysis-confidence', evidenceStrength(metrics.totalRecords));
       renderInsightChips(metrics);
       setText('insight-recommendation', buildRecommendedNextStepText(metrics));
       setText('insight-detail-filters', filterSentence());
@@ -528,6 +549,7 @@
       const summaryNode = document.getElementById('comparable-price-curve-summary');
       const prices = filteredRows().map(numericPrice).filter((value) => value !== null).sort((a, b) => a - b);
       const available = prices.length >= 2;
+      setText('price-curve-context', prices.length < 5 ? `${prices.length} prices are shown as individual observations; this is not a time trend.` : `${prices.length} prices show the ordered market range; the horizontal axis is listing rank, not time.`);
       chartNode.classList.toggle('hidden', !available);
       emptyNode.classList.toggle('hidden', available);
       charts.priceCurve.clear();
@@ -553,7 +575,20 @@
           symbolSize: 7,
           data: prices,
           lineStyle: { width: 3 },
-          markLine: { symbol: 'none', lineStyle: { color: '#7c3aed', type: 'dashed', width: 2 }, label: { formatter: `Median ${usd(median)}`, color: '#6d28d9' }, data: [{ yAxis: median }] },
+          markLine: {
+            symbol: 'none',
+            lineStyle: { color: '#7c3aed', type: 'dashed', width: 2 },
+            label: {
+              position: 'insideEndTop',
+              distance: 8,
+              formatter: `Median ${usd(median)}`,
+              color: '#6d28d9',
+              backgroundColor: 'rgba(255,255,255,.92)',
+              borderRadius: 4,
+              padding: [3, 6],
+            },
+            data: [{ yAxis: median }],
+          },
         }],
       });
     };
@@ -590,7 +625,9 @@
     };
     const renderHistogram = () => {
       const payload = buildHistogram(filteredRows());
-      const total = (payload.counts || []).reduce((sum, value) => sum + Number(value || 0), 0) || 1;
+      const actualTotal = (payload.counts || []).reduce((sum, value) => sum + Number(value || 0), 0);
+      const total = actualTotal || 1;
+      setText('histogram-context', actualTotal === 0 ? 'No prices match the current filters.' : (actualTotal < 5 ? `Limited sample (${actualTotal} records): use the bars to inspect placement, not to infer a population distribution.` : `${actualTotal} records grouped into price bands to reveal clustering and tails.`));
       charts.histogram.setOption({
         color: [palette[1]],
         grid: { left: 44, right: 20, top: 24, bottom: 54, containLabel: true },
@@ -602,6 +639,14 @@
     };
     const renderPlatformComparison = () => {
       const payload = buildPlatformComparison(filteredRows());
+      const labels = payload.labels || [];
+      if (labels.length < 2) {
+        setText('platform-comparison-context', 'A second visible platform is required for a cross-platform benchmark.');
+      } else {
+        const ranked = labels.map((label, index) => ({ label, median: Number(payload.median[index] || 0) })).sort((a, b) => a.median - b.median);
+        const difference = ranked.length > 1 ? Math.abs(ranked[1].median - ranked[0].median) : 0;
+        setText('platform-comparison-context', `${ranked[0].label} has the lowest visible median; the gap to the next platform is ${usd(difference)}. Review record counts before treating this as a market-wide difference.`);
+      }
       charts.platformComparison.setOption({
         color: [palette[0], palette[4]],
         legend: { top: 0, textStyle: { color: '#475569' } },
@@ -694,6 +739,31 @@
       const seriesItems = payload;
       const sorted = sortedSeries(seriesItems);
       const values = sorted.map((item) => state.metric === 'percentage' ? item.percent : item.count);
+      const chartNode = document.getElementById('condition-chart');
+      const stateNode = document.getElementById('condition-chart-state');
+      const hasData = sorted.length >= 1;
+      chartNode?.classList.toggle('hidden', !hasData);
+      stateNode?.classList.toggle('hidden', hasData);
+      charts.condition.clear();
+      if (!hasData) {
+        setText('condition-chart-state-title', 'Condition breakdown unavailable');
+        setText('condition-chart-state-detail', 'No consistent condition values are available for the current filters.');
+        return;
+      }
+      charts.condition.resize();
+      if (sorted.length === 1) {
+        const only = sorted[0];
+        charts.condition.setOption({
+          color: [palette[3]],
+          grid: { left: 96, right: 54, top: 42, bottom: 42, containLabel: true },
+          graphic: [{ type: 'text', left: 'center', top: 10, style: { text: 'Single condition in the current scope', fill: '#64748b', font: '600 12px Inter' } }],
+          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: () => `${only.name}<br>Records: ${only.count}` },
+          xAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: 'rgba(148,163,184,.18)' } }, axisLabel: { color: '#64748b' } },
+          yAxis: { type: 'category', data: [only.name], axisLabel: { color: '#64748b' }, axisLine: { lineStyle: { color: '#cbd5e1' } } },
+          series: [{ name: 'Condition total', type: 'bar', data: [only.count], barMaxWidth: 32, label: { show: true, position: 'right', formatter: `${only.count} record${only.count === 1 ? '' : 's'}`, color: '#334155' }, itemStyle: { borderRadius: [0, 8, 8, 0] } }],
+        }, { notMerge: true });
+        return;
+      }
       charts.condition.setOption({
         color: ['#cbd5e1', palette[3]],
         grid: { left: 96, right: 20, top: 20, bottom: 30, containLabel: true },
@@ -819,20 +889,27 @@
       downloadText('precision-curator-analytics-visible.csv', rowsCsv, 'text/csv;charset=utf-8');
     };
     const chartImage = (chart, pixelRatio = 3) => chart.getDataURL({ type: 'png', pixelRatio, backgroundColor: '#ffffff', excludeComponents: ['toolbox', 'tooltip', 'dataZoom'] });
-    const collectChartImages = (pixelRatio = 3) => ({
-      'Comparable Price Curve': chartImage(charts.priceCurve, pixelRatio),
-      'Ranked Listing Prices': chartImage(charts.trend, pixelRatio),
-      'Average vs median by platform': chartImage(charts.platformComparison, pixelRatio),
-      'Platform share': chartImage(charts.platformShare, pixelRatio),
-      'Condition / quality breakdown': chartImage(charts.condition, pixelRatio),
-      'Price distribution histogram': chartImage(charts.histogram, pixelRatio),
-    });
-    const collectReportChartImages = (pixelRatio = 2) => ({
-      'Ranked listing prices': chartImage(charts.trend, pixelRatio),
-      'Average and median by platform': chartImage(charts.platformComparison, pixelRatio),
-      'Platform sample share': chartImage(charts.platformShare, pixelRatio),
-      'Condition breakdown': chartImage(charts.condition, pixelRatio),
-    });
+    const visibleChartImage = (chart, nodeId, pixelRatio) => {
+      const node = document.getElementById(nodeId);
+      if (!node || node.classList.contains('hidden')) return null;
+      const image = chartImage(chart, pixelRatio);
+      return typeof image === 'string' && image.startsWith('data:image/') ? image : null;
+    };
+    const validChartImages = (entries) => Object.fromEntries(entries.filter(([, image]) => Boolean(image)));
+    const collectChartImages = (pixelRatio = 3) => validChartImages([
+      ['Comparable Price Curve', visibleChartImage(charts.priceCurve, 'comparable-price-curve-chart', pixelRatio)],
+      ['Ranked Listing Prices', visibleChartImage(charts.trend, 'trend-chart', pixelRatio)],
+      ['Average vs median by platform', visibleChartImage(charts.platformComparison, 'platform-comparison-chart', pixelRatio)],
+      ['Platform share', visibleChartImage(charts.platformShare, 'platform-share-chart', pixelRatio)],
+      ['Condition / quality breakdown', visibleChartImage(charts.condition, 'condition-chart', pixelRatio)],
+      ['Price distribution histogram', visibleChartImage(charts.histogram, 'histogram-chart', pixelRatio)],
+    ]);
+    const collectReportChartImages = (pixelRatio = 2) => validChartImages([
+      ['Ranked listing prices', visibleChartImage(charts.trend, 'trend-chart', pixelRatio)],
+      ['Average and median by platform', visibleChartImage(charts.platformComparison, 'platform-comparison-chart', pixelRatio)],
+      ['Platform sample share', visibleChartImage(charts.platformShare, 'platform-share-chart', pixelRatio)],
+      ['Condition breakdown', visibleChartImage(charts.condition, 'condition-chart', pixelRatio)],
+    ]);
     const exportChartPng = () => {
       Object.entries(collectChartImages(3)).forEach(([title, dataUrl], index) => {
         setTimeout(() => downloadDataUrl(`${String(index + 1).padStart(2, '0')}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`, dataUrl), index * 150);

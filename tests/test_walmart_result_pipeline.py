@@ -883,6 +883,30 @@ def test_google_shopping_walmart_parser_keeps_only_walmart_merchants_with_prices
     assert diagnostics["rejection_counts"] == {"non_walmart_merchant": 1}
 
 
+def test_google_shopping_installment_metadata_is_preserved_and_excluded_from_analytics():
+    payload = {
+        "shopping_results": [{
+            "position": 1,
+            "title": "Apple iPhone 16",
+            "source": "Walmart",
+            "price": "$17.48/mo",
+            "extracted_price": 17.48,
+            "installment": {"price": "$17.48/mo", "extracted_price": 17.48, "period": 36},
+            "product_link": "https://www.google.com/shopping/product/walmart-iphone-16-plan",
+        }],
+    }
+
+    parsed = serpapi_search.normalize_serpapi_records(
+        payload, platform="walmart", query="iPhone 16", engine="google_shopping",
+    )
+    normalized = precision_app.normalize_price_items(parsed)
+
+    assert parsed[0]["raw_price_text"] == "$17.48/mo"
+    assert parsed[0]["price_type"] == "installment"
+    assert normalized[0]["analytics_eligible"] is False
+    assert normalized[0]["total_price"] is None
+
+
 def test_plain_numeric_walmart_raw_price_is_formatted_with_currency():
     rows = precision_app.normalize_price_items([{
         "title": "Apple iPhone 16 128GB Unlocked",

@@ -13,22 +13,22 @@
   <div class="absolute inset-y-0 left-[46%] hidden w-px bg-slate-400/10 lg:block"></div>
   <div class="relative mx-auto grid max-w-7xl items-center gap-12 px-5 py-20 lg:grid-cols-2 lg:gap-16 lg:py-28">
     <div class="landing-reveal">
-      <span class="inline-flex items-center gap-2 rounded-full border border-slate-500/70 bg-slate-900/50 px-4 py-2 text-xs font-bold tracking-wide text-slate-200"><span class="h-1.5 w-1.5 rounded-full bg-cyan-300"></span>Market evidence, curated with precision</span>
+      <span class="inline-flex items-center gap-2 rounded-full border border-slate-500/70 bg-slate-900/50 px-4 py-2 text-xs font-bold tracking-wide text-slate-200"><span class="h-1.5 w-1.5 rounded-full bg-cyan-300"></span>Evidence-first marketplace intelligence</span>
       <h1 class="mt-7 max-w-2xl font-display text-5xl font-extrabold leading-tight text-white md:text-7xl">
         <span class="block">Price evidence,</span>
         <span class="block">curated with precision.</span>
       </h1>
-      <p class="mt-6 max-w-xl text-lg leading-8 text-slate-200">Precision Curator helps users collect marketplace records, compare normalized prices, save evidence, monitor watchlists, and validate prediction results against observed snapshots.</p>
+      <p class="mt-6 max-w-xl text-lg leading-8 text-slate-200">Turn marketplace listings into comparable prices, saved evidence, and monitored market signals—without losing the source context behind each decision.</p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
-        <a href="{{ url_for('register', plan='basic') }}" class="app-button-primary">Start analyzing <span class="material-symbols-outlined text-lg">arrow_forward</span></a>
-        <a href="{{ url_for('sample_analysis') }}" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-500 bg-slate-800/60 px-5 py-3.5 font-bold text-white transition hover:border-slate-400 hover:bg-slate-700/70">View sample analysis</a>
+        <a href="{{ url_for('sample_analysis') }}" class="app-button-primary">Explore sample workspace <span class="material-symbols-outlined text-lg">arrow_forward</span></a>
+        <a href="{{ url_for('register', plan='basic') }}" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-500 bg-slate-800/60 px-5 py-3.5 font-bold text-white transition hover:border-slate-400 hover:bg-slate-700/70">Create account</a>
       </div>
-      <p class="mt-6 max-w-xl text-sm leading-7 text-slate-400">Move from scattered listings to a clear, traceable view of the market.</p>
+      <div class="mt-6 flex max-w-xl flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-slate-400"><span>eBay + Walmart coverage</span><span>Research saved across sessions</span><span>Purpose-built workspaces</span></div>
     </div>
     <div class="workflow-preview landing-reveal rounded-2xl border border-slate-500/60 bg-[#111d2d]/95 p-5 sm:p-6" data-workflow-preview>
       <div class="flex items-start justify-between gap-4 border-b border-slate-700/80 pb-5">
-        <div><p class="text-xs font-bold uppercase tracking-[.18em] text-cyan-200">Live workspace preview</p><p class="mt-2 font-display text-xl font-bold">Evidence workflow</p></div>
-        <span class="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-200"><span class="h-1.5 w-1.5 rounded-full bg-emerald-300"></span>Active</span>
+        <div><p class="text-xs font-bold uppercase tracking-[.18em] text-cyan-200">Product workflow</p><p class="mt-2 font-display text-xl font-bold">Evidence workflow</p></div>
+        <span class="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-cyan-100"><span class="h-1.5 w-1.5 rounded-full bg-cyan-300"></span>4 connected steps</span>
       </div>
       <div class="mt-5 rounded-xl border border-slate-700 bg-slate-950/45 p-4">
         <div class="flex items-center justify-between text-xs text-slate-400"><span data-workflow-eyebrow>Marketplace search</span><span data-workflow-count>01 / 04</span></div>
@@ -36,7 +36,7 @@
         <div class="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-700"><div class="workflow-progress h-full rounded-full bg-cyan-300" data-workflow-progress style="width:25%"></div></div>
       </div>
       <div class="mt-4 grid gap-3 sm:grid-cols-2">
-        {% for icon,label,text,status in [('search','Search','Collect marketplace records.','12 sources scanned'),('compare_arrows','Compare','Normalize price context.','Prices aligned'),('bookmark','Save evidence','Preserve useful listings.','Evidence saved'),('fact_check','Validate','Compare against snapshots.','Ready to validate')] %}
+        {% for icon,label,text,status in [('search','Search','Collect marketplace records.','eBay · Walmart'),('compare_arrows','Compare','Normalize price context.','Comparable scope'),('bookmark','Save evidence','Preserve useful listings.','Atlas persisted'),('fact_check','Validate','Compare against snapshots.','Observed outcome')] %}
         <div class="workflow-step rounded-xl border border-slate-700 bg-slate-800/65 p-4 {% if loop.first %}is-active{% endif %}" data-workflow-step data-title="{{ label }}" data-text="{{ text }}" data-status="{{ status }}" data-index="{{ loop.index }}">
           <div class="flex items-start justify-between gap-3"><span class="workflow-icon grid h-9 w-9 place-items-center rounded-lg bg-slate-700 text-sky-200"><span class="material-symbols-outlined text-xl">{{ icon }}</span></span><span class="workflow-status text-[10px] font-bold uppercase tracking-wide text-cyan-200">{{ status }}</span></div>
           <h3 class="mt-4 font-display text-base font-bold text-white">{{ label }}</h3><p class="mt-1 text-xs leading-5 text-slate-300">{{ text }}</p>
@@ -57,9 +57,9 @@
       </div>
       <div class="grid gap-4 sm:grid-cols-3 landing-reveal">
         {% for metric,label,accent in [
-          ('Evidence-first','Saved records keep decisions traceable.',''),
-          ('Role-aware','Workspace context adapts to the account role.',''),
-          ('Tier-gated','Membership controls feature access account-wide.','')
+          ('Compare fairly','Normalized context makes marketplace prices easier to evaluate.',''),
+          ('Save what matters','Preserve selected records instead of losing them in search history.',''),
+          ('Monitor change','Follow selected products beyond a single point-in-time search.','')
         ] %}
         <article class="value-metric border-l-2 border-slate-200 bg-white/70 p-6 first:border-blue-500 last:border-violet-400">
           <h3 class="font-display text-xl font-extrabold text-slate-950">{{ metric }}</h3>
@@ -75,8 +75,8 @@
   <div class="mx-auto max-w-7xl px-5 py-20">
     <div class="relative mb-12 max-w-3xl landing-reveal">
       <p class="text-sm font-semibold text-primary">Core workflow</p>
-      <h2 class="mt-3 font-display text-4xl font-extrabold text-slate-950">Workflow overview: from search to validated market insight</h2>
-      <p class="mt-3 text-slate-600">Search → Compare → Save → Validate. Use one workflow to search, compare, save evidence, track watchlists, and validate predictions against observed snapshots.</p>
+      <h2 class="mt-3 font-display text-4xl font-extrabold text-slate-950">From the first search to a decision you can revisit.</h2>
+      <p class="mt-3 text-slate-600">Search → Compare → Save → Monitor → Validate. Each step preserves the context needed for the next one.</p>
     </div>
     <div class="relative grid gap-4 lg:grid-cols-5">
       {% for step,title,text,icon,accent in [
@@ -102,15 +102,15 @@
 <section id="roles" class="relative overflow-hidden bg-[#eef3f8]">
   <div class="mx-auto max-w-7xl px-5 py-20">
     <div class="mb-10 max-w-3xl landing-reveal">
-      <p class="text-sm font-semibold text-primary">Role + membership preview</p>
-      <h2 class="mt-3 font-display text-4xl font-extrabold text-slate-950">Choose a workspace for your use case</h2>
-      <p class="mt-3 text-slate-600">Workspace role controls interface context. Membership tier controls available features.</p>
+      <p class="text-sm font-semibold text-primary">Built around your use case</p>
+      <h2 class="mt-3 font-display text-4xl font-extrabold text-slate-950">Different market decisions need different starting points.</h2>
+      <p class="mt-3 text-slate-600">Choose the workspace closest to your goal. Your membership controls which advanced capabilities are available.</p>
     </div>
     <div class="grid gap-5 lg:grid-cols-3">
       {% for title,text,tint,icon in [
-        ('Consumer','For individual users who want to search products, compare prices, save items, and monitor selected products.','from-blue-600 to-cyan-500','person_search'),
-        ('Retailer / Reseller','For sellers who need market overview, platform comparison, price monitoring, and resale-oriented analytics.','from-orange-500 to-blue-600','storefront'),
-        ('Researcher','For users who need evidence tracking, source audit, logs, data transparency, and exportable research records.','from-violet-600 to-indigo-600','science')
+        ('Consumer','Compare a specific product, understand the price range, and keep useful listings for later.','from-blue-600 to-cyan-500','person_search'),
+        ('Retailer / Reseller','Monitor competitor movement, identify market lows, and track selected products over time.','from-orange-500 to-blue-600','storefront'),
+        ('Researcher','Build evidence collections, inspect provenance, and preserve reproducible research activity.','from-violet-600 to-indigo-600','science')
       ] %}
       <article class="landing-card landing-reveal {{ 'role-consumer' if loop.index == 1 else ('role-retailer' if loop.index == 2 else 'role-researcher') }} overflow-hidden rounded-xl border border-slate-200 bg-white p-7 shadow-sm" data-reveal-delay="{{ (loop.index0 * 110) }}">
         <div class="mb-5 grid h-12 w-12 place-items-center rounded-lg {{ 'bg-blue-50 text-blue-700' if loop.index == 1 else ('bg-orange-50 text-orange-700' if loop.index == 2 else 'bg-violet-50 text-violet-700') }}"><span class="material-symbols-outlined">{{ icon }}</span></div>
@@ -122,15 +122,15 @@
     <div id="membership" class="mt-12 border-t border-slate-300 pt-12">
       <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p class="text-sm font-semibold text-primary">Membership</p>
-          <h3 class="mt-2 font-display text-2xl font-extrabold text-slate-950">Account-wide feature access</h3>
-          <p class="mt-2 text-sm text-slate-600">Prototype pricing for demonstration only. One account uses one membership tier. Membership is not charged separately per role.</p>
+          <p class="text-sm font-semibold text-primary">Plans and access</p>
+          <h3 class="mt-2 font-display text-2xl font-extrabold text-slate-950">Start simple, then unlock deeper workflows.</h3>
+          <p class="mt-2 text-sm text-slate-600">One membership tier applies across the account, including every approved workspace role.</p>
         </div>
         <span class="rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-600">Plan overview</span>
       </div>
       <div class="grid gap-5 lg:grid-cols-3">
         {% for plan in membership_plans %}
-        <article class="relative flex h-full min-h-[34rem] flex-col rounded-xl border bg-white p-7 shadow-sm {% if plan.id == 'premium' %}border-blue-400{% elif plan.id == 'professional' %}border-violet-300{% else %}border-slate-200{% endif %}">
+        <article class="relative flex h-full min-h-[28rem] flex-col rounded-xl border bg-white p-7 shadow-sm {% if plan.id == 'premium' %}border-blue-400{% elif plan.id == 'professional' %}border-violet-300{% else %}border-slate-200{% endif %}">
           {% if plan.id == 'premium' %}
           <span class="absolute right-5 top-5 rounded-full bg-blue-600 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-sm">Recommended</span>
           {% endif %}
@@ -142,15 +142,15 @@
           <p class="mt-3 text-sm leading-6 text-slate-600">{{ plan.description }}</p>
           <ul class="mt-6 space-y-2 text-sm leading-6 text-slate-700">
             {% if plan.id == 'basic' %}
-              {% for feature in ['Product search across available sources','Simple product comparison','View essential product details','Limited search history','Read-only preview of advanced modules'] %}
+              {% for feature in ['Marketplace product search','Simple normalized comparison','Essential product details','Limited search history'] %}
               <li class="flex gap-2"><span class="mt-1 inline-block h-2 w-2 rounded-full bg-slate-300"></span><span>{{ feature }}</span></li>
               {% endfor %}
             {% elif plan.id == 'premium' %}
-              {% for feature in ['Product search and comparison','Save selected evidence','Saved Research workspace','Watchlist tracking and snapshot history','Analytics dashboard and interactive charts','AI-supported market summary','AI price forecast in Watchlist','Standard CSV, chart and report exports from unlocked pages'] %}
+              {% for feature in ['Everything in Basic','Saved evidence and research workspace','Watchlist snapshots and price trends','Analytics and grounded AI summaries','Standard workspace exports'] %}
               <li class="flex gap-2"><span class="mt-1 inline-block h-2 w-2 rounded-full bg-blue-500"></span><span>{{ feature }}</span></li>
               {% endfor %}
             {% else %}
-              {% for feature in ['All search, evidence, Watchlist, Analytics and AI forecasting capabilities','Forecast validation workflow','Source Audit','Activity Logs','Validation evidence summary','Audit-log export','Research package export','Advanced reporting and provenance records'] %}
+              {% for feature in ['Everything in Premium','Source Audit and Activity Logs','Research package export','Advanced provenance reporting','Audit-ready evidence workflows'] %}
               <li class="flex gap-2"><span class="mt-1 inline-block h-2 w-2 rounded-full bg-violet-500"></span><span>{{ feature }}</span></li>
               {% endfor %}
             {% endif %}
@@ -161,36 +161,30 @@
         </article>
         {% endfor %}
       </div>
+      <p class="mt-5 text-center text-xs text-slate-500">Plan selection is enabled for this prototype. Payment processing is not connected.</p>
     </div>
   </div>
 </section>
 
-<section id="testimonials" class="relative overflow-hidden bg-white">
+<section id="trust" class="relative overflow-hidden bg-white">
   <div class="relative mx-auto max-w-7xl px-5 py-20 pb-24">
     <div class="mb-12 max-w-3xl">
-      <p class="text-sm font-semibold text-primary">Representative feedback</p>
-      <h2 class="mt-3 font-display text-4xl font-extrabold text-slate-950">What users noticed</h2>
-      <p class="mt-4 max-w-2xl text-slate-600">Representative feedback from early product walkthroughs, presented as short product-style takeaways.</p>
+      <p class="text-sm font-semibold text-primary">Reliable by design</p>
+      <h2 class="mt-3 font-display text-4xl font-extrabold text-slate-950">Your market research stays usable, private, and traceable.</h2>
+      <p class="mt-4 max-w-2xl text-slate-600">Product safeguards are built into the workflow so saved work remains available and conclusions retain their source context.</p>
     </div>
     <div class="grid gap-5 md:grid-cols-3">
-      {% for initials,name,role,quote in [
-        ('MC','Maya Chen','Retailer workflow','Saved evidence and watchlist tracking helped us compare marketplace records in one workflow.'),
-        ('DL','Daniel Lim','Researcher workflow','The source audit view makes it easier to inspect provenance, AI activity and saved evidence records.'),
-        ('AT','Aisha Tan','Consumer workflow','The comparison workflow helped me preserve useful listings and review price differences later.')
+      {% for icon,title,label,description in [
+        ('cloud_done','Saved across sessions','Continuity','Evidence, research, and monitoring records remain available when you return.'),
+        ('shield_person','Private workspace boundaries','Account privacy','Dashboards, activity, evidence, and exports stay within the current account scope.'),
+        ('account_tree','Source-aware decisions','Traceability','Comparisons and analysis remain connected to the marketplace records behind them.')
       ] %}
-      <article class="relative flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-7 shadow-sm">
-        <div class="flex items-start gap-4">
-          <span class="grid h-12 w-12 flex-none place-items-center rounded-full bg-slate-900 font-display font-bold text-white">{{ initials }}</span>
-          <div>
-            <p class="font-display text-lg font-bold text-slate-950">{{ name }}</p>
-            <p class="mt-1 text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{{ role }}</p>
-          </div>
-        </div>
-        <p class="mt-5 text-sm leading-7 text-slate-600">"{{ quote }}"</p>
-        <div class="mt-6 inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-          <span class="h-1.5 w-1.5 rounded-full bg-primary"></span>
-          Product note
-        </div>
+      <article class="landing-card relative flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-7 shadow-sm">
+        <span class="grid h-12 w-12 place-items-center rounded-xl bg-blue-50 text-blue-700"><span class="material-symbols-outlined">{{ icon }}</span></span>
+        <p class="mt-6 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-700">{{ label }}</p>
+        <h3 class="mt-2 font-display text-xl font-bold text-slate-950">{{ title }}</h3>
+        <p class="mt-4 text-sm leading-7 text-slate-600">{{ description }}</p>
+        <div class="mt-6 inline-flex items-center gap-2 text-xs font-bold text-emerald-700"><span class="material-symbols-outlined text-[18px]">verified</span>Built into the product</div>
       </article>
       {% endfor %}
     </div>
@@ -209,8 +203,8 @@
     </div>
     <div class="mx-auto grid max-w-4xl gap-3" data-faq-accordion>
       {% for step,question,answer in [
-        ('01','Can one account use multiple workspace roles?','In the final academic prototype, each account uses one primary workspace role. If a user needs a different role, the administrator can update the role in User Management. Multi-role self-service approval is treated as a future commercial enhancement.'),
-        ('02','Do users pay separately for each role?','No. Membership is account-wide. A user has one membership tier, such as Basic, Premium, or Professional, and that tier controls feature access within the assigned workspace role.'),
+        ('01','Can I use multiple workspace roles on one account?','No. Each account has exactly one assigned role: Consumer, Retailer / Reseller, or Researcher. Roles cannot be combined or switched by the account holder.'),
+        ('02','Can my assigned role be changed later?','Yes, but the change must be made by an administrator. The new role replaces the existing role; it does not add a second workspace role.'),
         ('03','Why are some features locked?','Advanced features such as watchlists, audit logs, prediction validation, and exports require higher membership tiers.'),
         ('04','Does AI replace actual market data?','No. AI summaries and predictions are treated as assistive outputs. Actual observed marketplace records remain the evidence source.')
       ] %}
@@ -233,11 +227,11 @@
   <div class="mx-auto max-w-7xl px-5 py-20">
     <div class="rounded-2xl border border-slate-700 bg-slate-900 px-8 py-10 text-white">
       <p class="text-sm font-semibold text-blue-300">Get started</p>
-      <h2 class="mt-3 font-display text-4xl font-extrabold">Ready to build your market intelligence workflow?</h2>
-      <p class="mt-4 max-w-2xl text-sm leading-7 text-slate-300">Start with Basic, explore the sample analysis, or choose a workspace role that matches your use case.</p>
+      <h2 class="mt-3 font-display text-4xl font-extrabold">Ready to explore the evidence workflow?</h2>
+      <p class="mt-4 max-w-2xl text-sm leading-7 text-slate-300">Open the sample workspace first, then create an account when you are ready to save your own research.</p>
       <div class="mt-7 flex flex-wrap gap-3">
-        <a href="{{ url_for('register', plan='basic') }}" class="app-button-primary">Create account</a>
-        <a href="{{ url_for('sample_analysis') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-600 px-5 py-3 font-bold text-white transition hover:border-slate-400 hover:bg-slate-800">View sample analysis</a>
+        <a href="{{ url_for('sample_analysis') }}" class="app-button-primary">Explore sample workspace</a>
+        <a href="{{ url_for('register', plan='basic') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-600 px-5 py-3 font-bold text-white transition hover:border-slate-400 hover:bg-slate-800">Create account</a>
       </div>
     </div>
   </div>
@@ -249,7 +243,7 @@
       <div class="flex items-center gap-3"><img src="{{ url_for('static', filename='favicon.svg') }}" alt="" class="h-9 w-9 rounded-lg"><h3 class="font-display text-3xl font-extrabold tracking-tight text-white">Precision Curator</h3></div>
       <p class="mt-4 max-w-xl text-sm leading-7 text-slate-300">Market intelligence for product search, evidence tracking, watchlist monitoring, and prediction validation.</p>
       <div class="mt-6 space-y-3">
-        <p class="text-sm text-slate-400">Prototype pricing for demonstration only. No live billing is processed.</p>
+        <p class="text-sm text-slate-400">Prototype access tiers for demonstration only. Live billing is disabled.</p>
         <p class="text-xs leading-6 text-slate-500">Copyright © 2026 Precision Curator</p>
       </div>
     </div>
@@ -258,7 +252,7 @@
         <p class="text-xs font-bold text-slate-400">Explore</p>
         <div class="mt-3 flex flex-col gap-2.5 text-sm font-semibold text-slate-300">
           <a href="{{ url_for('home') }}" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">Home</a>
-          <a href="{{ url_for('home') }}#features" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">Features</a>
+          <a href="{{ url_for('home') }}#features" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">Product</a>
           <a href="{{ url_for('home') }}#roles" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">Roles</a>
           <a href="{{ url_for('home') }}#membership" class="transition hover:cursor-pointer hover:text-primary hover:underline underline-offset-4 decoration-blue-400/60">Pricing</a>
         </div>

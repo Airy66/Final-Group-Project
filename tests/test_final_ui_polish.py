@@ -2,7 +2,7 @@ from pathlib import Path
 
 import precision_app
 from services.database import MongoRepository
-from services.mail_service import PasswordResetMailService
+from services.email_service import EmailService
 from werkzeug.security import generate_password_hash
 
 
@@ -17,10 +17,46 @@ def test_sidebar_feature_badge_has_its_own_accessible_column():
     base = _template("product_base.html")
     assert "grid-template-columns:28px minmax(0,1fr) auto" in base
     assert ".app-nav-item .sidebar-link-text{min-width:0;overflow:hidden" in base
-    assert 'title="Source Audit">Source Audit</span>' in base
-    assert 'title="Professional feature" aria-label="Professional feature"' in base
-    assert '<span aria-hidden="true">Pro</span><span class="sr-only">Professional feature</span>' in base
+    assert 'title="Source Audit"' in base
+    assert '<span class="sidebar-link-text">Source Audit</span>' in base
+    assert 'title="Requires Professional plan" aria-label="Requires Professional plan">PRO</span>' in base
+    assert 'title="Requires Premium plan" aria-label="Requires Premium plan">PREM</span>' in base
+    assert ".sidebar-plan-marker--premium{" in base
+    assert ".sidebar-plan-marker--professional{" in base
+    assert "sidebar-access-lock" not in base
+    assert '<span class="sidebar-link-text">Activity Logs</span>' in base
+    assert 'aria-current="page"' in base
     assert 'body[data-sidebar-collapsed="true"] .sidebar-badge' in base
+
+
+def test_locked_feature_pages_have_distinct_value_previews_and_one_primary_upgrade_cta():
+    expected_features = {
+        "saved_research": ("bookmarks", "Evidence library"),
+        "watchlist": ("monitoring", "Price history"),
+        "analytics_dashboard": ("analytics", "Price distribution"),
+        "source_audit": ("policy", "Source provenance"),
+        "logs": ("receipt_long", "AI traceability"),
+    }
+    headlines = set()
+    for feature, (icon, capability) in expected_features.items():
+        view = precision_app.LOCKED_FEATURE_VIEWS[feature]
+        assert view["icon"] == icon
+        assert len(view["capabilities"]) == 3
+        assert capability in {item["title"] for item in view["capabilities"]}
+        headlines.add(view["headline"])
+    assert len(headlines) == len(expected_features)
+
+    template = _template("locked_feature.html")
+    assert template.count("{{ cta_label }}") == 1
+    assert "What this unlocks" in template
+    assert "Compare all plans" in template
+    assert "Continue with Product Search" in template
+
+
+def test_all_locked_feature_pages_use_the_same_dense_workspace_width():
+    base = _template("product_base.html")
+    assert "'analytics_compatibility','logs','administrator_dashboard'" in base
+    assert "or feature is defined" in base
 
 
 def test_responsive_shell_has_explicit_wide_and_mobile_policies():
@@ -34,6 +70,37 @@ def test_responsive_shell_has_explicit_wide_and_mobile_policies():
     assert ".workspace-sidebar{position:relative" in base
     assert ".workspace-main{width:100%" in base
     assert "max-width:calc(100vw - 1.5rem)" in base
+    assert ".workspace-sidebar .sidebar-nav{display:flex;width:100%;min-width:0;max-width:100%" in base
+    assert "overflow-x:auto;overflow-y:hidden" in base
+    assert "scroll-snap-type:x proximity" in base
+    assert ".workspace-sidebar .sidebar-section-label{display:none}" in base
+    assert 'class="app-sidebar workspace-sidebar border-b' in base
+
+
+def test_product_search_refine_filters_use_container_driven_wrapping_grid():
+    base = _template("product_base.html")
+    search = _template("source_search_roles.html")
+
+    assert ".refine-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))" in base
+    assert ".refine-filter-grid>*{min-width:0;max-width:100%}" in base
+    assert ".refine-filter-price-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)" in base
+    assert ".refine-filter-action-controls{display:flex;flex-wrap:wrap" in base
+    assert "@media (max-width:480px)" in base
+    assert ".refine-filter-action-controls>*{width:100%;flex-basis:auto}" in base
+
+    assert 'class="refine-filter-grid mt-4"' in search
+    assert 'class="refine-filter-price-fields"' in search
+    assert 'class="refine-filter-action-controls"' in search
+    assert "2xl:grid-cols-7" not in search
+    assert 'name="min_price"' in search and 'name="max_price"' in search
+    assert ">Reset</a>" in search and ">Apply filters</button>" in search
+
+
+def test_tailwind_configuration_has_balanced_closing_braces():
+    base = _template("product_base.html")
+    config_line = next(line.strip() for line in base.splitlines() if line.strip().startswith("<script>tailwind.config="))
+    assert config_line.endswith("}}}}</script>")
+    assert not config_line.endswith("}}}}}</script>")
 
 
 def test_search_loading_is_generic_and_duplicate_safe_by_default(monkeypatch):
@@ -73,7 +140,8 @@ def test_rendered_normal_search_hides_provider_stages(monkeypatch):
     assert "Searching marketplace sources" in body
     assert "Searching eBay and Walmart" not in body
     assert "Normalizing provider responses" not in body
-    assert 'title="Source Audit">Source Audit</span>' in body
+    assert 'title="Source Audit"' in body
+    assert '<span class="sidebar-link-text">Source Audit</span>' in body
 
 
 def test_export_menus_exclude_lifecycle_actions():
@@ -89,11 +157,41 @@ def test_export_menus_exclude_lifecycle_actions():
     assert ">Archive</button>" in watchlist and ">Delete</button>" in watchlist
 
 
+def test_export_triggers_share_one_visual_contract():
+    for name in ("saved_packages.html", "audit.html", "analytics_dashboard.html", "watchlist.html", "logs_complete.html"):
+        source = _template(name)
+        assert "app-export-summary" in source
+        assert "download" in source
+        assert "expand_more" in source
+    base = _template("product_base.html")
+    assert ".app-export-button,.app-export-summary" in base
+    assert "background:#2563eb" in base
+    assert ".app-export-button,.app-export-summary" in base
+
+
+def test_account_and_more_menus_are_isolated_from_export_styles():
+    base = _template("product_base.html")
+    analyses = _template("analytics_index.html")
+    watchlist = _template("watchlist.html")
+    assert ".app-dropdown > summary:not(.app-export-summary)" not in base
+    assert ".app-dropdown>.user-menu-summary" in base
+    assert ".app-dropdown>.app-overflow-summary" in base
+    assert 'class="app-overflow-summary"' in analyses
+    assert 'id="analysis-list" class="mt-5 overflow-visible' in analyses
+    assert "app-compact-action" in watchlist
+    assert "data-view-alert-history" in watchlist
+
+
 def test_dashboard_zero_listing_monitor_has_honest_state():
     source = _template("dashboard_retailer_saas.html")
     assert "{% if listing_count %}" in source
     assert "Needs refresh" in source
     assert "display_sgt_datetime" in source
+    assert "Price trend" in source
+    assert "Baseline collected" in source
+    assert "Observed range" in source
+    assert "Sourcing opportunity" in source
+    assert "data-values=" in source
 
 
 def test_comparable_price_curve_uses_rank_not_time_and_sorts_prices():
@@ -120,12 +218,26 @@ def test_analytics_chart_families_and_scope_copy_are_truthful():
     assert "Comparable Price Curve" in source
     assert "Comparable listing prices ordered from lowest to highest." in source
     assert "Listing rank" in source
+    assert "position: 'insideEndTop'" in source
+    assert "formatter: `Median ${usd(median)}`" in source
     assert "Price Trend" not in source
     assert "type: 'pie'" in source and "radius: ['55%', '78%']" in source
     assert "Price distribution histogram" in source
     assert "Lollipop" in source and "type: 'scatter'" in source
     assert "renderPriceCurve();" in source
     assert "renderPreview();" in source
+    assert 'data-role-chart-priority="{{ role }}"' in source
+    assert "Start with the price curve" in source
+    assert "Start with platform benchmarks" in source
+    assert "Start with distribution and provenance" in source
+    assert 'data-advanced-tab="sources"' in source
+    assert 'id="analysis-confidence"' in source
+    assert "Limited sample" in source and "Directional sample" in source and "Broader sample" in source
+    assert 'id="condition-chart-state"' in source
+    assert "Single condition in the current scope" in source
+    assert "validChartImages" in source and "visibleChartImage" in source
+    assert "this is not a time trend" in source
+    assert "use the bars to inspect placement, not to infer a population distribution" in source
 
 
 def test_watchlist_status_cards_editor_and_action_hierarchy():
@@ -134,7 +246,7 @@ def test_watchlist_status_cards_editor_and_action_hierarchy():
     assert 'data-status-card="price-alert"' in source
     assert "<dialog id=\"price-alert-modal\"" in source
     assert "<details id=\"price-alert-modal\"" not in source
-    assert "Collect latest snapshot" in source
+    assert "Collect first snapshot" in source and "Collect now and validate" in source
     assert "Generate next forecast" in source and "Generate forecast" in source
     assert "View snapshots" in source and ">Export " in source
     assert "Average Price Trend" in source and "Snapshot history over time." in source
@@ -143,7 +255,7 @@ def test_watchlist_status_cards_editor_and_action_hierarchy():
 
 
 def test_unified_email_templates_keep_plain_text_and_persisted_plan_content():
-    service = PasswordResetMailService(mode="console")
+    service = EmailService(enabled=False)
     reset_text = service._text_body("https://app.test/reset", 30)
     reset_html = service._html_body("https://app.test/reset", 30)
     welcome_text = service._welcome_text_body("Person", "https://app.test/login", "professional")

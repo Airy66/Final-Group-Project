@@ -10,7 +10,7 @@ services:
         value: 3.13.6
       - key: APP_ENV
         value: production
-      - key: ALLOW_MEMORY_FALLBACK
+      - key: DEMO_MODE
         value: "false"
       - key: DEMO_TOOLS_ENABLED
         value: "false"
@@ -20,10 +20,10 @@ services:
         generateValue: true
       - key: APP_BASE_URL
         sync: false
-      - key: MONGODB_URI
+      - key: MONGO_URI
         sync: false
-      - key: MONGODB_DATABASE
-        value: precision_curator
+      - key: MONGO_DATABASE
+        value: precision_curator_production
       - key: MONITOR_DAILY_REFRESH_ENABLED
         value: "true"
       - key: MONITOR_AUTO_REFRESH_MAX_PER_USER
@@ -44,6 +44,22 @@ services:
         sync: false
       - key: SERPAPI_MARKETPLACE_ENABLED
         value: "true"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.1-flash-lite
+      - key: GEMINI_TIMEOUT_MS
+        value: "45000"
+      - key: MAIL_PROVIDER
+        value: brevo_api
+      - key: MAIL_ENABLED
+        value: "true"
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: Precision Curator
   - type: cron
     name: precision-curator-daily-monitor-refresh
     runtime: python
@@ -55,7 +71,7 @@ services:
         value: 3.13.6
       - key: APP_ENV
         value: production
-      - key: ALLOW_MEMORY_FALLBACK
+      - key: DEMO_MODE
         value: "false"
       - key: MONITOR_DAILY_REFRESH_ENABLED
         value: "true"
@@ -71,10 +87,10 @@ services:
         sync: false
       - key: APP_BASE_URL
         sync: false
-      - key: MONGODB_URI
+      - key: MONGO_URI
         sync: false
-      - key: MONGODB_DATABASE
-        value: precision_curator
+      - key: MONGO_DATABASE
+        value: precision_curator_production
       - key: EBAY_CLIENT_ID
         sync: false
       - key: EBAY_CLIENT_SECRET
@@ -85,3 +101,13 @@ services:
         sync: false
       - key: SERPAPI_MARKETPLACE_ENABLED
         value: "true"
+      - key: MAIL_PROVIDER
+        value: brevo_api
+      - key: MAIL_ENABLED
+        value: "true"
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: Precision Curator

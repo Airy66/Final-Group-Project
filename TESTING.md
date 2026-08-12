@@ -25,23 +25,20 @@ record-ID analytics.
 7. Confirm Walmart is marked experimental and AI content is described as
    decision support throughout the UI.
 
-When MongoDB is absent, the application starts in a visibly labeled in-memory
-development fallback. This mode is deliberately non-persistent and is not the
-deployment data strategy.
+When MongoDB is absent, normal development and production fail closed.
+In-memory storage is available only when `DEMO_MODE=true` is explicitly set.
 
-## Local password reset test
+## Local Brevo password reset test
 
-1. Set `EMAIL_MODE=console`.
-2. Set `APP_BASE_URL=http://127.0.0.1:5000`.
-3. Start the Flask application.
-4. Register or use a test account with an email and password.
-5. Open **Forgot password** from the sign-in page.
-6. Submit the test email.
-7. Copy the reset URL printed in the terminal.
-8. Open the URL in the same local browser and set a new password.
-9. Confirm the old password fails and the new password succeeds.
-10. Confirm the reset URL cannot be reused.
+1. Verify a sender address in Brevo.
+2. Set `MAIL_PROVIDER=brevo_api` and `MAIL_ENABLED=true`.
+3. Set `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, and `BREVO_SENDER_NAME` locally without committing them.
+4. Set `APP_BASE_URL=http://127.0.0.1:5000`.
+5. Start the Flask application.
+6. Register or use a test account whose mailbox you control.
+7. Open **Forgot password** from the sign-in page and submit the email.
+8. Open the received link and set a new password.
+9. Confirm the old password fails, the new password succeeds, and the reset link cannot be reused.
+10. Remove the local Brevo API key after the controlled test if it is no longer needed.
 
-Console mode never opens an SMTP connection. To enable SMTP later, set
-`EMAIL_MODE=smtp` and configure the `MAIL_*` values documented in
-`.env.example`.
+Automated tests mock `requests.post` and must never send a live message. Logs and test output must not contain the API key, password, raw reset token, or complete reset URL.

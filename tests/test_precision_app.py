@@ -85,6 +85,7 @@ def test_membership_access_matrix_and_locked_controls():
     assert not precision_app.can_access(consumer_basic, "watchlist")
     assert precision_app.can_access(consumer_premium, "watchlist")
     assert precision_app.can_access(consumer_premium, "prediction")
+    assert precision_app.can_access(consumer_premium, "prediction_validation")
     assert precision_app.can_access(consumer_professional, "prediction_validation")
     assert not precision_app.can_access(retailer_basic, "export_report")
     assert precision_app.can_access(retailer_premium, "analytics_dashboard")
@@ -238,28 +239,36 @@ def test_homepage_and_register_show_three_membership_plans():
     assert "precision-curator-logo.png" in home_body
     assert 'href="/#membership"' in home_body
     assert 'id="features"' in home_body
+    assert 'href="/#features"' in home_body
     assert 'href="/#roles"' in home_body and 'href="/#faq"' in home_body
+    assert "Price evidence," in home_body and "curated with precision." in home_body
+    assert "Explore sample workspace" in home_body
     assert "What is Precision Curator?" in home_body
-    assert "Choose a workspace for your use case" in home_body
-    assert "Representative feedback from early product walkthroughs, presented as short product-style takeaways." in home_body
+    assert "Different market decisions need different starting points." in home_body
+    assert 'id="product-difference"' not in home_body
+    assert "Typical price search" not in home_body
+    assert "Evidence model" not in home_body
+    assert "Connected services" not in home_body
+    assert "MongoDB Atlas" not in home_body
+    assert "Everything needed to turn listings into a confident decision." not in home_body
+    assert "Illustrative monitored price trend" not in home_body
+    assert 'data-product-panel=' not in home_body
+    assert "Reliable by design" in home_body
+    assert "Saved across sessions" in home_body
+    assert "Built into the product" in home_body
     assert "Frequently asked questions" in home_body
     assert "app-button-primary" in home_body and "app-card-hover" in home_body
-    assert "Workflow overview" in home_body
-    assert "Search → Compare → Save → Validate" in home_body
-    assert "Normalized average price" not in home_body
-    assert "Watchlist snapshots" not in home_body
-    assert "Prediction error" not in home_body
-    assert "Evidence records" not in home_body
+    assert "From the first search to a decision you can revisit." in home_body
+    assert all(step in home_body for step in ("Search", "Compare", "Save", "Monitor", "Validate"))
     assert "Research package export" in home_body
-    assert "Can one account use multiple workspace roles?" in home_body
-    assert "each account uses one primary workspace role" in home_body
-    assert "Do users pay separately for each role?" in home_body
-    assert "Membership is account-wide" in home_body
-    assert "future commercial enhancement" in home_body
-    assert "request additional workspace roles for administrator approval" not in home_body
-    assert "Maya Chen" in home_body and "MC" in home_body and "Retailer workflow" in home_body
-    assert "Daniel Lim" in home_body and "DL" in home_body and "Researcher workflow" in home_body
-    assert "Aisha Tan" in home_body and "AT" in home_body and "Consumer workflow" in home_body
+    assert "Can I use multiple workspace roles on one account?" in home_body
+    assert "Each account has exactly one assigned role" in home_body
+    assert "Can my assigned role be changed later?" in home_body
+    assert "The new role replaces the existing role" in home_body
+    assert "Live workspace preview" not in home_body
+    assert "12 sources scanned" not in home_body
+    assert "Representative feedback" not in home_body
+    assert "Maya Chen" not in home_body and "Daniel Lim" not in home_body and "Aisha Tan" not in home_body
 
     register = test_client.get("/register?plan=premium")
     assert register.status_code == 200
@@ -267,16 +276,18 @@ def test_homepage_and_register_show_three_membership_plans():
     assert 'name="membership_tier" value="premium"' in register_body
     assert "app-choice-input" in register_body
     assert 'name="role" value="administrator"' not in register_body
-    assert "Role controls workspace context. Membership controls feature access across the account." in register_body
     assert "/ month" in register_body and "Source Audit" in register_body
-    assert "Role-based workspace" in register_body
-    assert "Minimum 8 characters. Letters and numbers recommended." in register_body
-    assert "Choose your primary workspace role." in register_body
-    assert "Role controls workspace context. Membership controls feature access." in register_body
-    assert "one account-wide membership tier" in register_body
+    assert "Choose your workspace" in register_body
+    assert "Use at least 8 characters." in register_body
+    assert "Choose your workspace." in register_body
+    assert "Each account has one workspace designed around how you use the product." in register_body
+    assert "Choose an access level." in register_body
+    assert "Demo pricing · no payment collected" in register_body
+    assert "Administrator accounts are assigned internally." not in register_body
+    assert "Administrators can update role assignments" not in register_body
     assert "For simple product discovery and essential price comparison." in register_body
     assert "For saved workflows, watchlist tracking, analytics, and AI-assisted forecasting." in register_body
-    assert "For advanced research, forecast validation, source audit, and exportable reports." in register_body
+    assert "For advanced research, source audit, provenance, activity logs, and exportable reports." in register_body
     assert "data-membership-plan-list" in register_body
     assert "data-plan-row" in register_body
     assert "[grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]" not in register_body
@@ -381,31 +392,69 @@ def test_admin_accounts_do_not_show_membership_controls():
     assert membership_page.status_code == 302
     assert "/dashboard/administrator" in membership_page.headers["Location"]
 
+    profile_page = test_client.get("/profile")
+    profile_body = profile_page.get_data(as_text=True)
+    assert "System access" in profile_body
+    assert "Administrator account" in profile_body
+    assert "System administrator" in profile_body
+    assert "Membership summary" not in profile_body
+    assert "Professional Plan" not in profile_body
+    assert "Upgrade / manage plan" not in profile_body
+
+
+def test_administrator_can_archive_mixed_evidence_history_records():
+    test_client = client()
+    login(test_client, username="ArchiveAdmin", role="administrator", membership_tier="basic")
+    user = precision_app.repository.get_user_by_display_name("ArchiveAdmin")
+    search_id = precision_app.repository.create_search(user["_id"], "archive-this-search", "ebay", status="completed")
+    ai_id = precision_app.repository.log_ai_activity(user["_id"], "archive-this-ai-log", "test-model", "records", 1)
+    audit_id = precision_app.repository.log_event(user["_id"], "search_started", "administrator", "ArchiveAdmin", {"query": "archive-this-event"})
+
+    audit_page = test_client.get("/audit").get_data(as_text=True)
+    logs_page = test_client.get("/logs").get_data(as_text=True)
+    assert 'id="audit-archive-form"' in audit_page and 'name="record_ref"' in audit_page
+    assert 'id="log-archive-form"' in logs_page and 'name="log_id"' in logs_page
+
+    response = test_client.post(
+        "/audit/archive",
+        data={"record_ref": [f"search_records:{search_id}", f"ai_search_logs:{ai_id}", f"audit_logs:{audit_id}"]},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert all(row.get("keyword") != "archive-this-search" for row in precision_app.repository.list_searches(limit=0))
+    assert all(row.get("keyword") != "archive-this-ai-log" for row in precision_app.repository.list_ai_logs(limit=0))
+    assert all(str(row.get("_id")) != str(audit_id) for row in precision_app.repository.list_audit_logs(limit=0))
+
 
 def test_logs_membership_access():
     test_client = client()
     login(test_client, username="ResearcherBasicLogs", role="researcher", membership_tier="basic")
     basic = test_client.get("/logs")
     assert basic.status_code == 200
-    assert b"Activity logs are part of the Professional audit workflow" in basic.data
+    assert b"Keep a chronological record of research actions." in basic.data
+    assert b"AI traceability" in basic.data
+    assert b"Requires Professional" in basic.data
 
     test_client.post("/logout")
     login(test_client, username="ResearcherPremiumLogs", role="researcher", membership_tier="premium")
     premium = test_client.get("/logs")
     assert premium.status_code == 200
-    assert b"Activity logs are part of the Professional audit workflow" in premium.data
+    assert b"Keep a chronological record of research actions." in premium.data
+    assert b"Upgrade to Professional" in premium.data
 
     test_client.post("/logout")
     login(test_client, username="ResearcherProLogs", role="researcher", membership_tier="professional")
     professional = test_client.get("/logs")
     assert professional.status_code == 200
-    assert b"Export activity logs CSV" in professional.data
+    assert b'href="/audit/export/activity-log.csv"' in professional.data
+    assert b'<span>Export</span>' in professional.data
 
     test_client.post("/logout")
     login(test_client, username="AdminLogs", role="administrator", membership_tier="basic")
     admin = test_client.get("/logs")
     assert admin.status_code == 200
-    assert b"Export activity logs CSV" in admin.data
+    assert b'href="/audit/export/activity-log.csv"' in admin.data
+    assert b'<span>Export</span>' in admin.data
 
 
 def test_activity_log_categories_match_event_semantics():
@@ -494,6 +543,22 @@ def test_membership_pages_do_not_return_500():
         assert response.status_code < 500
 
 
+def test_public_sample_uses_scoped_median_comparison():
+    response = client().get("/sample-analysis")
+    body = response.data.decode("utf-8", errors="ignore")
+
+    assert response.status_code == 200
+    assert "Walmart has the lower median price in this sample." in body
+    assert "USD 689.00" in body
+    assert "Median price by marketplace" in body
+    assert "Balanced sample: three records per marketplace." in body
+    assert "Illustrative dataset." in body
+    assert "not live marketplace listings" in body
+    assert "How the sample analysis flows" not in body
+    assert "Lowest observed platform" not in body
+    assert "Platform average comparison" not in body
+
+
 def test_public_routes_and_login_role_redirect():
     test_client = client()
     assert test_client.get("/").status_code == 200
@@ -545,12 +610,15 @@ def test_missing_ai_key_is_readable(monkeypatch):
     response = test_client.post("/api/ai-discover", json={"query": "headphones", "search_record_id": record["_id"]})
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["generation_mode"] == "rule_based_fallback"
-    assert payload["summary_source"] == "Rule-based fallback"
-    assert "headphones" in payload["summary"]
+    assert payload["generation_mode"] == "scope_guidance"
+    assert payload["summary_source"] == "Decision guidance"
+    assert payload["decision_status"] == "needs_refinement"
+    assert payload["platform_counts"]
+    assert "Decision readiness" in payload["summary"]
+    assert "Recommended next step" in payload["summary"]
     activity = precision_app.repository.list_activity_logs(limit=1)[0]
-    assert activity["summary_source"] == "Rule-based fallback"
-    assert activity["model"] == "gemini-2.5-flash-lite"
+    assert activity["summary_source"] == "Decision guidance"
+    assert activity["model"] == "gemini-3.1-flash-lite"
 
 
 def test_gemini_success_and_failure_modes(monkeypatch):
@@ -569,12 +637,13 @@ def test_gemini_success_and_failure_modes(monkeypatch):
     summary, mode, reason = ai_search.summarize_market_gemini("phone", items)
     assert summary == "Gemini generated market summary."
     assert mode == "gemini_api" and reason is None
-    assert captured["model"] == "gemini-2.5-flash-lite" and captured["timeout_ms"] == 15000
+    assert captured["model"] == "gemini-2.5-flash-lite" and captured["timeout_ms"] == 45000
 
     failures = [
         (RuntimeError("503 UNAVAILABLE"), "service_unavailable"),
         (TimeoutError("request timed out"), "timeout"),
         (RuntimeError("429 quota exceeded"), "quota_exceeded"),
+        (RuntimeError("404 model no longer available"), "model_unavailable"),
         (RuntimeError("unexpected API failure"), "api_error"),
     ]
     for error, expected_reason in failures:
@@ -585,6 +654,123 @@ def test_gemini_success_and_failure_modes(monkeypatch):
         assert mode == "rule_based_fallback" and reason == expected_reason
         for expected in ("3 records", "100.00", "160.00", "133.33", "60.00", "3 platform"):
             assert expected in summary
+
+
+def test_decision_guidance_does_not_call_ai_for_an_unqualified_scope(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-not-real")
+
+    def unexpected_call(*_args, **_kwargs):
+        raise AssertionError("Gemini must not interpret an unqualified comparison")
+
+    monkeypatch.setattr(ai_search, "_call_gemini", unexpected_call)
+    context = {
+        "qualified": False,
+        "mixed_configuration": True,
+        "mixed_condition": True,
+        "best_platform": None,
+    }
+    summary, mode, reason = ai_search.summarize_market_gemini("phone", [], decision_context=context)
+
+    assert mode == "scope_guidance"
+    assert reason == "comparison_scope_not_qualified"
+    assert "Decision readiness\nNot ready" in summary
+    assert "Key interpretation\nDifferences in variant and condition" in summary
+    assert "Recommended next step\nChoose one product configuration and one condition" in summary
+    assert not any(character.isdigit() for character in summary)
+
+
+def test_decision_guidance_prioritizes_platform_sample_imbalance():
+    summary = ai_search.decision_support_summary({
+        "qualified": False,
+        "platform_counts": {"eBay": 4, "Walmart": 1},
+        "mixed_configuration": False,
+        "mixed_condition": True,
+    })
+    assert "current marketplace sample is not balanced" in summary
+    assert "eBay: 4" in summary and "Walmart: 1" in summary
+    assert "Collect another comparable record for Walmart" in summary
+    assert "choose one product condition" in summary
+    assert "regenerate the interpretation" in summary
+
+
+def test_qualified_ai_explanation_rejects_numeric_kpi_restatement(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-not-real")
+    monkeypatch.setattr(
+        ai_search,
+        "_call_gemini",
+        lambda *_args, **_kwargs: (
+            "Decision readiness\nReady for comparison.\n\n"
+            "Key interpretation\nWalmart is lower at 255.25.\n\n"
+            "Recommended next step\nReview the evidence."
+        ),
+    )
+    context = {
+        "qualified": True,
+        "best_platform": "Walmart",
+        "robust_platform_sample": True,
+    }
+    summary, mode, reason = ai_search.summarize_market_gemini("phone", [], decision_context=context)
+
+    assert mode == "rule_based_fallback"
+    assert reason == "unstructured_or_numeric_restatement"
+    assert "Walmart has the lower typical price" in summary
+    assert "255.25" not in summary
+
+
+def test_qualified_comparison_without_ai_key_uses_decision_fallback(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    context = {
+        "qualified": True,
+        "best_platform": "Walmart",
+        "robust_platform_sample": True,
+    }
+    summary, mode, reason = ai_search.summarize_market_gemini("phone", [], decision_context=context)
+
+    assert mode == "rule_based_fallback"
+    assert reason == "missing_key"
+    assert "Walmart has the lower typical price" in summary
+    assert "Decision readiness" in summary
+
+
+def test_qualified_ai_explanation_accepts_structured_decision_support(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-not-real")
+    generated = (
+        "Decision readiness\nReady for a like-for-like comparison.\n\n"
+        "Key interpretation\nThe highlighted marketplace has a consistent lower typical price.\n\n"
+        "Recommended next step\nReview seller and shipping evidence before deciding."
+    )
+    monkeypatch.setattr(ai_search, "_call_gemini", lambda *_args, **_kwargs: generated)
+    context = {
+        "qualified": True,
+        "best_platform": "Walmart",
+        "robust_platform_sample": True,
+    }
+    summary, mode, reason = ai_search.summarize_market_gemini("phone", [], decision_context=context)
+
+    assert summary == generated
+    assert mode == "gemini_api"
+    assert reason is None
+
+
+def test_gemini_prediction_uses_the_most_recent_twenty_snapshots(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-not-real")
+    captured = {}
+
+    def success(_api_key, _model, prompt, _timeout_ms):
+        captured["prompt"] = prompt
+        return '{"predicted_average_price": 125, "predicted_direction": "increase", "confidence_level": "medium", "reason": "Recent observations"}'
+
+    monkeypatch.setattr(ai_search, "_call_gemini", success)
+    snapshots = [
+        {"collected_at": f"2026-07-{index:02d}", "average_price": index, "lowest_price": index, "highest_price": index, "record_count": 3, "data_quality": "good"}
+        for index in range(1, 26)
+    ]
+
+    payload, mode, reason = ai_search.predict_price_gemini("Phone", "search_scope", "all", "live", snapshots)
+
+    assert mode == "gemini_api" and reason is None and payload["predicted_average_price"] == 125
+    prompt_snapshots = json.loads(captured["prompt"].split("snapshots: ", 1)[1])
+    assert [row["average_price"] for row in prompt_snapshots] == list(range(6, 26))
 
 
 def test_gemini_condition_claim_is_checked_against_visible_records(monkeypatch):
@@ -653,7 +839,7 @@ def test_complete_mongo_style_search_compare_and_evidence_flow():
     assert b"Enter workspace" in login_page.data
     response = test_client.post("/search?q=iPhone%2017%20Pro%20256GB&data_source=mongodb&sort=platform&action=search", follow_redirects=True)
     assert response.status_code == 200
-    for label in (b"Product Price Search & Comparison", b"Search Sources", b"Generate AI price insight", b"Compare selected", b"Save selected evidence"):
+    for label in (b"Product Price Search & Comparison", b"Search Sources", b"Explain this comparison", b"Compare selected", b"Save selected evidence"):
         assert label in response.data
     assert b"Normalized price" not in response.data
     assert b"MONGODB_URI" not in response.data
@@ -696,25 +882,29 @@ def test_production_role_menus_and_developer_preview():
     login(test_client, role="retailer")
     retailer = test_client.get("/dashboard/retailer").data
     assert b"Monitor marketplace prices." in retailer
-    assert b"Tracked listings" in retailer and b"Lowest competitor price" in retailer
+    assert b"Price monitoring portfolio" in retailer
+    assert b"Price drops" in retailer and b"Needs attention" in retailer
     assert b"Create monitor" in retailer
-    assert b"Market overview" in retailer and b"Sourcing insight" in retailer
+    assert b"Active monitors" in retailer and b"New baselines" in retailer
     test_client.post("/logout")
     login(test_client, role="researcher")
     admin = test_client.get("/dashboard/researcher").data
-    for label in (b"Observe the evidence pipeline.", b"Data source status", b"AI analysis logs", b"Product result database"):
+    for label in (b"Build traceable findings.", b"Research pipeline", b"Recent evidence", b"Source reliability", b"Recent AI analyses", b"Research activity"):
         assert label in admin
+    assert b"Product result database" not in admin
+    assert b"Testing records" not in admin
+    assert b"Activity Logs" in admin
     assert b"Users" not in admin
     assert b"Developer role preview" not in admin
     assert test_client.post("/role-switch", data={"role": "consumer"}).status_code == 302
 
 
-def test_multi_role_workspace_and_admin_controls():
+def test_single_role_workspace_policy_and_admin_role_replacement():
     test_client = client()
     login(test_client, username="Multi", role="consumer")
     user = precision_app.repository.get_user_by_display_name("Multi")
     precision_app.repository.update_user(user["_id"], {"roles": ["consumer", "researcher"], "active_role": "consumer", "role": "consumer", "plan": "basic"})
-    test_client.get("/logout")
+    test_client.post("/logout")
     login(test_client, username="Multi", role="consumer")
     dashboard = test_client.get("/dashboard/consumer")
     assert dashboard.status_code == 200
@@ -722,8 +912,8 @@ def test_multi_role_workspace_and_admin_controls():
     response = test_client.post("/role-switch", data={"role": "researcher"})
     assert response.status_code == 302
     updated = precision_app.repository.get_user_by_display_name("Multi")
-    assert updated["active_role"] == "researcher"
-    assert updated["roles"] == ["consumer", "researcher"]
+    assert updated["active_role"] == "consumer"
+    assert updated["roles"] == ["consumer"]
     assert updated["_id"] == user["_id"]
     assert test_client.post("/role-switch", data={"role": "administrator"}).status_code == 302
     test_client.post("/logout")
@@ -732,18 +922,20 @@ def test_multi_role_workspace_and_admin_controls():
     target = precision_app.repository.get_user_by_display_name("Multi")
     response = test_client.post(
         f"/dashboard/administrator/users/{target['_id']}",
-        data={"roles": ["consumer", "researcher"], "active_role": "researcher", "plan": "professional", "account_status": "active"},
+        data={"workspace_role": "researcher", "plan": "professional", "account_status": "active"},
     )
     assert response.status_code == 302
     updated = precision_app.repository.get_user_by_id(target["_id"])
-    assert updated["roles"] == ["consumer", "researcher"]
+    assert updated["roles"] == ["researcher"]
     assert updated["active_role"] == "researcher"
     assert updated["plan"] == "professional"
     admin_page = test_client.get("/dashboard/administrator").data.decode("utf-8", errors="ignore")
     assert "Membership plan" in admin_page
+    assert "Roles cannot be combined" in admin_page
+    assert 'type="checkbox" name="roles"' not in admin_page
     response = test_client.post(
         f"/dashboard/administrator/users/{target['_id']}",
-        data={"roles": ["consumer"], "active_role": "consumer", "plan": "basic", "account_status": "active"},
+        data={"workspace_role": "consumer", "plan": "basic", "account_status": "active"},
     )
     assert response.status_code == 302
     updated = precision_app.repository.get_user_by_id(target["_id"])
@@ -760,8 +952,11 @@ def test_explicit_search_dynamic_platforms_and_role_tables():
     assert b'name="result_token"' not in pending.data
 
     ebay_controls = test_client.get("/search?data_source=ebay")
-    options = [option.get_text(strip=True) for option in BeautifulSoup(ebay_controls.data, "html.parser").select("#platform-filter option")]
-    assert options == ["All platforms", "eBay"]
+    scope_options = BeautifulSoup(ebay_controls.data, "html.parser").select("#platform-filter option")
+    options = [option.get_text(strip=True) for option in scope_options]
+    assert options == ["Both platforms", "eBay", "Walmart"]
+    assert [option.get("value") for option in scope_options] == ["both", "ebay", "walmart"]
+    assert next(option for option in scope_options if option.has_attr("selected"))["value"] == "ebay"
 
     consumer = test_client.post("/search?q=iphone17&data_source=mongodb&action=search", follow_redirects=True)
     assert b"Condition" in consumer.data
@@ -786,14 +981,17 @@ def test_watchlist_and_analytics_membership_gates(monkeypatch):
     record = precision_app.repository.list_searches(limit=1)[0]
     watchlist_locked = test_client.get("/watchlist")
     assert watchlist_locked.status_code == 200
-    assert b"Premium unlocks evidence saving, watchlists, analytics dashboards, and AI-assisted price forecasting." in watchlist_locked.data
+    assert b"See how a market moves after the first search." in watchlist_locked.data
+    assert b"Price history" in watchlist_locked.data
     assert b"Requires Premium" in watchlist_locked.data
     assert b"material-symbols-outlined" in watchlist_locked.data
-    assert b"View plans" in watchlist_locked.data
+    assert b"Upgrade to Premium" in watchlist_locked.data
+    assert watchlist_locked.data.count(b"Upgrade to Premium") == 1
     assert b"/membership" in watchlist_locked.data
     analytics_locked = test_client.get(f"/analytics/{record['_id']}")
     assert analytics_locked.status_code == 200
-    assert b"Premium unlocks evidence saving, watchlists, analytics dashboards, and AI-assisted price forecasting." in analytics_locked.data
+    assert b"Move from listings to a comparable market view." in analytics_locked.data
+    assert b"Price distribution" in analytics_locked.data
     save_blocked = test_client.post("/saved/results", data={"search_record_id": record["_id"], "result_token": record.get("result_tokens", [""])[0] if record.get("result_tokens") else ""})
     assert save_blocked.status_code == 302
 
@@ -809,9 +1007,10 @@ def test_watchlist_and_analytics_membership_gates(monkeypatch):
     assert test_client.get(f"/analytics/{record['_id']}").status_code == 200
     audit_locked = test_client.get("/audit")
     assert audit_locked.status_code == 200
-    assert b"Source audit requires Professional membership." in audit_locked.data
+    assert b"Review collection outcomes, source coverage, evidence events, and failures" in audit_locked.data
     assert b"Requires Professional" in audit_locked.data
     assert b"Upgrade to Professional" in audit_locked.data
+    assert b"Source provenance" in audit_locked.data
     assert b"/membership" in audit_locked.data
 
     test_client.post("/logout")
@@ -896,7 +1095,7 @@ def test_analytics_export_csv_includes_metadata_and_record_fields():
     export = test_client.get(f"/analytics/{record['_id']}/export/results.csv")
     assert export.status_code == 200
     rows = list(csv.reader(io.StringIO(export.data.decode("utf-8", errors="ignore"))))
-    assert rows[0] == ["Analysis ID", "Query", "Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL", "Analysis Included", "Exclusion Reason"]
+    assert rows[0] == ["Analysis ID", "Query", "Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL", "Analysis Included", "Exclusion Reason", "Product Configuration"]
     assert rows[1][1] == "metadata-phone"
     assert rows[1][13] == "Yes"
 
@@ -1088,7 +1287,7 @@ def test_prediction_evaluates_with_future_snapshot_and_metrics(monkeypatch):
     precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 100.0, "lowest_price": 90.0, "highest_price": 110.0, "record_count": 3, "source_label": "live", "data_quality": "good", "collected_at": precision_app.datetime(2026, 7, 1, tzinfo=precision_app.timezone.utc)})
     test_client.post(f"/watchlist/{item['_id']}/prediction")
     prediction = precision_app.repository.list_predictions(user_id=item["user_id"], watchlist_id=item["_id"], limit=1)[0]
-    precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 130.0, "lowest_price": 125.0, "highest_price": 135.0, "record_count": 3, "source_label": "live", "data_quality": "good", "collected_at": prediction["prediction_created_at"] + precision_app.timedelta(hours=1)})
+    precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 130.0, "lowest_price": 125.0, "highest_price": 135.0, "record_count": 3, "source_label": "live", "data_quality": "good", "collected_at": prediction["prediction_created_at"] + precision_app.timedelta(hours=13)})
     response = test_client.post(f"/watchlist/{item['_id']}/prediction/evaluate")
     assert response.status_code == 302
     prediction = precision_app.repository.list_predictions(user_id=item["user_id"], watchlist_id=item["_id"], limit=1)[0]
@@ -1126,7 +1325,7 @@ def test_prediction_evaluation_update_payload_strips_id(monkeypatch):
     precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 90.0, "lowest_price": 85.0, "highest_price": 95.0, "record_count": 2, "source_label": "live", "data_quality": "good", "collected_at": precision_app.datetime(2026, 7, 1, tzinfo=precision_app.timezone.utc)})
     test_client.post(f"/watchlist/{item['_id']}/prediction")
     prediction = precision_app.repository.list_predictions(user_id=item["user_id"], watchlist_id=item["_id"], limit=1)[0]
-    precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 95.0, "lowest_price": 90.0, "highest_price": 100.0, "record_count": 2, "source_label": "live", "data_quality": "good", "collected_at": prediction["prediction_created_at"] + precision_app.timedelta(hours=1)})
+    precision_app.repository.save_price_snapshot(item["_id"], item["user_id"], {"average_price": 95.0, "lowest_price": 90.0, "highest_price": 100.0, "record_count": 2, "source_label": "live", "data_quality": "good", "collected_at": prediction["prediction_created_at"] + precision_app.timedelta(hours=13)})
     captured = {}
     original_update = precision_app.repository.update_prediction
     def capture_update(prediction_id, updates):
@@ -1161,7 +1360,8 @@ def test_watchlist_chart_states_and_serializable_data(monkeypatch):
     assert "watchlist-trend-echart" in body
     assert "watchlist-validation-echart" in body
     assert "static/vendor/echarts.min.js" in body
-    assert "Track → Refresh → Review" in body
+    assert "Forecast awaiting validation" in body
+    assert "Collect now and validate" in body
 
 
 def test_watchlist_hides_debug_marker_and_renders_chart_metadata(monkeypatch):
@@ -1380,13 +1580,13 @@ def test_consumer_watchlist_uses_refresh_first_workflow(monkeypatch):
     item = precision_app.repository.list_watchlist_items(user_id=record["user_id"], limit=1)[0]
     page = test_client.get("/watchlist", query_string={"item_id": item["_id"]})
     body = page.data.decode("utf-8", errors="ignore")
-    assert "Collect latest snapshot" in body
+    assert "Collect latest prices" in body
     assert "Enable daily refresh" in body
     assert "Generate AI prediction" not in body
     assert "Evaluate with latest snapshot" not in body
 
 
-def test_refresh_snapshot_uses_success_message_and_preserves_selection(monkeypatch):
+def test_refresh_snapshot_validates_pending_forecast_and_preserves_selection(monkeypatch):
     test_client = client()
     login(test_client, username="RefreshUX", role="consumer", membership_tier="professional")
     monkeypatch.setattr(precision_app, "predict_price_gemini", lambda *args, **kwargs: ({"predicted_average_price": 100.0, "predicted_direction": "stable", "confidence_level": "medium", "reason": "mocked"}, "gemini_api", None))

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 from urllib.parse import urlparse
 
 import requests
@@ -28,6 +29,7 @@ class SerpApiError(RuntimeError):
 
 
 SERPAPI_ENDPOINT = "https://serpapi.com/search.json"
+SERPAPI_NORMALIZATION_VERSION = "2"
 
 
 def normalize_query(value):
@@ -55,6 +57,7 @@ def build_serpapi_cache_key(params):
         "currency": normalize_cache_value(params.get("currency")),
         "store_id": normalize_cache_value(params.get("store_id")),
         "limit": normalize_cache_value(params.get("limit")),
+        "normalization_version": normalize_cache_value(params.get("normalization_version") or SERPAPI_NORMALIZATION_VERSION),
     }
     payload = json.dumps(relevant, sort_keys=True, separators=(",", ":"))
     return "serpapi:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -176,6 +179,7 @@ def normalize_serpapi_records(payload, *, platform, query, collected_at=None, li
                 reject("non_walmart_merchant")
                 continue
         primary_offer = row.get("primary_offer") if isinstance(row.get("primary_offer"), dict) else {}
+        installment = row.get("installment") if isinstance(row.get("installment"), dict) else None
         raw_price = _first_present(row, ("extracted_price", "price", "price_str"))
         if raw_price in (None, ""):
             raw_price = primary_offer.get("offer_price")
@@ -224,8 +228,15 @@ def normalize_serpapi_records(payload, *, platform, query, collected_at=None, li
             "data_source_label": source_type,
             "serpapi_position": row.get("position"),
         }
-        if platform_key == "walmart":
-            normalized["raw_price_text"] = f"{str(currency or 'USD')[:8]} {price:.2f}"
+        provider_price_text = str(_first_present(row, ("price", "price_str"), raw_price) or "").strip()
+        is_installment = bool(installment) or bool(re.search(r"(?:/\s*(?:mo|month)|per\s+month|monthly)", provider_price_text, re.IGNORECASE))
+        normalized["raw_price_text"] = provider_price_text if is_installment else f"{str(currency or 'USD')[:8]} {price:.2f}"
+        if is_installment:
+            normalized.update(
+                price_type="installment",
+                billing_period="monthly",
+                installment_period=(installment or {}).get("period"),
+            )
         if len(results) < int(limit or 20):
             results.append(normalized)
     if diagnostics is not None:

@@ -3,27 +3,28 @@
 {% block content %}
 <section class="app-hero">
   <div class="flex flex-wrap items-start justify-between gap-5">
-    <div><p class="text-xs font-bold uppercase tracking-widest text-primary">Comparison workspace</p><h1 class="mt-2 font-display text-4xl font-extrabold">Price and market comparison</h1><p class="mt-2 text-slate-600">{{ record.keyword if record else 'Selected comparison' }} · {{ source_summary }}</p><p class="mt-2 text-xs text-slate-500">Created {{ display_sgt_datetime(comparison_created_at) }}</p><p class="mt-3 text-xs font-semibold text-slate-500">Review → Analyze → Track or Save</p></div>
+    <div><p class="text-xs font-bold uppercase tracking-widest text-primary">Comparison workspace</p><h1 class="mt-2 font-display text-4xl font-extrabold">Price and market comparison</h1><p class="mt-2 text-slate-600">{{ record.keyword if record else 'Selected comparison' }}{% if active_storage %} · {{ active_storage }}{% endif %} · {{ source_summary }}</p><p class="mt-2 text-xs text-slate-500">Created {{ display_sgt_datetime(comparison_created_at) }}</p><p class="mt-3 text-xs font-semibold text-slate-500">Review → Analyze → Track or Save</p></div>
     <a href="{{ url_for('search_results', search_run_id=record.search_run_id or record._id) if record else url_for('search') }}" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Back to search results</a>
   </div>
 </section>
 
 {% if products|length >= 2 %}
 {% if mixed_storage %}
-<section class="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950" role="alert">
-  <h2 class="font-display text-lg font-bold">Mixed storage comparison</h2>
-  <p class="mt-2 text-sm">The selected records contain multiple storage variants: {{ storage_variants|join(', ') }}.</p>
-  <div class="mt-4 flex flex-wrap gap-3">
-    <a href="#storage-groups" class="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-bold">Compare separately by storage</a>
-    <a href="#comparison-table" class="rounded-lg bg-amber-800 px-4 py-2 text-sm font-bold text-white">Continue with mixed variants</a>
-    <a href="{{ url_for('search_results', search_run_id=record.search_run_id or record._id) if record else url_for('search') }}" class="rounded-lg px-4 py-2 text-sm font-bold">Cancel</a>
+<section class="mt-6 rounded-2xl border border-blue-200 bg-blue-50/60 p-5" aria-labelledby="storage-scope-heading">
+  <div class="flex flex-wrap items-start justify-between gap-4"><div><p class="text-xs font-bold uppercase tracking-wider text-blue-700">Product variants</p><h2 id="storage-scope-heading" class="mt-1 font-display text-xl font-bold text-slate-950">{% if overview_mode %}Choose a storage capacity{% else %}{{ active_storage }} comparison{% endif %}</h2><p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{% if overview_mode %}Each capacity is calculated independently so a change in product mix cannot distort the price comparison.{% else %}Metrics and actions below use only {{ active_storage }} listings. Switch capacity without changing the original selection.{% endif %}</p></div>{% if active_storage %}<a href="{{ url_for('compare_group', comparison_id=comparison_id) }}" class="app-button-secondary py-2 text-sm">View all variants</a>{% endif %}</div>
+  <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    {% for group in storage_groups %}
+    <article class="rounded-xl border {{ 'border-blue-400 bg-white ring-2 ring-blue-100' if active_storage == group.value else 'border-slate-200 bg-white' }} p-4">
+      <div class="flex items-start justify-between gap-3"><div><h3 class="font-display text-lg font-bold text-slate-950">{{ group.value }}</h3><p class="mt-1 text-sm text-slate-500">{{ group.comparable_count }} comparable listing{{ 's' if group.comparable_count != 1 else '' }}</p></div><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ 'bg-emerald-50 text-emerald-700' if group.ready else 'bg-amber-50 text-amber-800' }}">{{ 'Ready' if group.ready else 'More listings required' }}</span></div>
+      <p class="mt-4 text-sm font-semibold text-slate-800">{% if group.lowest is number and group.highest is number %}USD {{ '%.2f'|format(group.lowest) }} – USD {{ '%.2f'|format(group.highest) }}{% else %}No comparable price range{% endif %}</p>
+      {% if group.ready %}<a href="{{ url_for('compare_group', comparison_id=comparison_id, storage=group.value) }}" class="mt-4 inline-flex text-sm font-bold text-blue-700 hover:underline">{{ 'Current comparison' if active_storage == group.value else 'Open comparison' }} <span aria-hidden="true">→</span></a>{% else %}<a href="{{ url_for('search_results', search_run_id=record.search_run_id or record._id, storage=group.value) if record else url_for('search', storage=group.value) }}" class="mt-4 inline-flex text-sm font-bold text-amber-800 hover:underline">Find more {{ group.value }} listings <span aria-hidden="true">→</span></a>{% endif %}
+    </article>
+    {% endfor %}
   </div>
-</section>
-<section id="storage-groups" class="mt-4 rounded-2xl border border-slate-200 bg-white p-5">
-  <h2 class="font-display text-lg font-bold">Storage groups</h2>
-  <div class="mt-3 flex flex-wrap gap-2">{% for storage in storage_variants %}<span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold">{{ storage }} · {{ products|selectattr('storage', 'equalto', storage)|list|length }} listing(s)</span>{% endfor %}</div>
+  {% if overview_mode %}<div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-blue-100 pt-4"><p class="text-xs text-slate-500">Saving preserves every capacity as a separate group inside one comparison package.</p>{% if comparison_saved %}<span class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700"><span class="material-symbols-outlined text-[18px]">check_circle</span>Package saved</span>{% else %}<form action="{{ url_for('save_comparison_set', comparison_id=comparison_id) }}" method="post"><button class="app-button-secondary py-2 text-sm"><span class="material-symbols-outlined text-[18px]">bookmark_add</span>Save comparison package</button></form>{% endif %}</div>{% endif %}
 </section>
 {% endif %}
+{% if not overview_mode %}
 {% if stats.excluded_count %}
 <section class="mt-6 border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950"><strong>{{ stats.excluded_count }} selected record{{ 's' if stats.excluded_count != 1 else '' }} excluded from comparison metrics.</strong> Non-comparable payment structures remain visible below for source transparency.</section>
 {% endif %}
@@ -57,23 +58,29 @@
   <span class="material-symbols-outlined mt-0.5 text-[22px] text-blue-700">insights</span>
   <div class="min-w-0"><p class="text-xs font-bold uppercase tracking-wider text-blue-700">Decision support</p><h2 class="mt-1 font-display text-lg font-bold text-slate-950">Market conclusion</h2><p class="mt-2 leading-7 text-slate-700">{{ conclusion }}</p></div>
 </section>
+{% endif %}
 
+{% if not overview_mode %}
 <section class="mt-7 border-t border-slate-200 pt-6" id="comparison-actions">
   <h2 class="font-display text-xl font-bold">Comparison actions</h2>
   <div class="mt-4 flex flex-wrap gap-3">
     {% if analysis_action == 'open' %}<a href="{{ url_for('analytics', search_record_id=current_analysis._id) }}" class="rounded-lg bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">Open analysis</a>
-    {% else %}<form action="{{ url_for('create_comparison_analysis', comparison_id=comparison_id) }}" method="post">{% if analysis_action == 'refresh' %}<input type="hidden" name="refresh" value="1">{% endif %}<button class="rounded-lg bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700" {% if not stats.comparable_count %}disabled title="No comparable full prices available"{% endif %}>{{ analysis_label }}</button></form>{% endif %}
-    <form action="{{ url_for('watchlist_from_compare') }}" method="post"><input type="hidden" name="comparison_id" value="{{ comparison_id }}"><input type="hidden" name="search_record_id" value="{{ record._id if record else '' }}"><button class="rounded-lg border border-blue-300 bg-white px-5 py-3 text-sm font-bold text-blue-700 hover:bg-blue-50" {% if not stats.comparable_count %}disabled title="No comparable full prices available"{% endif %}>Track this comparison</button></form>
-    {% if comparison_saved %}<span class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-bold text-emerald-700"><span class="material-symbols-outlined text-[18px]">check_circle</span>Saved</span>{% else %}<form action="{{ url_for('save_comparison_set', comparison_id=comparison_id) }}" method="post"><button class="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-5 py-3 text-sm font-bold text-blue-700 shadow-sm hover:border-blue-400 hover:bg-blue-50"><span class="material-symbols-outlined text-[18px]">bookmark_add</span>Save comparison set</button></form>{% endif %}
+    {% else %}<form action="{{ url_for('create_comparison_analysis', comparison_id=comparison_id) }}" method="post"><input type="hidden" name="storage_scope" value="{{ active_storage or '' }}">{% if analysis_action == 'refresh' %}<input type="hidden" name="refresh" value="1">{% endif %}<button class="rounded-lg bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700" {% if stats.comparable_count < 2 %}disabled title="At least two comparable full prices are required"{% endif %}>{{ analysis_label }}</button></form>{% endif %}
+    <form action="{{ url_for('watchlist_from_compare') }}" method="post"><input type="hidden" name="comparison_id" value="{{ comparison_id }}"><input type="hidden" name="search_record_id" value="{{ record._id if record else '' }}"><input type="hidden" name="storage_scope" value="{{ active_storage or '' }}"><button class="rounded-lg border border-blue-300 bg-white px-5 py-3 text-sm font-bold text-blue-700 hover:bg-blue-50" {% if stats.comparable_count < 2 %}disabled title="At least two comparable full prices are required"{% endif %}>Track {{ active_storage + ' comparison' if active_storage else 'this comparison' }}</button></form>
+    {% if comparison_saved %}<span class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-bold text-emerald-700"><span class="material-symbols-outlined text-[18px]">check_circle</span>Saved</span>{% else %}<form action="{{ url_for('save_comparison_set', comparison_id=comparison_id) }}" method="post"><button class="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-5 py-3 text-sm font-bold text-blue-700 shadow-sm hover:border-blue-400 hover:bg-blue-50"><span class="material-symbols-outlined text-[18px]">bookmark_add</span>{{ 'Save comparison package' if mixed_storage else 'Save comparison set' }}</button></form>{% endif %}
   </div>
-  {% if not stats.comparable_count %}<p class="mt-3 text-sm text-amber-800">Analyze and Track require at least one comparable full-price record.</p>{% endif %}
+  {% if stats.comparable_count < 2 %}<p class="mt-3 text-sm text-amber-800">Analyze and Track require at least two comparable full-price records in this storage group.</p>{% endif %}
 </section>
+{% else %}
+<section class="mt-6 rounded-xl border border-slate-200 bg-white p-5"><h2 class="font-display text-lg font-bold text-slate-950">All selected listings</h2><p class="mt-2 text-sm text-slate-600">This overview preserves the original {{ products|length }} records. Choose a ready storage group above to calculate comparable prices, analyze, or create a Monitor.</p></section>
+{% endif %}
 
 <section id="comparison-table" class="mt-7 app-table-wrap overflow-x-auto">
   <table class="app-table w-full min-w-[1100px] text-left text-sm">
-    <thead><tr><th class="p-4">Product</th><th class="p-4">Platform</th><th class="p-4">Price</th><th class="p-4">Condition</th><th class="p-4">Price quality</th><th class="p-4">Source link</th><th class="p-4">Market position</th></tr></thead>
+    <thead><tr><th class="p-4">Product</th>{% if mixed_storage %}<th class="p-4">Storage</th>{% endif %}<th class="p-4">Platform</th><th class="p-4">Price</th><th class="p-4">Condition</th><th class="p-4">Price quality</th><th class="p-4">Source link</th><th class="p-4">Market position</th></tr></thead>
     <tbody>{% for item in products %}<tr>
       <td class="max-w-[22rem] p-4 font-semibold"><span class="line-clamp-2" title="{{ item.title }}">{{ item.title }}</span></td>
+      {% if mixed_storage %}<td class="p-4 font-semibold">{{ item.storage or item.parsed_model.storage or 'Not specified' }}</td>{% endif %}
       <td class="p-4">{{ item.platform }}</td>
       <td class="p-4 font-bold">{% if item.analytics_eligible %}{{ item.total_currency }} {{ '%.2f'|format(item.total_price) }}{% else %}{{ item.raw_price_text }}{% if item.billing_period %}<small class="block font-normal text-slate-500">{{ item.billing_period }}</small>{% endif %}{% endif %}</td>
       <td class="p-4">{{ item.condition_display }}</td>

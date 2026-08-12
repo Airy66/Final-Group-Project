@@ -14,17 +14,29 @@ import logging
 import os
 from pathlib import Path
 import secrets
+import sys
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from bson import ObjectId
 from dotenv import load_dotenv
+
+# Environment-backed services must not be imported before the application's
+# .env file has been loaded. ``override=True`` also prevents a stale shell
+# value from silently selecting a different database than the project config.
+_test_environment = os.getenv("PRECISION_TESTING") == "true" and "pytest" in sys.modules
+load_dotenv(override=True)
+if _test_environment:
+    os.environ.update(APP_ENV="testing", DEMO_MODE="true")
+    os.environ.pop("MONGO_URI", None)
+
+from bson import ObjectId
 from flask import Flask, Response, abort, flash, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 from flask.testing import FlaskClient
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
+from pymongo.errors import DuplicateKeyError, PyMongoError
 import requests
 import re
 from openpyxl import Workbook
@@ -35,7 +47,7 @@ from werkzeug.utils import secure_filename
 from services.ai_search import AISearchError, ground_market_summary, predict_price_gemini, search_prices, summarize_market_gemini as summarize_market
 from services.app_urls import application_email_url, canonical_app_base_url
 from services.database import MongoRepository, utcnow
-from services.mail_service import PasswordResetMailService
+from services.email_service import EmailService
 from services.price_alerts import VALID_DIRECTIONS, evaluate_price_alert, normalize_mail_error
 from services.runtime_config import env_flag, is_production_environment, validate_production_configuration, web_security_configuration
 from services.category_attributes import CATEGORY_PROFILES, PRODUCT_TYPE_LABELS, apply_category_filters, canonical_facet_value, category_scope, classify_query_intent, detect_product_category, enrich_listing_category, generate_available_facets, product_type_scope
@@ -44,8 +56,6 @@ from services.platforms import canonical_marketplace_platform
 from src.ecommerce_price_monitor.collectors.walmart_collector import WalmartCollector
 from src.ecommerce_price_monitor.utils.exceptions import CollectorError
 
-if (os.getenv("APP_ENV") or os.getenv("FLASK_ENV") or "").strip().lower() not in {"test", "testing"}:
-    load_dotenv()
 validate_production_configuration()
 
 
@@ -66,6 +76,21 @@ logging.getLogger("werkzeug").addFilter(_ResetTokenLogFilter())
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 _runtime_environment = (os.getenv("APP_ENV") or os.getenv("FLASK_ENV") or "development").strip().lower()
+
+
+@app.errorhandler(PyMongoError)
+def database_operation_unavailable(error):
+    """Fail closed when an established MongoDB connection cannot serve a request."""
+    app.logger.error(
+        "MongoDB operation failed (%s)",
+        error.__class__.__name__,
+        exc_info=(type(error), error, error.__traceback__),
+    )
+    return Response(
+        "Database temporarily unavailable. Please try again later.",
+        status=503,
+        mimetype="text/plain",
+    )
 
 
 def _env_int(name, default, minimum=None, maximum=None):
@@ -91,10 +116,13 @@ app.config.update(
     MONITOR_SCHEDULED_RUN_LIMIT=_env_int("MONITOR_SCHEDULED_RUN_LIMIT", 5, 1),
     MONITOR_REFRESH_TIMEZONE=os.getenv("MONITOR_REFRESH_TIMEZONE", "Asia/Singapore"),
     MONITOR_DAILY_REFRESH_HOUR=_env_int("MONITOR_DAILY_REFRESH_HOUR", 8, 0, 23),
+    MONITOR_MANUAL_REFRESH_COOLDOWN_SECONDS=_env_int("MONITOR_MANUAL_REFRESH_COOLDOWN_SECONDS", 180, 0, 900),
     MONITOR_TEST_PROVIDER_CALLS=False,
     PRICE_ALERTS_ENABLED=env_flag("PRICE_ALERTS_ENABLED", True),
     PRICE_ALERT_DEFAULT_THRESHOLD_PERCENT=os.getenv("PRICE_ALERT_DEFAULT_THRESHOLD_PERCENT", "5"),
     PRICE_ALERT_COOLDOWN_HOURS=_env_int("PRICE_ALERT_COOLDOWN_HOURS", 24, 1),
+    PRICE_ALERT_MIN_COMPARABLE_RECORDS=_env_int("PRICE_ALERT_MIN_COMPARABLE_RECORDS", 2, 1),
+    PRICE_ALERT_MAX_RECORD_COUNT_CHANGE_PERCENT=_env_int("PRICE_ALERT_MAX_RECORD_COUNT_CHANGE_PERCENT", 50, 0),
     RUNTIME_ENVIRONMENT=_runtime_environment,
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,
     MAX_FORM_MEMORY_SIZE=16 * 1024 * 1024,
@@ -258,7 +286,7 @@ FEATURE_REQUIRED_TIERS = {
     "advanced_analytics": "professional",
     "prediction": "premium",
     "standard_export": "premium",
-    "prediction_validation": "professional",
+    "prediction_validation": "premium",
     "source_audit": "professional",
     "logs": "professional",
     "export_report": "professional",
@@ -291,6 +319,7 @@ MEMBERSHIP_PLANS = [
             "Analytics dashboard and interactive charts",
             "AI-supported market summary",
             "AI price forecast in Watchlist",
+            "Forecast validation against later eligible snapshots",
             "Standard CSV, chart and report exports from unlocked pages",
         ],
     },
@@ -301,7 +330,6 @@ MEMBERSHIP_PLANS = [
         "description": "For research and audit workflows requiring validation, provenance, activity records, and advanced research exports.",
         "features": [
             "All search, evidence, Watchlist, Analytics and AI forecasting capabilities",
-            "Forecast validation workflow",
             "Source Audit",
             "Activity Logs",
             "Validation evidence summary",
@@ -312,6 +340,74 @@ MEMBERSHIP_PLANS = [
     },
 ]
 PLAN_BY_ID = {plan["id"]: plan for plan in MEMBERSHIP_PLANS}
+LOCKED_FEATURE_VIEWS = {
+    "saved_research": {
+        "icon": "bookmarks",
+        "eyebrow": "Evidence workspace",
+        "headline": "Turn useful listings into reusable evidence.",
+        "summary": "Save selected marketplace records with their source, observed price, confidence, and collection context intact.",
+        "capabilities": [
+            {"icon": "bookmark_added", "title": "Evidence library", "detail": "Keep deliberate observations separate from temporary search results."},
+            {"icon": "inventory_2", "title": "Research packages", "detail": "Group evidence into focused, reusable research collections."},
+            {"icon": "download", "title": "Portable records", "detail": "Export unlocked evidence workflows without losing provenance."},
+        ],
+    },
+    "watchlist": {
+        "icon": "monitoring",
+        "eyebrow": "Price monitoring",
+        "headline": "See how a market moves after the first search.",
+        "summary": "Create product monitors, collect comparable price snapshots, and review changes against an established baseline.",
+        "capabilities": [
+            {"icon": "show_chart", "title": "Price history", "detail": "Follow average, low, and high observed prices over time."},
+            {"icon": "notifications_active", "title": "Change signals", "detail": "Surface price movements and monitors that need attention."},
+            {"icon": "storefront", "title": "Source comparison", "detail": "Track comparable listings across available marketplaces."},
+        ],
+    },
+    "analytics_dashboard": {
+        "icon": "analytics",
+        "eyebrow": "Market analytics",
+        "headline": "Move from listings to a comparable market view.",
+        "summary": "Explore normalized price ranges, platform coverage, comparable records, and grounded analytical summaries.",
+        "capabilities": [
+            {"icon": "query_stats", "title": "Price distribution", "detail": "Understand range, average, outliers, and market position."},
+            {"icon": "compare_arrows", "title": "Comparable sets", "detail": "Keep analytical conclusions tied to included records."},
+            {"icon": "auto_awesome", "title": "Grounded summaries", "detail": "Use current normalized evidence as the basis for AI analysis."},
+        ],
+    },
+    "source_audit": {
+        "icon": "policy",
+        "eyebrow": "Provenance and audit",
+        "headline": "Verify where every research record came from.",
+        "summary": "Review collection outcomes, source coverage, evidence events, and failures in one traceable audit workflow.",
+        "capabilities": [
+            {"icon": "fact_check", "title": "Source provenance", "detail": "Connect searches and saved evidence to their originating source."},
+            {"icon": "warning", "title": "Failure visibility", "detail": "Distinguish no-result outcomes from provider and persistence errors."},
+            {"icon": "description", "title": "Audit reports", "detail": "Generate exportable records for advanced review and documentation."},
+        ],
+    },
+    "logs": {
+        "icon": "receipt_long",
+        "eyebrow": "Research activity",
+        "headline": "Keep a chronological record of research actions.",
+        "summary": "Review search, evidence, AI, and audit activity as an account-scoped timeline for reproducibility.",
+        "capabilities": [
+            {"icon": "timeline", "title": "Activity timeline", "detail": "Review important workflow events in chronological order."},
+            {"icon": "smart_toy", "title": "AI traceability", "detail": "See model activity and the evidence scope used for analysis."},
+            {"icon": "ios_share", "title": "Review exports", "detail": "Export activity records for professional research workflows."},
+        ],
+    },
+    "export": {
+        "icon": "download",
+        "eyebrow": "Research export",
+        "headline": "Take traceable research records outside the workspace.",
+        "summary": "Export supported evidence, monitoring, analysis, or audit records from the page where they were created.",
+        "capabilities": [
+            {"icon": "table_view", "title": "Structured data", "detail": "Download supported records in portable tabular formats."},
+            {"icon": "verified", "title": "Preserved context", "detail": "Keep source and workflow context attached to research outputs."},
+            {"icon": "share", "title": "External review", "detail": "Prepare unlocked records for collaboration and reporting."},
+        ],
+    },
+}
 SOURCES = {"ebay": "eBay API", "ai": "AI Web Search", "demo": "Demo Data"}
 ACCESSORY_KEYWORDS = {"case", "cover", "screen protector", "tempered glass", "film", "accessory", "charger", "cable", "adapter", "strap", "mount", "holder", "replacement", "repair", "housing", "frame", "parts", "lcd", "display", "digitizer", "lens"}
 SERPAPI_MARKETPLACE_ENABLED = os.getenv("SERPAPI_MARKETPLACE_ENABLED", "true").lower() in {"1", "true", "on", "yes"}
@@ -397,22 +493,29 @@ def tier_label(tier):
 def locked_message(feature):
     if feature == "watchlist":
         return "Premium unlocks evidence saving, watchlists, analytics dashboards, and AI-assisted price forecasting."
-    if feature == "prediction":
-        return "AI price forecasting is available on Premium and Professional plans."
+    if feature in {"prediction", "prediction_validation"}:
+        return "AI price forecasting and validation are available on Premium and Professional plans."
     if feature == "source_audit":
         return "Source audit requires Professional membership."
     if feature == "logs":
         return "Activity logs are part of the Professional audit workflow because they support traceability and advanced review."
     if feature in {"saved_research", "save_evidence", "analytics_dashboard", "basic_analytics", "standard_export"}:
         return "Premium unlocks evidence saving, watchlists, analytics dashboards, and AI-assisted price forecasting."
-    if feature in {"advanced_analytics", "prediction", "prediction_validation", "export_report", "research_package"}:
-        return "Professional adds forecast validation, source audit, activity logs, and exportable research reports."
+    if feature in {"advanced_analytics", "export_report", "research_package"}:
+        return "Professional adds source audit, activity logs, advanced provenance, and exportable research reports."
     return f"This feature requires {tier_label(required_tier(feature))} membership."
 
 
 def locked_feature_response(feature, title=None, status_code=200):
     required = required_tier(feature)
-    cta_label = "View plans" if required == "premium" else f"Upgrade to {tier_label(required)}"
+    cta_label = f"Upgrade to {tier_label(required)}"
+    locked_view = LOCKED_FEATURE_VIEWS.get(feature, {
+        "icon": "lock",
+        "eyebrow": "Workspace capability",
+        "headline": f"Unlock {title or 'this feature'} when your workflow needs it.",
+        "summary": locked_message(feature),
+        "capabilities": [],
+    })
     return render_template(
         "locked_feature.html",
         feature=feature,
@@ -421,6 +524,7 @@ def locked_feature_response(feature, title=None, status_code=200):
         cta_label=cta_label,
         title=title or "Feature locked",
         message=locked_message(feature),
+        locked_view=locked_view,
     ), status_code
 
 
@@ -638,7 +742,17 @@ def singapore_time_string(value):
 
 
 def export_forbidden_response(message):
-    return render_template("locked_feature.html", feature="export", required_tier="premium", required_label="Premium", cta_label="View plans", title="Export locked", message=message), 403
+    required = "professional" if "Professional" in message else "premium"
+    return render_template(
+        "locked_feature.html",
+        feature="export",
+        required_tier=required,
+        required_label=tier_label(required),
+        cta_label=f"Upgrade to {tier_label(required)}",
+        title="Export locked",
+        message=message,
+        locked_view=LOCKED_FEATURE_VIEWS["export"],
+    ), 403
 
 
 def export_allowed(member, required):
@@ -747,6 +861,12 @@ def user_active_role(user):
     roles = user_roles(user)
     active_role = user.get("active_role") or user.get("role") or roles[0]
     return active_role if active_role in roles else roles[0]
+
+
+def single_account_role(user):
+    """Return the one canonical workspace role assigned to an account."""
+    candidate = (user or {}).get("active_role") or (user or {}).get("role") or (user or {}).get("primary_role")
+    return candidate if candidate in ROLES else "consumer"
 
 
 def is_accessory(title):
@@ -1660,6 +1780,7 @@ def _serpapi_cache_params(query, platform, *, category="", min_price=None, max_p
         "currency": os.getenv("SERPAPI_CURRENCY", "USD"),
         "store_id": os.getenv("SERPAPI_WALMART_STORE_ID", "") if engine == "walmart" else "",
         "limit": limit,
+        "normalization_version": "2",
     }
     params["cache_key"] = build_serpapi_cache_key(params)
     return params
@@ -1937,8 +2058,85 @@ def build_retailer_dashboard_view(user_id, monitor_id=None):
             insight = "Platform coverage is limited. Collect or save more marketplace records before making sourcing decisions."
         return distribution_rows, price_range, insight
 
+    def monitor_metrics(monitor):
+        snapshots = safe_call(lambda: repository.list_price_snapshots(monitor["_id"], limit=90), [])
+        normalized_snapshots = []
+        for snapshot in snapshots:
+            row = dict(snapshot)
+            listing_rows = normalize_price_items(row.get("listing_records") or [])
+            listing_prices = [_dashboard_price_value(item) for item in listing_rows]
+            listing_prices = [value for value in listing_prices if value is not None]
+            if _snapshot_float(row.get("average_price")) is None and listing_prices:
+                row["average_price"] = round(sum(listing_prices) / len(listing_prices), 2)
+                row["lowest_price"] = round(min(listing_prices), 2)
+                row["highest_price"] = round(max(listing_prices), 2)
+                row["record_count"] = len(listing_prices)
+            if _snapshot_float(row.get("average_price")) is not None:
+                normalized_snapshots.append(row)
+        normalized_snapshots.sort(
+            key=lambda row: _normalized_utc_datetime(row.get("collected_at") or row.get("created_at"))
+            or datetime.min.replace(tzinfo=timezone.utc)
+        )
+        latest = normalized_snapshots[-1] if normalized_snapshots else None
+        previous = normalized_snapshots[-2] if len(normalized_snapshots) > 1 else None
+        current_average = _snapshot_float((latest or {}).get("average_price"))
+        previous_average = _snapshot_float((previous or {}).get("average_price"))
+        current_low = _snapshot_float((latest or {}).get("lowest_price"))
+        current_high = _snapshot_float((latest or {}).get("highest_price"))
+        change_amount = round(current_average - previous_average, 2) if current_average is not None and previous_average is not None else None
+        change_percentage = round(change_amount / previous_average * 100, 2) if change_amount is not None and previous_average else None
+        latest_listings = normalize_price_items((latest or {}).get("listing_records") or [])
+        priced_listings = [
+            (item, _dashboard_price_value(item))
+            for item in latest_listings
+            if item.get("analytics_eligible")
+        ]
+        priced_listings = [(item, value) for item, value in priced_listings if value is not None]
+        best_listing, best_price = min(priced_listings, key=lambda pair: pair[1]) if priced_listings else (None, current_low)
+        best_platform = (best_listing or {}).get("platform") or (latest or {}).get("best_platform")
+        below_average_percent = (
+            round((current_average - best_price) / current_average * 100, 1)
+            if current_average and best_price is not None
+            else None
+        )
+        if not normalized_snapshots:
+            trend_state, trend_label = "empty", "Waiting for baseline"
+        elif len(normalized_snapshots) == 1:
+            trend_state, trend_label = "baseline", "Baseline collected"
+        elif change_amount is not None and change_amount < 0:
+            trend_state, trend_label = "falling", "Price falling"
+        elif change_amount is not None and change_amount > 0:
+            trend_state, trend_label = "rising", "Price rising"
+        else:
+            trend_state, trend_label = "stable", "Price stable"
+        average_position = 50.0
+        if current_low is not None and current_high is not None and current_high > current_low and current_average is not None:
+            average_position = round((current_average - current_low) / (current_high - current_low) * 100, 1)
+        return {
+            "snapshots": normalized_snapshots,
+            "snapshot_count": len(normalized_snapshots),
+            "trend_chart": _watchlist_trend_chart_data(normalized_snapshots),
+            "sparkline": [_snapshot_float(row.get("average_price")) for row in normalized_snapshots[-14:]],
+            "current_low": current_low,
+            "current_average": current_average,
+            "current_high": current_high,
+            "change_amount": change_amount,
+            "change_percentage": change_percentage,
+            "trend_state": trend_state,
+            "trend_label": trend_label,
+            "best_platform": best_platform,
+            "best_price": best_price,
+            "below_average_percent": below_average_percent,
+            "average_position": average_position,
+            "latest_listing_count": int((latest or {}).get("listing_count") or (latest or {}).get("record_count") or len(latest_listings)),
+            "latest_collected_at": (latest or {}).get("collected_at") or (latest or {}).get("created_at"),
+            "data_quality": (latest or {}).get("data_quality"),
+        }
+
     try:
         monitored = _watchlist_items_for_user(user_id, include_archived=False)
+        for monitor in monitored:
+            monitor["dashboard"] = monitor_metrics(monitor)
         selected_monitor = next((row for row in monitored if str(row.get("_id")) == str(monitor_id)), None) if monitor_id else None
         scoped_monitors = [selected_monitor] if selected_monitor else monitored
         records = []
@@ -1982,6 +2180,35 @@ def build_retailer_dashboard_view(user_id, monitor_id=None):
         # products. Price KPIs exist only for one explicitly selected monitor.
         if selected_monitor is None:
             summary.update(lowest=None, average=None, highest=None, range=None)
+        selected_metrics = selected_monitor.get("dashboard") if selected_monitor else None
+        if selected_metrics:
+            summary.update(
+                lowest=selected_metrics.get("current_low"),
+                average=selected_metrics.get("current_average"),
+                highest=selected_metrics.get("current_high"),
+                range=(
+                    round(selected_metrics["current_high"] - selected_metrics["current_low"], 2)
+                    if selected_metrics.get("current_high") is not None and selected_metrics.get("current_low") is not None
+                    else None
+                ),
+            )
+            if selected_metrics.get("best_platform") and selected_metrics.get("best_price") is not None:
+                gap = selected_metrics.get("below_average_percent")
+                sourcing_insight = (
+                    f"{selected_metrics['best_platform']} currently has the lowest comparable listing at "
+                    f"USD {selected_metrics['best_price']:.2f}"
+                    + (f", {gap:.1f}% below the observed market average." if gap is not None else ".")
+                )
+        portfolio_metrics = {
+            "active_monitors": len(monitored),
+            "price_drops": sum((monitor.get("dashboard") or {}).get("trend_state") == "falling" for monitor in monitored),
+            "needs_attention": sum(
+                not monitor.get("latest_snapshot")
+                or monitor.get("last_refresh_status") in {"failed", "partial"}
+                for monitor in monitored
+            ),
+            "baselines": sum((monitor.get("dashboard") or {}).get("trend_state") == "baseline" for monitor in monitored),
+        }
         return {
             "records": visible_records,
             "distribution": distribution,
@@ -1997,6 +2224,10 @@ def build_retailer_dashboard_view(user_id, monitor_id=None):
             "monitors": monitored,
             "selected_monitor_id": str(selected_monitor.get("_id")) if selected_monitor else "",
             "portfolio_scope": selected_monitor is None,
+            "selected_monitor": selected_monitor,
+            "selected_metrics": selected_metrics,
+            "trend_chart": (selected_metrics or {}).get("trend_chart") or _watchlist_trend_chart_data([]),
+            "portfolio_metrics": portfolio_metrics,
             "latest_snapshot_time": latest_snapshot_time,
             "scope_label": ((f"Based on {len(monitored)} active monitor{'s' if len(monitored) != 1 else ''} · {len(visible_records)} unique listings") if selected_monitor is None else f"{selected_monitor.get('product_label') or selected_monitor.get('keyword') or 'Selected monitor'} · {len(visible_records)} listings") if active_monitor_count else "No active monitoring data yet.",
             "sourcing_insight": sourcing_insight,
@@ -2023,6 +2254,13 @@ def build_retailer_dashboard_view(user_id, monitor_id=None):
             "source_kind": "empty",
             "demo_records": 0,
             "active_monitor_count": 0,
+            "monitors": [],
+            "selected_monitor_id": "",
+            "portfolio_scope": True,
+            "selected_monitor": None,
+            "selected_metrics": None,
+            "trend_chart": _watchlist_trend_chart_data([]),
+            "portfolio_metrics": {"active_monitors": 0, "price_drops": 0, "needs_attention": 0, "baselines": 0},
             "latest_snapshot_time": None,
             "scope_label": "No active monitoring data yet.",
             "sourcing_insight": sourcing_insight,
@@ -2163,6 +2401,37 @@ def _watchlist_scope_from_products(products, record=None, tracking_mode="search_
     }
 
 
+def _monitor_alert_scope_signature(watchlist_item):
+    frozen_scope = watchlist_item.get("frozen_scope") or {}
+    scope = {
+        "tracking_mode": watchlist_item.get("tracking_mode") or "search_scope",
+        "keyword": " ".join(str(frozen_scope.get("keyword") or watchlist_item.get("keyword") or "").lower().split()),
+        "category_key": frozen_scope.get("category_key") or watchlist_item.get("category_key"),
+        "storage": frozen_scope.get("storage") or watchlist_item.get("storage_scope"),
+        "condition": frozen_scope.get("condition_scope") or watchlist_item.get("condition_scope"),
+        "platform_scope": str(frozen_scope.get("platform_scope") or watchlist_item.get("platform_scope") or "all").lower(),
+        "selected_record_ids": sorted(str(value) for value in (watchlist_item.get("selected_record_ids") or [])),
+    }
+    encoded = json.dumps(scope, sort_keys=True, ensure_ascii=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:24]
+
+
+def _snapshot_observed_scope_signature(watchlist_item, items):
+    category_key = watchlist_item.get("category_key") or (watchlist_item.get("frozen_scope") or {}).get("category_key") or "generic"
+    configuration = {}
+    for field in COMPARISON_CONFIGURATION_FIELDS.get(category_key, COMPARISON_CONFIGURATION_FIELDS["generic"]):
+        values = sorted({_summary_configuration_value(item, field) for item in items if _summary_configuration_value(item, field)})
+        if values:
+            configuration[field] = values
+    scope = {
+        "configuration": configuration,
+        "conditions": sorted({str(item.get("condition_normalized") or item.get("condition_display") or item.get("condition") or "").strip().lower() for item in items if str(item.get("condition_normalized") or item.get("condition_display") or item.get("condition") or "").strip()}),
+        "platforms": sorted({str(item.get("platform") or "").strip().lower() for item in items if str(item.get("platform") or "").strip()}),
+    }
+    encoded = json.dumps(scope, sort_keys=True, ensure_ascii=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:24]
+
+
 def _snapshot_payload_from_items(watchlist_item, items):
     items = [item for item in normalize_price_items(items) if item.get("analytics_eligible") and item.get("total_price") not in (None, 0)]
     if not items:
@@ -2179,11 +2448,14 @@ def _snapshot_payload_from_items(watchlist_item, items):
         "selected_result_ids": list(watchlist_item.get("selected_record_ids") or []),
         "comparable_result_ids": [item.get("_selection_token") or item.get("_id") for item in items],
         "tracking_mode": watchlist_item.get("tracking_mode") or "search_scope",
+        "alert_scope_signature": _monitor_alert_scope_signature(watchlist_item),
+        "observed_scope_signature": _snapshot_observed_scope_signature(watchlist_item, items),
         "keyword": watchlist_item["keyword"],
         "product_label": watchlist_item["product_label"],
         "platform_scope": watchlist_item.get("platform_scope"),
         "source_scope": watchlist_item.get("source_scope"),
         "record_count": len(items),
+        "eligible_record_count": len(items),
         "listing_count": len(items),
         "lowest_price": round(min(prices), 2),
         "highest_price": round(max(prices), 2),
@@ -2637,6 +2909,14 @@ def _forecast_cycle_view(prediction, snapshots):
         "benchmark_predicted_price": benchmark_prediction,
         "ai_method": prediction.get("ai_method") or prediction.get("ai_provider") or ("gemini" if ai_value is not None else None),
         "ai_predicted_price": ai_value,
+        "ai_availability_label": {
+            "missing_key": "AI service is not configured",
+            "model_unavailable": "AI model is temporarily unavailable",
+            "quota_exceeded": "AI service capacity is temporarily unavailable",
+            "timeout": "AI service timed out",
+            "service_unavailable": "AI service is temporarily unavailable",
+            "invalid_response": "AI response could not be validated",
+        }.get(prediction.get("ai_failure_reason"), "AI service is temporarily unavailable") if ai_value is None else "Available",
         "predicted_average_price": predicted,
         "forecast_method": prediction.get("forecast_method") or ("Gemini" if ai_value is not None else (prediction.get("baseline_method") or "Not available in this legacy forecast record")),
         "forecast_provider": prediction.get("forecast_provider") or (prediction.get("ai_provider") if ai_value is not None else "Deterministic baseline"),
@@ -2663,24 +2943,47 @@ def _forecast_cycle_view(prediction, snapshots):
 def _forecast_cycle_chart_data(cycle):
     if not cycle:
         return {"available": False, "pending": False, "labels": [], "values": [], "tooltip_rows": [], "status_text": "No forecast has been generated for the latest snapshot.", "reason": "no_forecast"}
-    labels = ["Benchmark prediction", "AI-assisted forecast"]
-    values = [cycle.get("benchmark_predicted_price"), cycle.get("ai_predicted_price")]
-    rows = [{"label": label, "value": value, "abs_error": None, "pct_error": None} for label, value in zip(labels, values)]
-    validated = cycle.get("visible_status") == "validated" and cycle.get("observed_average_price") is not None
+    benchmark_value = cycle.get("benchmark_predicted_price")
+    ai_value = cycle.get("ai_predicted_price")
+    observed_value = cycle.get("validation_observed_price")
+    labels = []
+    values = []
+    rows = []
+    for label, value in (
+        ("Benchmark prediction", benchmark_value),
+        ("AI-assisted forecast", ai_value),
+    ):
+        if value is not None:
+            labels.append(label)
+            values.append(value)
+            rows.append({"label": label, "value": value, "abs_error": None, "pct_error": None})
+    validated = cycle.get("visible_status") == "validated" and observed_value is not None
     if validated:
         labels.append("Observed market average")
-        values.append(cycle.get("validation_observed_price"))
-        rows.append({"label": "Observed market average", "value": cycle.get("validation_observed_price"), "abs_error": None, "pct_error": None})
-    available = all(value is not None for value in values)
+        values.append(observed_value)
+        rows.append({"label": "Observed market average", "value": observed_value, "abs_error": None, "pct_error": None})
+    available = validated and benchmark_value is not None
+    if benchmark_value is None:
+        reason = "benchmark_missing"
+    elif cycle.get("visible_status") == "validated" and observed_value is None:
+        reason = "actual_missing"
+    else:
+        reason = None
+    if validated and ai_value is not None:
+        status_text = "Benchmark prediction, AI-assisted forecast and observed market average for the selected Forecast Cycle."
+    elif validated:
+        status_text = "Benchmark prediction and observed market average for the selected Forecast Cycle."
+    else:
+        status_text = "Observation pending until a later eligible snapshot is collected."
     return {
-        "available": available and validated,
-        "pending": cycle.get("visible_status") == "pending",
+        "available": available,
+        "pending": cycle.get("visible_status") == "pending" and benchmark_value is not None,
         "labels": labels,
         "values": values,
         "tooltip_rows": rows,
-        "status_text": "Benchmark prediction, AI-assisted forecast and observed market average for the selected Forecast Cycle." if validated else "Observation pending until a later eligible snapshot is collected.",
+        "status_text": status_text,
         "error_level": "pending" if not validated else "validated",
-        "reason": None if available else "legacy_metadata_missing",
+        "reason": reason,
         "cycle_id": cycle.get("short_id"),
     }
 
@@ -2895,6 +3198,18 @@ def build_analytics_payload(records, *, query="", source="", analysis_scope="", 
         parsed_model = item.get("parsed_model") or parse_canonical_product_model(item.get("title"))
         attributes = item.get("attributes") or {}
         item_storage = item.get("storage") or attributes.get("storage") or parsed_model.get("storage")
+        item_category_key = item.get("category_key")
+        if not item_category_key:
+            item_category_key = detect_product_category(
+                item.get("title") or item.get("product_name"),
+                item.get("category_display") or item.get("category"),
+            ).category_key
+        configuration_parts = []
+        for field in COMPARISON_CONFIGURATION_FIELDS.get(item_category_key, COMPARISON_CONFIGURATION_FIELDS["generic"]):
+            value = _summary_configuration_value(item, field)
+            if value:
+                configuration_parts.append(f"{COMPARISON_CONFIGURATION_LABELS.get(field, field.replace('_', ' ').title())}: {value}")
+        configuration_display = " · ".join(configuration_parts) or "Not consistently provided"
         price_value = item.get("normalized_price", item.get("price"))
         try:
             numeric_price = float(price_value)
@@ -2930,6 +3245,7 @@ def build_analytics_payload(records, *, query="", source="", analysis_scope="", 
             "analytics_eligible": eligible,
             "condition_source": item.get("condition_source") or "not_specified_by_source",
             "storage": item_storage,
+            "configuration_display": configuration_display,
             "collected_at": display_sgt_datetime(item.get("collected_at") or item.get("created_at")),
             "source_url": item.get("source_url") or item.get("item_url") or "",
             "record_source": _record_source_label(item),
@@ -2949,6 +3265,16 @@ def build_analytics_payload(records, *, query="", source="", analysis_scope="", 
             "maximum_price": 0.0,
             "price_range": 0.0,
             "best_platform": "",
+            "platform_metric_label": "Platform comparison",
+            "platform_metric_detail": None,
+            "platform_qualification_reason": "No comparable prices are available.",
+            "scope_refinement_notice": None,
+            "mixed_configuration": False,
+            "mixed_condition": False,
+            "mixed_conditions": False,
+            "mixed_variants": False,
+            "configuration_values": {},
+            "differing_configuration_fields": [],
         }
         payload["platform_distribution"] = {
             "labels": [str(label) for label in platform_counts.keys()],
@@ -3013,14 +3339,13 @@ def build_analytics_payload(records, *, query="", source="", analysis_scope="", 
     histogram_labels = [str(bucket).replace("(", "").replace("]", "").replace(",", " -") for bucket in histogram["bucket"].tolist()]
     histogram_counts = [int(value) for value in histogram["count"].tolist()]
     histogram_total = sum(histogram_counts) or 1
-    storage_variants = sorted(set(storage_values))
-    mixed_storage = len(storage_variants) > 1
-    mixed_conditions = len(condition_counts) > 1
-    # Storage changes the product variant being compared. Condition is a
-    # separate price-quality dimension and must not silently turn a
-    # single-capacity comparison into a mixed-variant analysis.
-    mixed_variants = mixed_storage
-    lowest_platform = str(min(metric_rows, key=lambda item: float(item.get("normalized_price", item.get("price")))).get("platform")) if metric_rows else ""
+    summary_items = []
+    for item in metric_rows:
+        summary_item = dict(item)
+        summary_item["total_price"] = item.get("normalized_price", item.get("price"))
+        summary_item["analytics_eligible"] = True
+        summary_items.append(summary_item)
+    comparison_summary = calculate_summary(summary_items)
     payload["summary"] = {
         "total_records": int(len(series)),
         "platform_count": int(len(platform_counts)),
@@ -3030,12 +3355,25 @@ def build_analytics_payload(records, *, query="", source="", analysis_scope="", 
         "minimum_price": round(min_price, 2),
         "maximum_price": round(max_price, 2),
         "price_range": round(max_price - min_price, 2),
-        "best_platform": "" if mixed_variants else lowest_platform,
-        "storage_variants": storage_variants,
-        "mixed_storage": mixed_storage,
-        "mixed_variants": mixed_variants,
-        "mixed_conditions": mixed_conditions,
-        "scope_label": "Aggregate across mixed storage variants" if mixed_storage else "Comparable single-storage scope",
+        "best_platform": comparison_summary.get("best_platform") or "",
+        "best_platform_price": comparison_summary.get("best_platform_price"),
+        "best_platform_listing_count": comparison_summary.get("best_platform_listing_count", 0),
+        "platform_metric_label": comparison_summary.get("platform_metric_label"),
+        "platform_metric_detail": comparison_summary.get("platform_metric_detail"),
+        "platform_qualification_reason": comparison_summary.get("platform_qualification_reason"),
+        "platform_summaries": comparison_summary.get("platform_summaries", []),
+        "storage_variants": comparison_summary.get("storage_variants", []),
+        "mixed_storage": comparison_summary.get("mixed_storage", False),
+        "mixed_variants": comparison_summary.get("mixed_configuration", False),
+        "mixed_configuration": comparison_summary.get("mixed_configuration", False),
+        "mixed_condition": comparison_summary.get("mixed_condition", False),
+        "mixed_conditions": comparison_summary.get("mixed_condition", False),
+        "configuration_values": comparison_summary.get("configuration_values", {}),
+        "differing_configuration_fields": comparison_summary.get("differing_configuration_fields", []),
+        "configuration_notice": comparison_summary.get("configuration_notice"),
+        "scope_refinement_notice": comparison_summary.get("scope_refinement_notice"),
+        "scope_label": comparison_summary.get("scope_label"),
+        "category_key": comparison_summary.get("category_key"),
     }
     payload["price_distribution"] = {
         "bins": histogram_labels,
@@ -3442,8 +3780,7 @@ def build_activity_records(user_id):
             "research_saved": "Research saved", "ai_discover": "AI price insight generated",
             "analysis_deleted": "Analysis deleted", "prediction_created": "Price forecast generated",
             "password_reset_requested": "Password reset requested",
-            "password_reset_email_printed": "Reset email printed",
-            "password_reset_email_queued": "Reset email queued",
+            "password_reset_email_delivered": "Reset email delivered",
             "password_reset_completed": "Password reset completed",
             "password_reset_invalid_attempt": "Invalid reset link attempted",
             "password_reset_throttled": "Password reset throttled",
@@ -3478,8 +3815,8 @@ def build_activity_records(user_id):
             detail = f"Generated a {details.get('generation_mode') or 'grounded'} insight for “{query or 'analysis'}” from {count or 0} record(s)."
         elif action_key == "password_reset_requested":
             detail = "A password reset was requested for this account."
-        elif action_key in {"password_reset_email_printed", "password_reset_email_queued"}:
-            detail = f"Password reset delivery was prepared using {details.get('delivery_mode') or 'configured mail'} mode."
+        elif action_key == "password_reset_email_delivered":
+            detail = f"Password reset delivery was accepted by {details.get('mail_provider') or 'the configured mail provider'}."
         elif action_key == "password_reset_completed":
             detail = "The account password was updated using a valid single-use reset link."
         elif action_key == "password_reset_invalid_attempt":
@@ -3493,7 +3830,7 @@ def build_activity_records(user_id):
         raw_status = str(details.get("status") or "").lower().replace(" ", "_")
         if any(term in action_key for term in ("failed", "error", "blocked", "invalid_attempt")) or raw_status in {"failed", "error", "provider_error"}:
             status = "Failed"
-        elif raw_status in {"success", "completed", "complete"} or action_key in {"records_collected", "search_query", "evidence_save", "save_evidence", "research_saved", "ai_discover", "prediction_created", "password_reset_email_printed", "password_reset_email_queued", "password_reset_completed"}:
+        elif raw_status in {"success", "completed", "complete"} or action_key in {"records_collected", "search_query", "evidence_save", "save_evidence", "research_saved", "ai_discover", "prediction_created", "password_reset_email_delivered", "password_reset_completed"}:
             status = "Completed"
         elif raw_status in {"no_results", "no_result"}:
             status = "No results"
@@ -3509,6 +3846,8 @@ def build_activity_records(user_id):
             "status": status,
             "time": _log_time_value(row),
             "raw_time": row.get("created_at") or row.get("timestamp"),
+            "record_id": str(row.get("_id") or ""),
+            "record_collection": "audit_logs",
         })
     records.sort(key=_record_sort_key, reverse=True)
     return records[:50]
@@ -3562,6 +3901,8 @@ def build_audit_records(user_id):
             "status": overall_status,
             "detail": f"Listings returned and retained for this search: {result_count}; comparable complete products: {comparable_count}.{walmart_trace}",
             "raw_time": row.get("created_at") or row.get("timestamp"),
+            "record_id": str(row.get("_id") or ""),
+            "record_collection": "search_records",
         })
     for row in safe_call(lambda: repository.list_evidence(user_id=user_id, limit=50), []):
         records.append({
@@ -3583,6 +3924,8 @@ def build_audit_records(user_id):
             "status": "Recorded",
             "detail": f"Evidence status: {row.get('evidence_status') or 'saved'}; confidence: {row.get('confidence_level') or 'not stated'}.",
             "raw_time": row.get("created_at") or row.get("saved_at") or row.get("timestamp"),
+            "record_id": str(row.get("_id") or ""),
+            "record_collection": "evidence_records",
         })
     for row in safe_call(lambda: repository.list_ai_logs(user_id=user_id, limit=50), []):
         records.append({
@@ -3604,6 +3947,8 @@ def build_audit_records(user_id):
             "status": "Recorded",
             "detail": row.get("raw_response_summary") or row.get("prompt_summary") or "Read only",
             "raw_time": row.get("created_at") or row.get("timestamp"),
+            "record_id": str(row.get("_id") or ""),
+            "record_collection": "ai_search_logs",
         })
     for row in safe_call(lambda: repository.list_audit_logs(user_id=user_id, limit=50), []):
         action = row.get("event_type") or row.get("action") or "audit"
@@ -3631,6 +3976,8 @@ def build_audit_records(user_id):
             "status": event_status,
             "detail": _audit_details_text(details or row.get("message") or row.get("label")),
             "raw_time": row.get("created_at") or row.get("timestamp"),
+            "record_id": str(row.get("_id") or ""),
+            "record_collection": "audit_logs",
         })
     records.sort(key=_record_sort_key, reverse=True)
     return records[:200]
@@ -3859,13 +4206,145 @@ def sort_items(items, sort_option):
     return items
 
 
-def calculate_summary(items):
+COMPARISON_CONFIGURATION_FIELDS = {
+    "smartphones": ("storage", "carrier"),
+    "laptops": ("cpu", "ram", "storage", "screen_size", "gpu"),
+    "headphones": ("headphone_type", "wireless", "noise_cancelling"),
+    "cameras": ("camera_type", "lens_mount", "kit_type"),
+    "generic": ("product_type",),
+    "food_and_grocery": (),
+}
+
+COMPARISON_CONFIGURATION_LABELS = {
+    "storage": "Storage",
+    "carrier": "Carrier",
+    "cpu": "Processor",
+    "ram": "Memory",
+    "screen_size": "Screen",
+    "gpu": "Graphics",
+    "headphone_type": "Headphone type",
+    "wireless": "Wireless",
+    "noise_cancelling": "Noise cancelling",
+    "camera_type": "Camera type",
+    "lens_mount": "Lens mount",
+    "kit_type": "Kit type",
+    "product_type": "Product type",
+}
+
+
+def _summary_configuration_value(item, field):
+    attributes = item.get("attributes") or {}
+    parsed = item.get("parsed_model") or parse_canonical_product_model(item.get("title"))
+    value = attributes.get(field) or parsed.get(field) or item.get(field)
+    normalized = " ".join(str(value or "").strip().split())
+    return "" if normalized.casefold() in {"", "unknown", "not stated", "not specified", "n/a", "none"} else normalized
+
+
+def _configuration_notice(category_key, differing_fields):
+    fields = set(differing_fields)
+    if category_key == "smartphones" and fields == {"storage"}:
+        return "Multiple storage capacities are included. Choose one capacity for a reliable price comparison."
+    if category_key == "smartphones" and fields == {"carrier"}:
+        return "Multiple carrier variants are included. Choose one carrier configuration for a reliable price comparison."
+    if category_key == "laptops":
+        return "Multiple hardware configurations are included. Choose one processor, memory, storage, graphics, and screen configuration before comparing platforms."
+    if category_key == "cameras":
+        return "Multiple camera configurations are included. Choose one body or kit configuration before comparing platforms."
+    if category_key == "headphones":
+        return "Multiple headphone variants are included. Choose one product configuration before comparing platforms."
+    return "Multiple product configurations are included. Choose one configuration for a reliable price comparison."
+
+
+def calculate_summary(items, category_key=None):
     eligible = [item for item in items if item.get("analytics_eligible") and item.get("total_price") is not None]
-    storage_variants = sorted({(item.get("parsed_model") or parse_canonical_product_model(item.get("title"))).get("storage") for item in eligible if (item.get("parsed_model") or parse_canonical_product_model(item.get("title"))).get("storage")})
+    storage_variants = sorted({_summary_configuration_value(item, "storage") for item in eligible if _summary_configuration_value(item, "storage")})
     mixed_storage = len(storage_variants) > 1
+    category_key = category_key or next((item.get("category_key") for item in eligible if item.get("category_key")), None)
+    if not category_key and eligible:
+        detected = detect_product_category(eligible[0].get("title"), eligible[0].get("category"))
+        category_key = detected.category_key
+    category_key = category_key or "generic"
+    configuration_values = {}
+    for field in COMPARISON_CONFIGURATION_FIELDS.get(category_key, COMPARISON_CONFIGURATION_FIELDS["generic"]):
+        values = sorted({_summary_configuration_value(item, field) for item in eligible if _summary_configuration_value(item, field)})
+        if values:
+            configuration_values[field] = values
+    differing_fields = [field for field, values in configuration_values.items() if len(values) > 1]
+    mixed_configuration = bool(differing_fields)
+    conditions = sorted({str(item.get("condition_normalized") or item.get("condition_display") or "").strip() for item in eligible if str(item.get("condition_normalized") or item.get("condition_display") or "").strip()})
+    mixed_condition = len(conditions) > 1
     totals = [float(item["total_price"]) for item in eligible]
-    best = min(eligible, key=lambda item: item["total_price"]) if eligible else None
-    return {"total_results": len(items), "comparable_results": len(eligible), "excluded_results": len(items) - len(eligible), "lowest_price": round(min(totals), 2) if totals else None, "highest_price": round(max(totals), 2) if totals else None, "average_price": round(sum(totals) / len(totals), 2) if totals else None, "potential_saving": round(max(totals)-min(totals), 2) if totals else None, "best_platform": None if mixed_storage else (best.get("platform") if best else None), "best_source": None if mixed_storage else (best.get("source_type") if best else None), "storage_variants": storage_variants, "mixed_storage": mixed_storage, "scope_label": "Mixed storage variants" if mixed_storage else "Comparable model variant", "accessories_excluded": sum(bool(item.get("is_accessory")) for item in items)}
+    platform_prices = {}
+    for item in eligible:
+        platform = str(item.get("platform") or "").strip()
+        if platform:
+            platform_prices.setdefault(platform, []).append(float(item["total_price"]))
+    platform_summary = [
+        {"platform": platform, "median": round(float(pd.Series(prices, dtype="float64").median()), 2), "count": len(prices)}
+        for platform, prices in sorted(platform_prices.items())
+    ]
+    qualification_reason = None
+    best_platform = None
+    best_platform_price = None
+    best_platform_listing_count = 0
+    best_source = None
+    qualification_requirements = []
+    if mixed_configuration:
+        qualification_requirements.append("choose one product configuration")
+    if mixed_condition:
+        qualification_requirements.append("choose one product condition")
+    if len(platform_summary) < 2:
+        qualification_requirements.append("include at least two marketplaces")
+    if qualification_requirements:
+        if len(qualification_requirements) == 1:
+            requirements_text = qualification_requirements[0]
+        else:
+            requirements_text = ", ".join(qualification_requirements[:-1]) + f", and {qualification_requirements[-1]}"
+        qualification_reason = f"To compare platforms fairly, {requirements_text}."
+    elif platform_summary:
+        winner = min(platform_summary, key=lambda row: (row["median"], row["platform"].casefold()))
+        best_platform = winner["platform"]
+        best_platform_price = winner["median"]
+        best_platform_listing_count = winner["count"]
+        best_source = next((item.get("source_type") for item in eligible if item.get("platform") == best_platform), None)
+    robust_platform_sample = bool(platform_summary) and all(row["count"] >= 2 for row in platform_summary)
+    platform_metric_label = "Lowest median-price platform" if robust_platform_sample else "Lowest observed platform"
+    platform_metric_detail = None
+    if best_platform:
+        if robust_platform_sample:
+            platform_metric_detail = f"Median USD {best_platform_price:.2f} · {best_platform_listing_count} comparable listings"
+        else:
+            platform_metric_detail = f"USD {best_platform_price:.2f} · Limited cross-platform sample"
+    configuration_notice = _configuration_notice(category_key, differing_fields) if mixed_configuration else None
+    if mixed_configuration and mixed_condition:
+        scope_refinement_notice = (
+            f"{configuration_notice} Also choose one condition so marketplace price levels are compared fairly."
+        )
+    elif mixed_configuration:
+        scope_refinement_notice = configuration_notice
+    elif mixed_condition:
+        scope_refinement_notice = "Multiple product conditions are included. Choose one condition before comparing marketplace price levels."
+    else:
+        scope_refinement_notice = None
+    return {
+        "total_results": len(items), "comparable_results": len(eligible), "excluded_results": len(items) - len(eligible),
+        "lowest_price": round(min(totals), 2) if totals else None, "highest_price": round(max(totals), 2) if totals else None,
+        "average_price": round(sum(totals) / len(totals), 2) if totals else None,
+        "potential_saving": round(max(totals)-min(totals), 2) if totals else None,
+        "best_platform": best_platform, "best_source": best_source,
+        "best_platform_price": best_platform_price, "best_platform_listing_count": best_platform_listing_count,
+        "platform_metric_label": platform_metric_label, "platform_metric_detail": platform_metric_detail,
+        "platform_qualification_reason": qualification_reason,
+        "platform_summaries": platform_summary,
+        "storage_variants": storage_variants, "mixed_storage": mixed_storage,
+        "mixed_configuration": mixed_configuration, "mixed_condition": mixed_condition,
+        "configuration_values": configuration_values, "differing_configuration_fields": differing_fields,
+        "configuration_notice": configuration_notice,
+        "scope_refinement_notice": scope_refinement_notice,
+        "category_key": category_key,
+        "scope_label": "Mixed product configurations" if mixed_configuration else "Comparable product configuration",
+        "accessories_excluded": sum(bool(item.get("is_accessory")) for item in items),
+    }
 
 
 NON_COMPARABLE_PRICE_TYPES = {"installment", "subscription", "deposit", "down_payment", "contract", "starting_price", "unknown_suspicious"}
@@ -4108,6 +4587,57 @@ def _tokens_allowed_for_search(record, tokens):
 
 def _comparison_group_records(group):
     return normalize_price_items(group.get("selected_records") or [])
+
+
+def _comparison_storage(item):
+    value = item.get("storage") or (item.get("attributes") or {}).get("storage") or (item.get("parsed_model") or {}).get("storage")
+    return str(value or "").strip().upper()
+
+
+def _storage_sort_key(value):
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(GB|TB)", str(value or "").upper())
+    if not match:
+        return float("inf"), str(value or "")
+    amount = float(match.group(1)) * (1024 if match.group(2) == "TB" else 1)
+    return amount, str(value or "")
+
+
+def _comparison_storage_groups(items):
+    grouped = {}
+    for item in items:
+        storage = _comparison_storage(item)
+        if storage:
+            grouped.setdefault(storage, []).append(item)
+    groups = []
+    for storage in sorted(grouped, key=_storage_sort_key):
+        records = grouped[storage]
+        metrics = comparison_metrics(records)
+        groups.append({
+            "value": storage,
+            "listing_count": len(records),
+            "comparable_count": metrics["comparable_count"],
+            "lowest": metrics["lowest"],
+            "highest": metrics["highest"],
+            "average": metrics["average"],
+            "ready": metrics["comparable_count"] >= 2,
+            "record_ids": [item.get("_selection_token") for item in records if item.get("_selection_token")],
+        })
+    return groups
+
+
+def _comparison_records_for_storage(group, requested_storage=None):
+    products = annotate_comparison(
+        _comparison_group_records(group),
+        group.get("query") or "",
+    )
+    groups = _comparison_storage_groups(products)
+    allowed = {entry["value"] for entry in groups}
+    requested = str(requested_storage or "").strip().upper()
+    if requested and requested not in allowed:
+        return products, groups, None
+    if requested:
+        return [item for item in products if _comparison_storage(item) == requested], groups, requested
+    return products, groups, None
 
 
 def annotate_comparison(items, query):
@@ -4406,70 +4936,60 @@ def upgrade_membership():
 def sample_analysis():
     """Public, read-only example: no search, comparison, or persistence actions."""
     sample_records = [
-        {"platform": "eBay", "title": "iPhone sample 256GB - eBay listing", "price": 699.00, "normalized_price": 699.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Marketplace"},
-        {"platform": "eBay", "title": "iPhone sample 256GB - renewed listing", "price": 729.00, "normalized_price": 729.00, "currency": "USD", "availability": "In stock", "condition": "Refurbished", "source_type": "Marketplace"},
-        {"platform": "Walmart", "title": "iPhone sample 256GB - store listing", "price": 679.00, "normalized_price": 679.00, "currency": "USD", "availability": "Limited stock", "condition": "New", "source_type": "Marketplace"},
-        {"platform": "Walmart", "title": "iPhone sample 256GB - online listing", "price": 689.00, "normalized_price": 689.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Marketplace"},
-        {"platform": "Demo Source", "title": "iPhone sample 256GB - demo record A", "price": 689.00, "normalized_price": 689.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Demo Source"},
-        {"platform": "Demo Source", "title": "iPhone sample 256GB - demo record B", "price": 709.00, "normalized_price": 709.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Demo Source"},
+        {"platform": "eBay", "title": "Apple iPhone 14 128GB - Midnight", "price": 699.00, "normalized_price": 699.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Illustrative record"},
+        {"platform": "eBay", "title": "Apple iPhone 14 128GB - Blue", "price": 709.00, "normalized_price": 709.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Illustrative record"},
+        {"platform": "eBay", "title": "Apple iPhone 14 128GB - Starlight", "price": 729.00, "normalized_price": 729.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Illustrative record"},
+        {"platform": "Walmart", "title": "Apple iPhone 14 128GB - Midnight", "price": 679.00, "normalized_price": 679.00, "currency": "USD", "availability": "Limited stock", "condition": "New", "source_type": "Illustrative record"},
+        {"platform": "Walmart", "title": "Apple iPhone 14 128GB - Blue", "price": 689.00, "normalized_price": 689.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Illustrative record"},
+        {"platform": "Walmart", "title": "Apple iPhone 14 128GB - Starlight", "price": 699.00, "normalized_price": 699.00, "currency": "USD", "availability": "In stock", "condition": "New", "source_type": "Illustrative record"},
     ]
     items = normalize_price_items(sample_records)
-    available_items = [item for item in items if str(item.get("availability", "")).lower() not in {"out of stock", "unavailable", "not available"}]
-    best = min(available_items, key=lambda item: item["normalized_price"]) if available_items else None
     prices = [item["normalized_price"] for item in items]
     platform_stats = []
     by_platform = {}
     for item in items:
-        bucket = by_platform.setdefault(item["platform"], {"count": 0, "total": 0.0, "available": 0})
-        bucket["count"] += 1
-        bucket["total"] += float(item["normalized_price"])
-        if str(item.get("availability", "")).lower() not in {"out of stock", "unavailable", "not available"}:
-            bucket["available"] += 1
+        by_platform.setdefault(item["platform"], []).append(float(item["normalized_price"]))
     total_records = len(items)
-    for platform, values in by_platform.items():
-        average_price = round(values["total"] / values["count"], 2)
-        share = round((values["count"] / total_records) * 100, 1) if total_records else 0
-        platform_stats.append({
-            "platform": platform,
-            "count": values["count"],
-            "average_price": average_price,
-            "share": share,
-            "available": values["available"],
-            "is_best": best and best["platform"] == platform,
-        })
-    platform_stats.sort(key=lambda row: row["average_price"])
     lowest_price = round(min(prices), 2)
     highest_price = round(max(prices), 2)
     price_span = max(highest_price - lowest_price, 1)
+    for platform, platform_prices in by_platform.items():
+        median_price = round(float(pd.Series(platform_prices, dtype="float64").median()), 2)
+        share = round((len(platform_prices) / total_records) * 100, 1) if total_records else 0
+        platform_stats.append({
+            "platform": platform,
+            "count": len(platform_prices),
+            "median_price": median_price,
+            "lowest_price": round(min(platform_prices), 2),
+            "highest_price": round(max(platform_prices), 2),
+            "share": share,
+            "bar_width": round(55 + ((median_price - lowest_price) / price_span) * 40, 1),
+        })
+    platform_stats.sort(key=lambda row: row["median_price"])
+    winner = platform_stats[0]
+    distribution_items = [
+        {**item, "position": round(((float(item["normalized_price"]) - lowest_price) / price_span) * 100, 1)}
+        for item in items
+    ]
     summary = {
         "lowest_price": lowest_price,
-        "average_price": round(sum(prices) / len(prices), 2),
+        "median_price": round(float(pd.Series(prices, dtype="float64").median()), 2),
         "highest_price": highest_price,
-        "best_platform": best["platform"] if best else "Not available",
+        "price_range": round(highest_price - lowest_price, 2),
+        "best_platform": winner["platform"],
+        "best_platform_median": winner["median_price"],
+        "median_gap": round(platform_stats[1]["median_price"] - winner["median_price"], 2),
         "total_records": total_records,
         "platform_count": len(by_platform),
     }
-    workflow_steps = [
-        {"title": "Search", "description": "Collect sample price records from available sources."},
-        {"title": "Compare", "description": "Review price differences and platform coverage."},
-        {"title": "Save Evidence", "description": "Preserve selected records for later review."},
-        {"title": "Analyze", "description": "Summarise price range, average price, and best visible option."},
-        {"title": "Review Results", "description": "Inspect sample records and workflow output."},
-    ]
-    sample_insight = (
-        f"The sample records show a price range from {summary['lowest_price']:.2f} to {summary['highest_price']:.2f}, "
-        f"with {summary['best_platform']} currently the strongest visible option among the displayed records."
-    )
     return render_template(
         "public_sample.html",
         items=items,
         summary=summary,
         platform_stats=platform_stats,
-        workflow_steps=workflow_steps,
-        sample_insight=sample_insight,
-        demo_keyword="iPhone sample",
-        coverage_note=f"{summary['total_records']} demonstration records across {summary['platform_count']} platforms",
-        price_span=price_span,
+        distribution_items=distribution_items,
+        demo_keyword="iPhone 14 · 128GB",
+        coverage_note=f"{summary['total_records']} comparable records · {summary['platform_count']} marketplaces",
     )
 
 
@@ -4542,6 +5062,15 @@ def login():
                 repository.record_login_failure(user["_id"])
             flash("Invalid email or password.", "error")
             return render_template("login.html"), 200
+        assigned_role = single_account_role(user)
+        if user_roles(user) != [assigned_role] or user.get("role") != assigned_role or user.get("active_role") != assigned_role:
+            repository.update_user(user["_id"], {
+                "roles": [assigned_role],
+                "primary_role": assigned_role,
+                "active_role": assigned_role,
+                "role": assigned_role,
+            })
+            user = repository.get_user_by_id(user["_id"])
         repository.record_login_success(user["_id"])
         session.clear()
         session.update(
@@ -4549,9 +5078,9 @@ def login():
             username=user.get("display_name") or user.get("username"),
             display_name=user.get("display_name") or user.get("username"),
             email=user.get("email"),
-            roles=user_roles(user),
-            active_role=user_active_role(user),
-            role=user_active_role(user),
+            roles=[assigned_role],
+            active_role=assigned_role,
+            role=assigned_role,
         )
         session.permanent = True
         repository.log_event(user["_id"], "login", session["active_role"], user.get("display_name") or user.get("username"), {"login_method": "password"})
@@ -4588,7 +5117,7 @@ def register():
             welcome_failed = False
             if app.config.get("REGISTRATION_WELCOME_EMAIL_ENABLED", True):
                 try:
-                    delivery = PasswordResetMailService().send_registration_welcome(
+                    EmailService().send_registration_welcome(
                         user.get("email"),
                         user.get("display_name"),
                         registration_login_url(),
@@ -4596,13 +5125,13 @@ def register():
                     )
                     repository.log_event(
                         user["_id"], "registration_welcome_email_delivered", role, user.get("display_name"),
-                        {"delivery_mode": os.getenv("EMAIL_MODE", "console").lower(), "delivery_status": delivery},
+                        {"mail_provider": os.getenv("MAIL_PROVIDER", "brevo_api").lower(), "delivery_status": "sent"},
                     )
                 except Exception as exc:
                     welcome_failed = True
                     repository.log_event(
                         user["_id"], "registration_welcome_email_failed", role, user.get("display_name"),
-                        {"delivery_mode": os.getenv("EMAIL_MODE", "console").lower(), "error_type": exc.__class__.__name__},
+                        {"mail_provider": os.getenv("MAIL_PROVIDER", "brevo_api").lower(), "error_type": exc.__class__.__name__},
                     )
                     app.logger.warning("Registration welcome email delivery failed (%s)", exc.__class__.__name__)
             if welcome_failed:
@@ -4634,10 +5163,10 @@ def forgot_password():
                 token = secrets.token_urlsafe(32)
                 ttl_minutes = password_reset_token_ttl_minutes()
                 repository.create_password_reset_token(user["_id"], reset_token_hash(token), now + timedelta(minutes=ttl_minutes))
-                repository.log_event(user["_id"], "password_reset_requested", user.get("role"), user.get("display_name"), {"delivery_mode": os.getenv("EMAIL_MODE", "console").lower()})
+                repository.log_event(user["_id"], "password_reset_requested", user.get("role"), user.get("display_name"), {"mail_provider": os.getenv("MAIL_PROVIDER", "brevo_api").lower()})
                 try:
-                    delivery = PasswordResetMailService().send_password_reset(user.get("email"), password_reset_url(token), ttl_minutes)
-                    repository.log_event(user["_id"], f"password_reset_email_{delivery}", user.get("role"), user.get("display_name"), {"delivery_mode": os.getenv("EMAIL_MODE", "console").lower()})
+                    EmailService().send_password_reset(user.get("email"), password_reset_url(token), ttl_minutes)
+                    repository.log_event(user["_id"], "password_reset_email_delivered", user.get("role"), user.get("display_name"), {"mail_provider": os.getenv("MAIL_PROVIDER", "brevo_api").lower(), "delivery_status": "sent"})
                 except Exception as exc:
                     repository.revoke_unused_password_reset_tokens(user["_id"])
                     repository.log_event(user["_id"], "password_reset_mail_failed", user.get("role"), user.get("display_name"), {"error_type": exc.__class__.__name__})
@@ -4703,18 +5232,7 @@ def reset_password(token):
 @app.post("/role-switch")
 @login_required
 def role_switch():
-    role = request.form.get("role")
-    user = current_user()
-    if role not in (user.get("roles") or []):
-        flash("Please choose a valid workspace role.", "error")
-        return redirect(url_for("dashboard_redirect"))
-    if role == "administrator" and session.get("active_role") != "administrator" and "administrator" not in (user.get("roles") or []):
-        abort(403)
-    repository.update_user(session["user_id"], {"active_role": role, "role": role})
-    session["role"] = role
-    session["active_role"] = role
-    repository.log_event(session["user_id"], "role_switch", role, session["username"], {"new_active_role": role, "assigned_roles": user.get("roles"), "user_id": session["user_id"]})
-    flash(f"Workspace changed to {ROLES[role]}.", "info")
+    flash("Each account has one assigned workspace role. Contact an administrator if your role needs to change.", "info")
     return redirect(url_for("dashboard_redirect"))
 
 
@@ -4797,27 +5315,70 @@ def retailer_dashboard():
         categories=dashboard["categories"],
         monitors=dashboard.get("monitors", []),
         selected_monitor_id=dashboard.get("selected_monitor_id", ""),
+        selected_monitor=dashboard.get("selected_monitor"),
+        selected_metrics=dashboard.get("selected_metrics"),
+        trend_chart=dashboard.get("trend_chart", {}),
+        portfolio_metrics=dashboard.get("portfolio_metrics", {}),
         portfolio_scope=dashboard.get("portfolio_scope", True),
         synthetic=dashboard["source_kind"] == "demo",
     )
 
 
+def build_researcher_dashboard_view(user_id):
+    """Build an owner-scoped research workflow view; never expose global records."""
+    health = get_service_health()
+    searches = safe_call(lambda: repository.list_searches(user_id, limit=20), [])
+    products = safe_call(lambda: repository.list_products(user_id, limit=20), [])
+    evidence = safe_call(lambda: repository.list_evidence(user_id, limit=20), [])
+    research_packages = safe_call(lambda: repository.list_research(user_id, limit=20), [])
+    analyses = safe_call(lambda: repository.list_analysis_records(user_id, limit=20), [])
+    ai_logs = safe_call(lambda: repository.list_ai_logs(user_id, limit=12), [])
+    audit_logs = present_audit_logs(safe_call(lambda: repository.list_audit_logs(user_id, limit=20), []))
+    source_warning_count = sum(
+        row.get("event_type") in {"api_call_failed", "mongodb_save_failed"}
+        for row in audit_logs
+    )
+    snapshot = {
+        "search_records": len(safe_call(lambda: repository.list_searches(user_id, limit=0), [])),
+        "product_results": len(safe_call(lambda: repository.list_products(user_id, limit=0), [])),
+        "evidence_records": len(safe_call(lambda: repository.list_evidence(user_id, limit=0), [])),
+        "research_records": len(safe_call(lambda: repository.list_research(user_id, limit=0), [])),
+        "ai_search_logs": len(safe_call(lambda: repository.list_ai_logs(user_id, limit=0), [])),
+        "analytics_reports": len(safe_call(lambda: repository.list_analysis_records(user_id, limit=0), [])),
+    }
+    sources = [
+        {"name": "Atlas evidence store", "status": health[0]["status"], "type": "Persistent research and evidence storage", "detail": health[0]["detail"]},
+        {"name": "eBay marketplace source", "status": health[1]["status"], "type": "Comparable marketplace listing collection", "detail": health[1]["detail"]},
+        {"name": "Walmart marketplace source", "status": health[2]["status"], "type": "Comparable marketplace listing collection", "detail": health[2]["detail"]},
+        {"name": "Gemini analysis service", "status": health[3]["status"], "type": "Grounded analysis support, not a marketplace source", "detail": health[3]["detail"]},
+    ]
+    return {
+        "searches": searches,
+        "products": products,
+        "evidence": normalize_price_items(evidence),
+        "research_packages": research_packages,
+        "analyses": analyses,
+        "ai_logs": ai_logs,
+        "audit_logs": audit_logs,
+        "source_warning_count": source_warning_count,
+        "snapshot": snapshot,
+        "pipeline": [
+            {"label": "Search runs", "count": snapshot["search_records"], "endpoint": "search"},
+            {"label": "Saved evidence", "count": snapshot["evidence_records"], "endpoint": "saved"},
+            {"label": "Research packages", "count": snapshot["research_records"], "endpoint": "saved"},
+            {"label": "Analysis reports", "count": snapshot["analytics_reports"], "endpoint": "analytics_compatibility"},
+        ],
+        "sources": sources,
+    }
+
+
 @app.route("/dashboard/researcher")
 @role_required("researcher")
 def researcher_dashboard():
-    health = get_service_health()
+    dashboard = build_researcher_dashboard_view(session["user_id"])
     return render_template(
         "dashboard_researcher_role.html",
-        searches=safe_call(lambda: repository.list_searches(limit=20), []),
-        ai_logs=safe_call(lambda: repository.list_ai_logs(limit=20), []),
-        products=safe_call(lambda: repository.list_products(limit=20), []),
-        snapshot=safe_call(repository.admin_snapshot, {}),
-        audit_logs=present_audit_logs(safe_call(lambda: repository.list_audit_logs(limit=12), [])),
-        sources=[
-            {"name": "MongoDB market_records", "status": health[0]["status"], "type": "Demo-data collection service", "detail": health[0]["detail"]},
-            {"name": "eBay Browse API", "status": health[1]["status"], "type": "Live marketplace collection service", "detail": health[1]["detail"]},
-            {"name": "Gemini AI Discover", "status": health[3]["status"], "type": "Analysis service (not a marketplace source)", "detail": health[3]["detail"]},
-        ],
+        **dashboard,
     )
 
 
@@ -4896,45 +5457,35 @@ def administrator_update_user(user_id):
     if str(target.get("_id")) == str(session.get("user_id")):
         flash("Your own administrator account cannot be changed from this screen.", "error")
         return redirect(url_for("administrator_dashboard") + "#user-management")
-    requested_roles = normalize_roles(request.form.getlist("roles"))
-    if not requested_roles:
-        requested_roles = user_roles(target)
-    if "administrator" in requested_roles and session.get("user_id") != target.get("_id"):
-        requested_roles = [role for role in requested_roles if role != "administrator"] or user_roles(target)
-    active_role = request.form.get("active_role") or target.get("active_role") or target.get("role", "consumer")
     target_roles = user_roles(target)
     target_is_administrator = "administrator" in target_roles or target.get("active_role") == "administrator" or target.get("role") == "administrator"
+    legacy_roles = normalize_roles(request.form.getlist("roles")) if request.form.getlist("roles") else []
+    requested_role = (
+        request.form.get("workspace_role")
+        or request.form.get("active_role")
+        or (legacy_roles[0] if len(legacy_roles) == 1 else None)
+        or single_account_role(target)
+    )
+    if target_is_administrator:
+        requested_role = "administrator"
     submitted_tier = request.form.get("membership_tier") or request.form.get("plan") or target.get("membership_tier") or target.get("plan") or "basic"
     plan = normalize_membership_tier(submitted_tier)
     membership_tier = plan
     account_status = request.form.get("account_status", target.get("account_status", "active"))
-    if any(role not in ROLES for role in requested_roles):
-        flash("Please choose valid assigned roles.", "error")
-        return redirect(url_for("administrator_dashboard") + "#user-management")
-    if active_role not in requested_roles:
-        flash("Please choose an active workspace from the assigned roles.", "error")
+    if requested_role not in ROLES or (requested_role == "administrator" and not target_is_administrator):
+        flash("Please choose a valid single workspace role.", "error")
         return redirect(url_for("administrator_dashboard") + "#user-management")
     if account_status not in {"active", "inactive"}:
         flash("Please choose a valid account status.", "error")
         return redirect(url_for("administrator_dashboard") + "#user-management")
-    if not requested_roles:
-        flash("Each user must keep at least one assigned role.", "error")
-        return redirect(url_for("administrator_dashboard") + "#user-management")
-    if len(user_roles(target)) == 1 and len(requested_roles) == 0:
-        flash("Do not remove the final role from a user.", "error")
-        return redirect(url_for("administrator_dashboard") + "#user-management")
-    if session.get("user_id") == target.get("_id") and "administrator" not in requested_roles and "administrator" in user_roles(target):
-        flash("Your own administrator role cannot be removed from this screen.", "error")
-        return redirect(url_for("administrator_dashboard") + "#user-management")
-    if "administrator" in requested_roles and session.get("user_id") != target.get("_id"):
-        flash("Normal users cannot be assigned administrator role.", "error")
-        return redirect(url_for("administrator_dashboard") + "#user-management")
     updates = {}
-    if set(requested_roles) != set(target_roles):
-        updates["roles"] = requested_roles
-    if active_role != target.get("active_role", target.get("role")):
-        updates["active_role"] = active_role
-        updates["role"] = active_role
+    if target_roles != [requested_role] or single_account_role(target) != requested_role:
+        updates.update(
+            roles=[requested_role],
+            primary_role=requested_role,
+            active_role=requested_role,
+            role=requested_role,
+        )
     if not target_is_administrator:
         if plan != normalize_membership_tier(target.get("plan")):
             updates["plan"] = plan
@@ -4978,9 +5529,19 @@ def save_comparison_set(comparison_id):
         abort(404)
     items = annotate_comparison(_comparison_group_records(group), group.get("query", ""))
     metrics = comparison_metrics(items)
+    variant_groups = _comparison_storage_groups(items)
+    frozen_summary = {key: value for key, value in metrics.items() if key not in {"excluded", "comparable"}}
+    if len(variant_groups) > 1:
+        frozen_summary = {
+            "scope": "variant_package",
+            "selected_count": len(items),
+            "group_count": len(variant_groups),
+            "ready_group_count": sum(bool(entry.get("ready")) for entry in variant_groups),
+        }
     repository.update_comparison_group(comparison_id, {
         "document_type": "comparison_set", "saved_status": "saved", "status": "saved", "saved_at": utcnow(),
-        "frozen_summary": {key: value for key, value in metrics.items() if key not in {"excluded", "comparable"}},
+        "frozen_summary": frozen_summary,
+        "variant_groups": variant_groups,
         "monitoring_enabled": False,
     })
     repository.log_event(session["user_id"], "comparison_set_saved", session.get("role"), session.get("username"), {"comparison_id": comparison_id, "record_count": len(items)})
@@ -5366,6 +5927,7 @@ def compare():
         "search_record_id": record.get("_id"),
         "selected_record_ids": tokens,
         "selected_records": products,
+        "variant_groups": _comparison_storage_groups(products),
         "source_types": [item.get("source_type") or item.get("platform") for item in products],
         "document_type": "comparison_set",
         "saved_status": "draft",
@@ -5386,25 +5948,34 @@ def compare_group(comparison_id):
         return redirect(url_for("search"))
     search_id = group.get("search_record_id", "")
     record = repository.get_search(search_id, session["user_id"]) if search_id else None
-    products = annotate_comparison(_comparison_group_records(group), group.get("query") or (record.get("keyword", "") if record else ""))
-    selected_record_ids = [str(token) for token in group.get("selected_record_ids", [])]
-    _comparison_debug("compare_display", comparison_id=comparison_id, selected_record_ids=selected_record_ids, displayed_count=len(products))
-    products = annotate_comparison(normalize_price_items(products), record.get("keyword", "") if record else "")
+    all_products = annotate_comparison(_comparison_group_records(group), group.get("query") or (record.get("keyword", "") if record else ""))
+    storage_groups = _comparison_storage_groups(all_products)
+    storage_variants = [entry["value"] for entry in storage_groups]
+    mixed_storage = len(storage_groups) > 1
+    requested_storage = str(request.args.get("storage") or "").strip().upper()
+    active_storage = requested_storage if requested_storage in set(storage_variants) else None
+    if requested_storage and not active_storage:
+        flash("That storage group is not part of this comparison.", "warning")
+        return redirect(url_for("compare_group", comparison_id=comparison_id))
+    overview_mode = bool(mixed_storage and not active_storage)
+    products = [item for item in all_products if _comparison_storage(item) == active_storage] if active_storage else all_products
+    selected_record_ids = [str(item.get("_selection_token")) for item in products if item.get("_selection_token")]
+    _comparison_debug("compare_display", comparison_id=comparison_id, selected_record_ids=selected_record_ids, displayed_count=len(products), storage_scope=active_storage)
     if len(products) < 2:
         flash("Select at least two results to compare.", "error")
     stats = comparison_metrics(products)
-    conclusion = comparison_conclusion(products, stats)
+    conclusion = None if overview_mode else comparison_conclusion(products, stats)
     platforms = sorted({item.get("platform") for item in products if item.get("platform")})
     source_summary = f"{len(products)} selected records" + (f" · {' and '.join(platforms)}" if platforms else "")
-    storage_variants = sorted({item.get("storage") or (item.get("parsed_model") or {}).get("storage") for item in products if item.get("storage") or (item.get("parsed_model") or {}).get("storage")})
-    mixed_storage = len(storage_variants) > 1
-    preview_payload = _analysis_record_payload("selected_comparison", record or {"_id": search_id, "keyword": group.get("query", "")}, products, selected_record_ids, comparison_set_id=comparison_id)
-    current_analysis = repository.find_analysis_by_signature(session["user_id"], preview_payload["analysis_signature"])
+    preview_payload = None if overview_mode else _analysis_record_payload("selected_comparison", record or {"_id": search_id, "keyword": group.get("query", "")}, products, selected_record_ids, comparison_set_id=comparison_id, analysis_filters={"storage": active_storage} if active_storage else {})
+    current_analysis = repository.find_analysis_by_signature(session["user_id"], preview_payload["analysis_signature"]) if preview_payload else None
     if current_analysis:
         analysis_action, analysis_label = "open", "Open analysis"
     else:
         analysis_action, analysis_label = "create", "Analyze comparison"
-    return render_template("compare_complete.html", products=products, record=record, stats=stats, conclusion=conclusion, source_summary=source_summary, comparison_id=comparison_id, selected_record_ids=selected_record_ids, comparison_created_at=group.get("created_at"), storage_variants=storage_variants, mixed_storage=mixed_storage, current_analysis=current_analysis, analysis_action=analysis_action, analysis_label=analysis_label, comparison_saved=group.get("saved_status") == "saved")
+    if group.get("variant_groups") != storage_groups:
+        repository.update_comparison_group(comparison_id, {"variant_groups": storage_groups})
+    return render_template("compare_complete.html", products=products, all_products=all_products, record=record, stats=stats, conclusion=conclusion, source_summary=source_summary, comparison_id=comparison_id, selected_record_ids=selected_record_ids, comparison_created_at=group.get("created_at"), storage_variants=storage_variants, storage_groups=storage_groups, mixed_storage=mixed_storage, active_storage=active_storage, overview_mode=overview_mode, current_analysis=current_analysis, analysis_action=analysis_action, analysis_label=analysis_label, comparison_saved=group.get("saved_status") == "saved")
 
 
 def _watchlist_item_payload_from_search(record, items, tracking_mode="search_scope"):
@@ -5518,17 +6089,25 @@ def watchlist_from_compare():
     comparison_id = request.form.get("comparison_id", "")
     group = repository.get_comparison_group(comparison_id, session["user_id"]) if comparison_id else None
     record = repository.get_search(search_id, session["user_id"]) if search_id else None
+    active_storage = None
     if group:
         search_id = group.get("search_record_id") or search_id
         record = repository.get_search(search_id, session["user_id"]) if search_id else record
-        tokens = [str(token) for token in group.get("selected_record_ids", [])]
-        products = _comparison_group_records(group)
+        products, storage_groups, active_storage = _comparison_records_for_storage(group, request.form.get("storage_scope"))
+        if len(storage_groups) > 1 and not active_storage:
+            flash("Choose one storage group before creating a Monitor.", "info")
+            return redirect(url_for("compare_group", comparison_id=comparison_id))
+        tokens = [str(item.get("_selection_token")) for item in products if item.get("_selection_token")]
     else:
         tokens = _submitted_selection_tokens(request.form)
         products = []
     if not group and record and tokens and record.get("result_tokens"):
         allowed = set(record.get("result_tokens", []))
         products = resolve_result_tokens([token for token in tokens if token in allowed])
+    scoped_metrics = comparison_metrics(annotate_comparison(normalize_price_items(products), (record or {}).get("keyword", "")))
+    if scoped_metrics["comparable_count"] < 2:
+        flash("At least two comparable listings in one storage group are required to create a Monitor.", "error")
+        return redirect(url_for("compare_group", comparison_id=comparison_id, storage=active_storage) if comparison_id and active_storage else url_for("compare_group", comparison_id=comparison_id) if comparison_id else url_for("search", search_record_id=search_id))
     _comparison_debug("watchlist_from_compare", comparison_id=comparison_id, search_record_id=search_id, selected_record_ids=tokens, record_count=len(products))
     payload = _watchlist_item_payload_from_search(record or {}, products, tracking_mode="selected_records")
     if not payload:
@@ -5536,6 +6115,10 @@ def watchlist_from_compare():
         return redirect(url_for("compare_group", comparison_id=comparison_id) if comparison_id else url_for("search", search_record_id=search_id))
     payload["comparison_group_id"] = comparison_id
     payload["comparison_set_id"] = comparison_id
+    if group and active_storage:
+        payload["storage_scope"] = active_storage
+        payload["product_label"] = f"{payload.get('product_label') or group.get('query') or 'Comparison'} · {active_storage}"
+        payload["frozen_scope"]["storage"] = active_storage
     watchlist_id, created = repository.create_watchlist_item(session["user_id"], payload)
     watchlist_item = repository.get_watchlist_item(watchlist_id, session["user_id"])
     snapshot_result = _collect_watchlist_snapshot(watchlist_item) if watchlist_item else None
@@ -5704,7 +6287,7 @@ def _evaluate_pending_monitor_forecast(monitor, snapshot):
     return pending.get("_id")
 
 
-def refresh_monitor(monitor_id, owner_id=None, trigger="manual", force=False, scheduled_date=None, now=None):
+def refresh_monitor(monitor_id, owner_id=None, trigger="manual", force=False, scheduled_date=None, now=None, request_id=None):
     """Shared manual/scheduled refresh path with safe status and daily idempotency."""
     now_utc = _normalized_utc_datetime(now) or utcnow()
     trigger = "scheduled" if trigger == "scheduled" else "manual"
@@ -5713,6 +6296,18 @@ def refresh_monitor(monitor_id, owner_id=None, trigger="manual", force=False, sc
         return {"status": "skipped", "error_code": "monitor_ineligible", "snapshot_id": None}
     owner_id = monitor.get("user_id")
     run_date = scheduled_date or monitor_scheduled_date(now_utc)
+    if trigger == "manual" and not force:
+        cooldown_seconds = int(app.config.get("MONITOR_MANUAL_REFRESH_COOLDOWN_SECONDS", 180))
+        claimed, retry_after = repository.claim_manual_monitor_refresh(
+            monitor["_id"], owner_id, now_utc, cooldown_seconds, request_id=request_id,
+        )
+        if not claimed:
+            return {
+                "status": "skipped",
+                "error_code": "manual_refresh_cooldown",
+                "snapshot_id": None,
+                "retry_after_seconds": retry_after,
+            }
     if trigger == "scheduled":
         if not force and not app.config.get("MONITOR_DAILY_REFRESH_ENABLED", False):
             return {"status": "skipped", "error_code": "scheduled_refresh_disabled", "snapshot_id": None}
@@ -5758,14 +6353,18 @@ def refresh_monitor(monitor_id, owner_id=None, trigger="manual", force=False, sc
             # evaluator only reads the snapshot already collected above.
             safe_call(lambda: evaluate_price_alert(
                 repository, monitor, snapshot,
-                mail_service_factory=PasswordResetMailService,
+                mail_service_factory=EmailService,
                 monitor_url=price_alert_monitor_url(monitor["_id"]),
                 alerts_enabled=app.config.get("PRICE_ALERTS_ENABLED", True),
                 now=now_utc,
                 audit=alert_audit,
+                minimum_records=app.config.get("PRICE_ALERT_MIN_COMPARABLE_RECORDS", 2),
+                maximum_record_count_change_percent=app.config.get("PRICE_ALERT_MAX_RECORD_COUNT_CHANGE_PERCENT", 50),
             ), None)
     else:
         error_code = "no_valid_comparable_data" if succeeded_count else "all_sources_unavailable"
+        if trigger == "manual":
+            repository.release_manual_monitor_refresh(monitor["_id"], owner_id, now_utc)
 
     updates = {
         "last_refreshed_at": now_utc,
@@ -5810,9 +6409,17 @@ def refresh_watchlist_snapshot(watchlist_id):
         return blocked
     if not is_valid_object_id(watchlist_id):
         abort(404)
-    result = refresh_monitor(watchlist_id, session["user_id"], trigger="manual")
+    result = refresh_monitor(
+        watchlist_id,
+        session["user_id"],
+        trigger="manual",
+        request_id=request.form.get("refresh_request_id"),
+    )
     if result["status"] == "failed":
         flash("No valid comparable records found for this snapshot.", "error")
+    elif result["status"] == "skipped" and result.get("error_code") == "manual_refresh_cooldown":
+        retry_after = max(1, int(result.get("retry_after_seconds") or 1))
+        flash(f"Prices were collected recently. Try again in {retry_after} seconds.", "info")
     elif result["status"] == "skipped":
         flash("This Monitor is not eligible for refresh.", "warning")
     else:
@@ -5963,11 +6570,11 @@ def test_watchlist_price_alert_email(watchlist_id):
     item = _owned_alert_monitor(watchlist_id)
     user = repository.get_user_by_id(session["user_id"])
     try:
-        delivery = PasswordResetMailService().send_price_alert_test(
+        EmailService().send_price_alert_test(
             user.get("email"), item.get("product_label") or item.get("keyword") or "Watchlist Monitor",
             price_alert_monitor_url(watchlist_id),
         )
-        repository.log_event(session["user_id"], "test_alert_email_sent", session.get("role"), session.get("username"), {"monitor_id": watchlist_id, "delivery_mode": delivery, "notification_type": "test"})
+        repository.log_event(session["user_id"], "test_alert_email_sent", session.get("role"), session.get("username"), {"monitor_id": watchlist_id, "mail_provider": os.getenv("MAIL_PROVIDER", "brevo_api").lower(), "delivery_status": "sent", "notification_type": "test"})
         flash("Test price alert email sent. No marketplace threshold was triggered.", "success")
     except Exception as exc:
         repository.log_event(session["user_id"], "test_alert_email_failed", session.get("role"), session.get("username"), {"monitor_id": watchlist_id, "error_code": normalize_mail_error(exc), "notification_type": "test"})
@@ -6059,10 +6666,16 @@ def watchlist():
     prediction_has_actual = actual_snapshot_used is not None
     if current_forecast_cycle and current_forecast_cycle.get("visible_status") == "validated":
         forecast_workflow_status = "Forecast validated"
+        forecast_workflow_state = "validated"
     elif current_forecast_cycle:
-        forecast_workflow_status = "Waiting for validation snapshot"
+        forecast_workflow_status = "Forecast awaiting validation"
+        forecast_workflow_state = "pending"
+    elif snapshots:
+        forecast_workflow_status = "Ready to forecast"
+        forecast_workflow_state = "ready"
     else:
-        forecast_workflow_status = "No forecast generated"
+        forecast_workflow_status = "Start monitoring"
+        forecast_workflow_state = "empty"
     snapshots_total = len(snapshots)
     snapshots_after_prediction_count = len([row for row in snapshots if selected_forecast_cycle and is_snapshot_after_prediction(row, selected_forecast_cycle)])
     pending_prediction = next((row for row in predictions if row.get("status") in {"pending_actual", "ai_unavailable"}), None)
@@ -6071,7 +6684,7 @@ def watchlist():
     reason_validation_not_available = prediction_chart.get("reason")
     env_loaded = Path(".env").exists()
     gemini_api_key_present = bool(os.getenv("GEMINI_API_KEY"))
-    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     gemini_call_reason = None
     if selected_forecast_cycle:
         gemini_call_reason = selected_forecast_cycle.get("ai_failure_reason") or selected_forecast_cycle.get("ai_reason") or selected_forecast_cycle.get("ai_provider")
@@ -6082,6 +6695,11 @@ def watchlist():
         else:
             gemini_call_reason = "record_has_no_gemini_output"
     plotted_snapshot_count = len([value for value in trend_chart.get("average", []) if value is not None]) if trend_chart else 0
+    manual_refresh_cooldown_remaining = 0
+    if selected_item:
+        manual_refresh_locked_until = _normalized_utc_datetime(selected_item.get("manual_refresh_locked_until"))
+        if manual_refresh_locked_until:
+            manual_refresh_cooldown_remaining = max(0, int((manual_refresh_locked_until - utcnow()).total_seconds()) + 1)
     validation_error = None
     if selected_forecast_cycle and prediction_has_actual:
         validation_error = {
@@ -6115,6 +6733,9 @@ def watchlist():
         prediction_error=make_json_safe(validation_error),
         prediction_has_actual=prediction_has_actual,
         forecast_workflow_status=forecast_workflow_status,
+        forecast_workflow_state=forecast_workflow_state,
+        refresh_request_id=secrets.token_urlsafe(18),
+        manual_refresh_cooldown_remaining=manual_refresh_cooldown_remaining,
         actual_snapshot_used=actual_snapshot_used,
         selected_forecast_cycle_safe=make_json_safe(selected_forecast_cycle),
         debug_charts=debug_charts,
@@ -6176,7 +6797,7 @@ def export_watchlist_snapshots_csv():
 @login_required
 def export_watchlist_validation_csv():
     if not can_access(current_user(), "prediction_validation"):
-        return export_forbidden_response("Prediction validation exports require Professional membership.")
+        return export_forbidden_response("Prediction validation exports require Premium membership.")
     monitor_id = request.args.get("monitor_id", "").strip()
     if not monitor_id:
         abort(404)
@@ -6355,13 +6976,37 @@ def audit():
 @app.post("/audit/archive")
 @role_required("administrator")
 def archive_audit_logs():
-    ids = [value for value in request.form.getlist("audit_id") if value]
-    if not ids:
+    references = [value for value in request.form.getlist("record_ref") if value]
+    legacy_ids = [value for value in request.form.getlist("audit_id") if value]
+    references.extend(f"audit_logs:{value}" for value in legacy_ids)
+    if not references:
         flash("Select at least one audit record.", "error")
         return redirect(url_for("audit"))
-    archived = repository.archive_many_audit_logs(ids, archived_by=session.get("user_id"), reason="audit_archive_selected")
-    repository.log_event(session["user_id"], "audit_log_archived", session.get("role"), session.get("username"), {"archived_count": archived})
-    flash(f"Archived {archived} audit record(s).", "success")
+    known_ids = {
+        "search_records": {str(row.get("_id")) for row in repository.list_searches(limit=0)},
+        "evidence_records": {str(row.get("_id")) for row in repository.list_evidence(limit=0)},
+        "ai_search_logs": {str(row.get("_id")) for row in repository.list_ai_logs(limit=0)},
+        "audit_logs": {str(row.get("_id")) for row in repository.list_audit_logs(limit=0)},
+    }
+    archived = 0
+    for reference in references:
+        collection, separator, record_id = str(reference).partition(":")
+        if not separator or record_id not in known_ids.get(collection, set()):
+            continue
+        if collection == "search_records":
+            repository.delete_search(record_id, deleted_by=session.get("user_id"), reason="administrator_audit_cleanup")
+        elif collection == "evidence_records":
+            repository.delete_evidence(record_id, deleted_by=session.get("user_id"), reason="administrator_audit_cleanup")
+        elif collection == "ai_search_logs":
+            repository.archive_ai_log(record_id, archived_by=session.get("user_id"), reason="administrator_audit_cleanup")
+        else:
+            repository.archive_audit_log(record_id, archived_by=session.get("user_id"), reason="administrator_audit_cleanup")
+        archived += 1
+    repository.log_event(session["user_id"], "audit_log_archived", session.get("role"), session.get("username"), {"archived_count": archived, "selected_count": len(references), "mode": "administrator_audit_cleanup"})
+    if archived:
+        flash(f"Archived {archived} selected record(s) from active views.", "success")
+    else:
+        flash("No eligible records were archived.", "info")
     return redirect(url_for("audit"))
 
 
@@ -6674,12 +7319,23 @@ def search(search_run_id=None):
             query, search_scope, search_record_id = record["keyword"], _normalize_search_scope(record.get("selected_source", "both")), str(record["_id"])
             public_search_run_id = str(record.get("search_run_id") or search_record_id)
             stored_filters = record.get("filters") or {}
-            platform = stored_filters.get("platform", platform)
-            min_price, max_price = stored_filters.get("min_price"), stored_filters.get("max_price")
-            sort_option = stored_filters.get("sort", sort_option)
-            storage_filter = stored_filters.get("storage", storage_filter)
-            condition_filter = stored_filters.get("condition", condition_filter)
-            include_related_variants = stored_filters.get("match_mode") == "related" or bool(stored_filters.get("include_related_variants"))
+            # A restored Search Run supplies defaults only. Explicit filter
+            # submissions, including blank values used to clear a filter, must
+            # take precedence over the previously persisted state.
+            if "platform" not in params:
+                platform = stored_filters.get("platform", platform)
+            if "min_price" not in params:
+                min_price = stored_filters.get("min_price")
+            if "max_price" not in params:
+                max_price = stored_filters.get("max_price")
+            if "sort" not in params:
+                sort_option = stored_filters.get("sort", sort_option)
+            if "storage" not in params:
+                storage_filter = stored_filters.get("storage", storage_filter)
+            if "condition" not in params:
+                condition_filter = stored_filters.get("condition", condition_filter)
+            if "match_mode" not in params and "include_related_variants" not in params:
+                include_related_variants = stored_filters.get("match_mode") == "related" or bool(stored_filters.get("include_related_variants"))
             search_diagnostics = record.get("source_diagnostics") or _new_search_diagnostics(query, search_scope)
             search_diagnostics.setdefault("search_run_mode", "existing_search_run")
             search_diagnostics["page_load_mode"] = "reused_search_run"
@@ -7223,7 +7879,7 @@ def search(search_run_id=None):
     )
     if source_statuses.get("walmart"):
         source_statuses["walmart"]["displayed_count"] = search_diagnostics["displayed_walmart_count"]
-    summary = calculate_summary(items) if items and comparison_enabled else None
+    summary = calculate_summary(items, category_key=category_key) if items and comparison_enabled else None
     current_filter_signature = hashlib.sha256(json.dumps({"selected_facets": selected_facets, "active_filters": {"selected_category_key": selected_category_key, "selected_product_type": selected_product_type, "platform": platform, "condition": condition_filter, "min_price": min_price, "max_price": max_price, "sort": sort_option}}, sort_keys=True, default=str, separators=(",", ":")).encode("utf-8")).hexdigest()
     if ai_insight and not stale_ai_insight and ai_insight.get("filter_signature") == current_filter_signature and str(ai_insight.get("search_run_id")) in {str(search_record_id), str(public_search_run_id or "")}:
         insight = ai_insight.get("summary")
@@ -7326,7 +7982,7 @@ def search(search_run_id=None):
         return redirect(url_for("search_results", search_run_id=current_run.get("search_run_id") or search_record_id))
     canonical_model = parse_canonical_product_model(query) if query else {}
     spelling_suggestion = _search_spelling_suggestion(query, items, source_statuses) if search_record_id else None
-    return render_template("source_search_roles.html", query=query, search_scope=search_scope, result_view=result_view, platform_filter=result_view, category=category, min_price=params.get("min_price", min_price or ""), max_price=params.get("max_price", max_price or ""), sort_option=sort_option, platforms=platforms, categories=facets["categories"], items=items, excluded_items=excluded_items, summary=summary, insight=insight, ai_insight=ai_insight, stale_ai_insight=stale_ai_insight, error=error, notice=notice, search_record_id=search_record_id, search_run_id=public_search_run_id or search_record_id, max_total=max_total, show_platform_filter=(search_scope == "both"), result_platforms=result_platforms, result_platform_counts=result_platform_counts, include_related_variants=include_related_variants, query_is_product_like=_is_product_like_query(query), search_diagnostics=search_diagnostics, show_search_diagnostics=_search_ui_diagnostics_enabled(), walmart_unavailable=walmart_unavailable, walmart_chip_label=walmart_chip_label, source_mode_note=search_diagnostics["source_mode_note"], stored_walmart_visible=stored_walmart_visible, live_walmart_visible=live_walmart_visible, stored_walmart_count=search_diagnostics.get("stored_walmart_count", 0), comparison_max=COMPARISON_MAX_RECORDS, available_storage_variants=available_storage_variants, available_conditions=available_conditions, storage_filter=storage_filter, condition_filter=condition_filter, canonical_model=canonical_model, category_profile=category_profile, category_key=category_key, category_mode=category_mode, search_mode=search_mode, comparison_enabled=comparison_enabled, category_options=category_options, selected_category_key=selected_category_key, product_type_options=product_type_options, selected_product_type=selected_product_type, technical_facets_limited=technical_facets_limited, spelling_suggestion=spelling_suggestion, source_messages=source_messages, query_intent_status=query_intent_status, available_facets=available_facets, selected_facets=selected_facets, available_filter_platforms=available_filter_platforms, general_comparison_mode=(comparison_enabled and category_key in {"generic", "food_and_grocery"}))
+    return render_template("source_search_roles.html", query=query, search_scope=search_scope, result_view=result_view, platform=platform, platform_filter=result_view, category=category, min_price=params.get("min_price", min_price or ""), max_price=params.get("max_price", max_price or ""), sort_option=sort_option, platforms=platforms, categories=facets["categories"], items=items, excluded_items=excluded_items, summary=summary, insight=insight, ai_insight=ai_insight, stale_ai_insight=stale_ai_insight, error=error, notice=notice, search_record_id=search_record_id, search_run_id=public_search_run_id or search_record_id, max_total=max_total, show_platform_filter=(search_scope == "both"), result_platforms=result_platforms, result_platform_counts=result_platform_counts, include_related_variants=include_related_variants, query_is_product_like=_is_product_like_query(query), search_diagnostics=search_diagnostics, show_search_diagnostics=_search_ui_diagnostics_enabled(), walmart_unavailable=walmart_unavailable, walmart_chip_label=walmart_chip_label, source_mode_note=search_diagnostics["source_mode_note"], stored_walmart_visible=stored_walmart_visible, live_walmart_visible=live_walmart_visible, stored_walmart_count=search_diagnostics.get("stored_walmart_count", 0), comparison_max=COMPARISON_MAX_RECORDS, available_storage_variants=available_storage_variants, available_conditions=available_conditions, storage_filter=storage_filter, condition_filter=condition_filter, canonical_model=canonical_model, category_profile=category_profile, category_key=category_key, category_mode=category_mode, search_mode=search_mode, comparison_enabled=comparison_enabled, category_options=category_options, selected_category_key=selected_category_key, product_type_options=product_type_options, selected_product_type=selected_product_type, technical_facets_limited=technical_facets_limited, spelling_suggestion=spelling_suggestion, source_messages=source_messages, query_intent_status=query_intent_status, available_facets=available_facets, selected_facets=selected_facets, available_filter_platforms=available_filter_platforms, general_comparison_mode=(comparison_enabled and category_key in {"generic", "food_and_grocery"}))
 
 
 @app.post("/api/search")
@@ -7443,9 +8099,21 @@ def ai_discover():
     if not record or not items:
         return jsonify({"error": "Please search sources first before using AI Discover.", "summary_source": None, "record_count": 0}), 400
     query = record.get("keyword", "current market") if record else "current market"
-    summary, mode, fallback_reason = summarize_market(query, items)
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
-    summary_source = "Gemini API" if mode == "gemini_api" else "Rule-based fallback"
+    comparison_summary = calculate_summary(items, category_key=record.get("selected_category_key") or None)
+    platform_counts = dict(Counter(str(item.get("platform") or "Unknown") for item in items))
+    decision_context = {
+        "qualified": bool(comparison_summary.get("best_platform")),
+        "best_platform": comparison_summary.get("best_platform"),
+        "platform_metric_label": comparison_summary.get("platform_metric_label"),
+        "robust_platform_sample": len(platform_counts) >= 2 and all(count >= 2 for count in platform_counts.values()),
+        "platform_counts": platform_counts,
+        "mixed_configuration": bool(comparison_summary.get("mixed_configuration")),
+        "mixed_condition": bool(comparison_summary.get("mixed_condition")),
+        "qualification_reason": comparison_summary.get("platform_qualification_reason"),
+    }
+    summary, mode, fallback_reason = summarize_market(query, items, decision_context=decision_context)
+    model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+    summary_source = "Gemini API" if mode == "gemini_api" else ("Decision guidance" if mode == "scope_guidance" else "Rule-based fallback")
     repository.log_ai_search(session["user_id"], query, model, "Gemini market summary grounded in current normalized records.", summary)
     repository.log_ai_activity(session["user_id"], query, model, summary_source, len(items), fallback_reason)
     repository.log_event(session["user_id"], "ai_discover", session["role"], session["username"], {"query": query, "provider": "Gemini", "model": model, "generation_mode": mode, "summary_source": summary_source, "fallback_reason": fallback_reason, "record_count": len(items)})
@@ -7465,13 +8133,16 @@ def ai_discover():
         "filter_signature": hashlib.sha256(json.dumps({"selected_facets": record.get("selected_facets") or {}, "active_filters": record.get("active_filters") or {}}, sort_keys=True, default=str, separators=(",", ":")).encode("utf-8")).hexdigest(),
         "summary": summary, "summary_source": summary_source, "generation_mode": mode,
         "model": model, "generated_at": generated_at, "fallback_reason": fallback_reason,
+        "decision_context": decision_context,
     }
     ai_insight_id = repository.save_ai_insight(session["user_id"], insight_document)
     return jsonify({"ai_insight_id": ai_insight_id, "summary": summary, "summary_source": summary_source, "generation_mode": mode, "model": model,
                     "search_run_id": str(record.get("_id")), "user_id": str(session["user_id"]), "query": query,
                     "included_result_ids": included_result_ids,
                     "comparable_result_count": len(items), "record_count": len(items),
+                    "decision_status": "qualified" if decision_context["qualified"] else "needs_refinement",
                     "platforms": sorted({item.get("platform") for item in items if item.get("platform")} ),
+                    "platform_counts": platform_counts,
                     "generated_at": display_sgt_datetime(generated_at), "fallback_reason": fallback_reason})
 
 
@@ -7649,12 +8320,15 @@ def create_comparison_analysis(comparison_id):
     if not group:
         abort(404)
     record = repository.get_search(group.get("search_record_id"), session["user_id"])
-    tokens = list(group.get("selected_record_ids") or [])
-    items = _comparison_group_records(group)
-    payload = _analysis_record_payload("selected_comparison", record or {"_id": group.get("search_record_id"), "keyword": group.get("query", "")}, items, tokens, comparison_set_id=comparison_id)
-    if not payload["included_result_ids"]:
-        flash("No comparable full-price records are available for analysis.", "error")
+    items, storage_groups, active_storage = _comparison_records_for_storage(group, request.form.get("storage_scope"))
+    if len(storage_groups) > 1 and not active_storage:
+        flash("Choose one storage group before analyzing this comparison.", "info")
         return redirect(url_for("compare_group", comparison_id=comparison_id))
+    tokens = [str(item.get("_selection_token")) for item in items if item.get("_selection_token")]
+    payload = _analysis_record_payload("selected_comparison", record or {"_id": group.get("search_record_id"), "keyword": group.get("query", "")}, items, tokens, comparison_set_id=comparison_id, analysis_filters={"storage": active_storage} if active_storage else {})
+    if len(payload["included_result_ids"]) < 2:
+        flash("At least two comparable full-price records are required for analysis.", "error")
+        return redirect(url_for("compare_group", comparison_id=comparison_id, storage=active_storage) if active_storage else url_for("compare_group", comparison_id=comparison_id))
     existing = repository.find_analysis_by_signature(session["user_id"], payload["analysis_signature"])
     if existing and request.form.get("refresh") != "1":
         analysis_id = existing["_id"]
@@ -7765,7 +8439,10 @@ def analytics_comparison(comparison_id):
     search_id = group.get("search_record_id")
     record = repository.get_search(search_id, session["user_id"]) if search_id else None
     display_query = group.get("query") or (analytics_display_query(record) if record else "Selected comparison")
-    items = annotate_comparison(_comparison_group_records(group), display_query)
+    items, storage_groups, active_storage = _comparison_records_for_storage(group, request.args.get("storage"))
+    if len(storage_groups) > 1 and not active_storage:
+        flash("Choose one storage group before opening comparison analytics.", "info")
+        return redirect(url_for("compare_group", comparison_id=comparison_id))
     if request.args.get("include_demo") != "1":
         items = [item for item in items if _normalize_export_source_type(item) != "demo_sample"]
     analysis_items = [item for item in items if item.get("analytics_eligible") and item.get("total_price") is not None]
@@ -7774,7 +8451,7 @@ def analytics_comparison(comparison_id):
         items,
         query=display_query,
         source="selected comparison records",
-        analysis_scope="selected comparison records",
+        analysis_scope=f"selected {active_storage} comparison records" if active_storage else "selected comparison records",
         mode="selected",
     )
     summary = analytics_payload["summary"]
@@ -7929,7 +8606,7 @@ def analytics_export_results_csv(search_record_id):
     if not can_access(current_user(), "watchlist"):
         return export_forbidden_response("Export is available on Premium and Professional plans.")
     record, analytics_payload, _items = _analytics_export_context(search_record_id)
-    rows = [["Analysis ID", "Query", "Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL", "Analysis Included", "Exclusion Reason"]]
+    rows = [["Analysis ID", "Query", "Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL", "Analysis Included", "Exclusion Reason", "Product Configuration"]]
     for item in analytics_payload["records"]:
         rows.append([
             search_record_id,
@@ -7947,6 +8624,7 @@ def analytics_export_results_csv(search_record_id):
             item.get("source_url") or "",
             "Yes",
             "",
+            item.get("configuration_display") or "Not consistently provided",
         ])
     return csv_response(rows, f"analytics-results-{search_record_id}.csv")
 
@@ -7967,10 +8645,13 @@ def _analytics_workbook_response(analysis_id, record, payload):
     summary_sheet.append(["Price Range", summary.get("price_range")])
     summary_sheet.append(["Analysis Scope", f"{summary.get('total_records', 0)} comparable listings"])
     summary_sheet.append(["Applied Filters", "No additional filters"])
+    summary_sheet.append([summary.get("platform_metric_label") or "Platform Comparison", summary.get("best_platform") or "Not qualified"])
+    summary_sheet.append(["Platform Comparison Detail", summary.get("platform_metric_detail") or summary.get("platform_qualification_reason") or "Not available"])
+    summary_sheet.append(["Scope Refinement", summary.get("scope_refinement_notice") or "Not required"])
     records_sheet = workbook.create_sheet("Records")
-    records_sheet.append(["Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL"])
+    records_sheet.append(["Platform", "Product Title", "Observed Price", "Currency", "Normalized Price", "Condition", "Category", "Seller", "Collected At (SGT)", "Record Source", "Source URL", "Product Configuration"])
     for item in payload["records"]:
-        records_sheet.append([item.get("platform"), item.get("title"), item.get("price"), item.get("currency"), item.get("normalized_price"), item.get("condition_display") or "Not available", item.get("category_display") or "Not available", item.get("seller") or "", item.get("collected_at"), item.get("record_source"), item.get("source_url")])
+        records_sheet.append([item.get("platform"), item.get("title"), item.get("price"), item.get("currency"), item.get("normalized_price"), item.get("condition_display") or "Not available", item.get("category_display") or "Not available", item.get("seller") or "", item.get("collected_at"), item.get("record_source"), item.get("source_url"), item.get("configuration_display") or "Not consistently provided"])
     platform_sheet = workbook.create_sheet("Platform Breakdown")
     platform_sheet.append(["Platform", "Count", "Percentage", "Average", "Median", "Minimum", "Maximum"])
     comparison = payload["platform_price_comparison"]
@@ -8075,6 +8756,14 @@ def analytics_export_report_post(search_record_id):
             if not report_row.get("storage"):
                 report_row["storage"] = storage_values[0]
     storage_scope = ", ".join(storage_values) if storage_values else "Not consistently provided"
+    configuration_values = summary.get("configuration_values") or {}
+    configuration_parts = []
+    for field, values in configuration_values.items():
+        clean_values = [str(value) for value in values if str(value).strip()]
+        if clean_values:
+            label = COMPARISON_CONFIGURATION_LABELS.get(field, field.replace("_", " ").title())
+            configuration_parts.append(f"{label}: {', '.join(clean_values)}")
+    configuration_scope = "; ".join(configuration_parts) or storage_scope
     condition_values = payload.get("condition_distribution", {}).get("labels") or []
     condition_scope = ", ".join(condition_values) if condition_values else "Not consistently provided"
     query = analytics_display_query(record)
@@ -8095,11 +8784,14 @@ def analytics_export_report_post(search_record_id):
         "platforms": ", ".join(payload["platform_distribution"].get("labels") or []) or "Not available",
         "filters": _report_filter_text(persisted_filters, dashboard_filters),
         "storage_scope": storage_scope,
+        "configuration_scope": configuration_scope,
         "condition_scope": condition_scope,
         "collected_at": display_sgt_datetime(record.get("created_at")),
         "analysis_id": search_record_id,
         "mixed_variants": bool(summary.get("mixed_variants")),
         "mixed_conditions": bool(summary.get("mixed_conditions")),
+        "scope_refinement_notice": summary.get("scope_refinement_notice"),
+        "platform_qualification_reason": summary.get("platform_qualification_reason"),
     }
     return render_template(
         "export_report.html",

@@ -1,247 +1,274 @@
-# 贡献指南 / Contributing Guide
+# Contributing to Precision Curator
 
-感谢您对E-commerce Price Monitor项目的关注！我们欢迎所有形式的贡献。
+Thank you for helping improve Precision Curator. The project is release-bound for a public academic SaaS demonstration, so contributions must be focused, testable, secure, and compatible with the Render deployment workflow.
 
-Thank you for your interest in contributing to the E-commerce Price Monitor project! We welcome all forms of contributions.
+By contributing, you agree that your contribution may be distributed under the repository's [MIT License](LICENSE).
 
-## 🚀 如何贡献 / How to Contribute
+## Ground rules
 
-### 1. 报告问题 / Report Issues
-- 使用[GitHub Issues](https://github.com/wangdw495/ecommerce-price-analysis/issues)报告bug
-- 提交功能请求和改进建议
-- 请尽可能详细地描述问题
+- Preserve working functionality and existing user data.
+- Make the smallest change that completely solves the confirmed problem.
+- Keep unrelated refactors, formatting changes, and UI redesigns out of the same change.
+- Maintain the canonical `precision_app:app` entry point.
+- Keep authentication, authorization, ownership, membership, and CSRF decisions on the server.
+- Keep automated tests deterministic and independent of live external services.
+- Update documentation whenever configuration, behaviour, deployment, or data semantics change.
+- Never describe a check as passing unless it was actually run.
 
-### 2. 提交代码 / Submit Code
-1. Fork 这个仓库
-2. 创建您的功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交您的更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开一个Pull Request
+Do not introduce a new framework, duplicate application entry point, destructive migration, background system, or broad architecture rewrite without a demonstrated need, an upgrade path, and explicit review.
 
-### 3. 改进文档 / Improve Documentation
-- 修复文档中的错误
-- 添加新的示例
-- 改善API文档
+## Branch and review workflow
 
-## 🛠️ 开发环境设置 / Development Setup
+Start from the current shared deployment branch and create one focused branch:
 
 ```bash
-# 克隆仓库
-git clone https://github.com/wangdw495/ecommerce-price-analysis.git
-cd ecommerce-price-analysis
-
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# 安装开发依赖
-pip install -e ".[dev]"
-
-# 安装pre-commit钩子
-pre-commit install
+git switch <deployment-branch>
+git pull --ff-only
+git switch -c fix/<short-description>
 ```
 
-## 📋 代码规范 / Code Standards
+Recommended prefixes:
 
-### Python 代码风格 / Python Code Style
-- 使用 [Black](https://black.readthedocs.io/) 进行代码格式化
-- 使用 [flake8](https://flake8.pycqa.org/) 进行代码检查
-- 使用 [mypy](https://mypy.readthedocs.io/) 进行类型检查
-- 遵循 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 规范
+```text
+feature/  fix/  security/  ui/  docs/  test/  release/
+```
 
-### 运行代码检查 / Run Code Checks
+Do not force-push a shared branch without team agreement. Preserve unrelated changes in an already dirty worktree.
+
+A pull request or review handoff should state:
+
+- the problem and expected behaviour;
+- changed files and affected routes/workflows;
+- environment-variable or database impact;
+- security and deployment impact;
+- tests and manual checks actually performed;
+- external services mocked or intentionally not tested;
+- known limitations and follow-up work.
+
+## Local setup
+
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+Copy-Item .env.example .env
+python -m flask --app precision_app:app run
+```
+
+macOS or Linux:
+
 ```bash
-# 格式化代码
-black src/ tests/
-
-# 代码检查
-flake8 src/ tests/
-
-# 类型检查
-mypy src/
-
-# 运行所有检查
-pre-commit run --all-files
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+cp .env.example .env
+python -m flask --app precision_app:app run
 ```
 
-### 文档字符串 / Docstrings
-使用Google风格的文档字符串：
+Use `.env` only for local development and never commit it. Persistent development should use `MONGO_URI` and `MONGO_DATABASE`. In-memory storage is allowed only through explicit `DEMO_MODE=true`; production must remain fail-closed with `DEMO_MODE=false`.
 
-```python
-def example_function(param1: str, param2: int) -> bool:
-    """Example function with types documented in the docstring.
-    
-    Args:
-        param1: The first parameter.
-        param2: The second parameter.
-    
-    Returns:
-        True if successful, False otherwise.
-    
-    Raises:
-        ValueError: If param1 is empty.
-    """
-    if not param1:
-        raise ValueError("param1 cannot be empty")
-    return True
-```
+## Required checks
 
-## 🧪 测试 / Testing
+Before requesting review, run:
 
-### 运行测试 / Running Tests
 ```bash
-# 运行所有测试
-pytest
-
-# 运行特定测试文件
-pytest tests/test_collectors.py
-
-# 运行带覆盖率的测试
-pytest --cov=ecommerce_price_monitor --cov-report=html
-
-# 运行特定测试类
-pytest tests/test_collectors.py::TestAmazonCollector
+python -m pytest tests src/tests -q -p no:cacheprovider
+python -m compileall precision_app.py services tools
+python -m pip check
+git diff --check
+git status --short
 ```
 
-### 编写测试 / Writing Tests
-- 为所有新功能编写测试
-- 测试文件命名格式: `test_*.py`
-- 使用描述性的测试方法名
-- 包含正常情况和边界情况测试
+Run targeted tests first while developing, then the complete offline suite. Investigate failures instead of hiding, skipping, or weakening assertions without a valid behavioural reason.
 
-```python
-import pytest
-from ecommerce_price_monitor.collectors.base_collector import BaseCollector
+## Render deployment contract
 
+`precision_app:app` is the only production WSGI entry point. Deployment changes must preserve the Gunicorn command, `/health` endpoint, fail-closed Atlas startup, and public HTTPS URL generation unless the replacement is reviewed and documented.
 
-class TestBaseCollector:
-    def test_rate_limiting(self):
-        """Test that rate limiting works correctly."""
-        # Test implementation here
-        pass
-    
-    def test_invalid_url_handling(self):
-        """Test handling of invalid URLs."""
-        with pytest.raises(ValueError):
-            # Test code that should raise ValueError
-            pass
+- Never run schema-destructive work or administrator creation during application import or startup.
+- Keep secrets in Render Environment settings. Values declared with `sync: false` in `render.yaml` must be entered manually when added to an existing Blueprint.
+- Keep `APP_BASE_URL` set to the canonical public origin; do not derive email links from the request Host header.
+- Keep the Web Service and Monitor Cron Job on the same code revision and Atlas database.
+- Treat the Cron Job as optional paid infrastructure. The site must describe Daily Refresh truthfully when it is not provisioned.
+- Scheduled commands must be bounded, idempotent, safe to retry, and exit when complete.
+- Do not write durable application state to Render's ephemeral filesystem.
+
+A release handoff must include the Render deploy result, `/health` result, sanitized startup target, post-restart Atlas persistence check, Brevo transactional status, and any external provider limitation observed during smoke testing.
+
+## Testing external integrations
+
+Automated tests must not require live access to:
+
+- MongoDB Atlas;
+- eBay, Walmart, or SerpAPI;
+- Gemini, OpenAI, or another model provider;
+- Brevo or another email provider;
+- Render or another hosting platform.
+
+Mock the production adapter boundary and exercise the internal pipeline wherever practical:
+
+```text
+provider response
+  -> parsing and validation
+  -> normalization and comparability
+  -> persistent workflow object
+  -> server-calculated metrics
+  -> rendered result and audit metadata
 ```
 
-## 📦 添加新的平台支持 / Adding New Platform Support
+Use clearly fake credentials in tests. Never use a real API key to make a test pass, and never insert pre-rendered final rows merely to bypass production logic.
 
-要添加新的电商平台支持，请：
+## Security requirements
 
-To add support for a new e-commerce platform:
+Never commit or log:
 
-1. 在 `src/ecommerce_price_monitor/collectors/` 中创建新的收集器
-2. 继承 `BaseCollector` 类
-3. 实现必需的抽象方法
-4. 在 `price_collector.py` 中注册新的收集器
-5. 添加相应的测试
-6. 更新文档
+- `.env` files or secret files;
+- API keys or email-provider credentials;
+- MongoDB connection strings or database passwords;
+- user passwords, administrator passwords, or password hashes copied from production;
+- reset tokens or complete password-reset URLs;
+- Session cookies, CSRF tokens, or private authentication tokens;
+- real user data or generated exports containing sensitive data.
 
-示例结构：
-```python
-from .base_collector import BaseCollector, ProductData
+Do not weaken password hashing, reset-token expiry/revocation, secure Session configuration, CSRF validation, login controls, ownership checks, membership checks, workspace-role checks, administrator checks, safe redirects, source URL validation, or safe error handling.
 
-class NewPlatformCollector(BaseCollector):
-    def __init__(self):
-        super().__init__("NewPlatform")
-        
-    def search_products(self, query: str, max_results: int = 20):
-        # Implementation
-        pass
-        
-    def get_product_details(self, product_url: str):
-        # Implementation
-        pass
-        
-    def extract_product_id(self, url: str):
-        # Implementation
-        pass
+Roles, membership tiers, owner IDs, recipients, and record IDs supplied by a browser are untrusted. Re-read authoritative values from the authenticated Session and persistent account/record.
+
+## Authentication and administration
+
+Do not:
+
+- add username-only or empty-credential login;
+- accept a browser-submitted role as authority;
+- create an administrator Session from request data;
+- seed or reset administrators during application import/startup;
+- print generated or supplied administrator passwords.
+
+Create administrators explicitly:
+
+```bash
+python -m tools.create_admin --email administrator@example.com
 ```
 
-## 🐛 调试 / Debugging
+Administrator system access is separate from customer membership. Changes must not make administrator capability depend on Basic, Premium, or Professional membership.
 
-### 日志配置 / Logging Configuration
-```python
-from ecommerce_price_monitor.utils.logging_config import setup_logging
+## MongoDB and persistence
 
-# 启用调试日志
-setup_logging(log_level="DEBUG", console_output=True)
+All persistent workflows use the shared repository/database connection configured by `MONGO_URI` and `MONGO_DATABASE`.
+
+Database changes must:
+
+- preserve ownership and existing collection semantics;
+- retain UTC storage timestamps and the established user-facing timezone;
+- use bounded queries and appropriate indexes;
+- keep test and production databases separate;
+- avoid destructive startup migrations;
+- fail safely without pretending an unsuccessful write succeeded.
+
+Do not add another `MongoClient`, hard-code localhost, silently fall back to memory, create a temporary Session account after registration failure, or return one user's records to another user.
+
+## Marketplace and comparison integrity
+
+Marketplace responses change over time. Preserve truthful distinctions among success with results, success with no results, no comparable results, unusable prices, timeout, quota/rate limit, authentication failure, bot blocking, and provider error.
+
+Exclude records that are not safe comparable prices, including:
+
+- missing, zero, or negative prices;
+- instalments, subscriptions, deposits, or contract-only offers;
+- accessories and incompatible product models;
+- malformed records and unsafe source URLs.
+
+Do not mix historical evidence into a new live Search Run without explicit provenance. Saved evidence must retain source, collection time, owner, and Search Run lineage.
+
+Platform conclusions require one comparable product configuration, one condition, and at least two marketplaces. Qualified platform ranking uses platform median price; a single unusually low listing must not determine the winning marketplace. Descriptive cards may continue to show lowest, average, highest, and spread for the current result set.
+
+## Analysis, evidence, and exports
+
+An Analysis Run must use its frozen included record IDs. Do not silently rebuild historical analysis from a later Search Run.
+
+Charts, cards, tables, reports, and exports must describe the same selected scope. Export changes must preserve:
+
+- user ownership and frozen record IDs;
+- safe CSV cell handling;
+- meaningful, stable schemas;
+- source provenance and collection timestamps;
+- the established user-facing timezone.
+
+Keep lifecycle actions such as Archive and Delete separate from Export menus.
+
+## Watchlist, forecast, and alert integrity
+
+A Monitor is a persistent frozen scope, not an alias for the latest unrelated Search Run.
+
+Scheduled refresh must:
+
+- respect owner, active/paused state, and configured due time;
+- prevent duplicate daily Snapshots and overlapping refresh claims;
+- reuse the same normalization and comparability rules;
+- preserve the last valid Snapshot when collection fails;
+- avoid zero-price or empty failure Snapshots;
+- avoid automatically generating an AI forecast.
+
+Forecast changes must preserve immutable Forecast Cycles, source Snapshot lineage, deterministic benchmark, optional AI prediction, later validation Snapshot, and accurate error metrics.
+
+Price Alerts evaluate existing valid Snapshots. They must not launch an additional marketplace search, send duplicate notifications, bypass cooldown/scope quality rules, or use a recipient supplied by the browser. Email failure must not delete the Snapshot.
+
+## Email delivery
+
+All welcome, password-reset, test-alert, and price-alert messages must use the shared mail service. Do not create separate transports for each email type.
+
+The deployment uses Brevo Transactional Email over HTTPS. SMTP transports and port settings are not part of the supported configuration. `BREVO_API_KEY` must contain an API v3 key, not an SMTP key; the Brevo Transactional platform and sender must both be active.
+
+Email changes must keep `services/email_service.py` as the single transport boundary, preserve the existing text/HTML and audit semantics, use a bounded timeout, and keep `APP_BASE_URL` as the only source for public application links. Mock Brevo HTTP calls in automated tests. Never log the API key, provider response body, raw reset token, or complete reset URL.
+
+Production emails must never contain localhost, passwords, API keys, database URIs, Session tokens, or raw provider payloads. Release smoke tests should check Brevo's Transactional Logs for accepted and delivered events and must not paste reset links or provider credentials into issues or review notes.
+
+## UI and accessibility
+
+UI changes should preserve the established product design system and remain usable at desktop, tablet, and approximately 375-416px mobile widths.
+
+- Keep one clear primary action for each workflow state.
+- Do not use colour as the only status indicator.
+- Preserve keyboard focus, labels, accessible names, and meaningful button behaviour.
+- Avoid fake controls, dead overflow menus, and buttons that only jump without performing their stated action.
+- Keep tables horizontally usable and navigation reachable on touch devices.
+- Do not redesign unrelated pages as part of a focused fix.
+
+## Documentation and configuration
+
+Update README, `.env.example`, deployment files, tests, and operational notes when their contracts change. Documentation must use the implemented variable names and must distinguish available functionality from planned work.
+
+Do not claim complete coverage, guaranteed lowest prices, guaranteed forecasts, payment processing, perfect security, commercial production certification, or a provider integration that has not been implemented and tested.
+
+## Commit messages
+
+Use concise, descriptive messages:
+
+```text
+fix: keep mobile workspace navigation scrollable
+feat: add Brevo transactional email adapter
+security: fail closed when Atlas is unavailable
+docs: finalize Render deployment guide
+test: cover qualified platform median comparison
 ```
 
-### 常见问题 / Common Issues
-1. **网络请求失败**: 检查网络连接和防火墙设置
-2. **解析错误**: 目标网站可能更新了HTML结构
-3. **速率限制**: 调整请求延迟设置
+Avoid messages such as `update files`, `fix stuff`, or `final changes`.
 
-## 📖 文档贡献 / Documentation Contributions
+## Release discipline
 
-### API文档 / API Documentation
-- 保持文档字符串最新
-- 添加使用示例
-- 解释复杂的算法和数据结构
+For every release-bound change:
 
-### README更新 / README Updates
-- 添加新功能说明
-- 更新安装说明
-- 改进示例代码
+1. inspect the existing implementation and dirty worktree;
+2. make the smallest safe change;
+3. run targeted tests;
+4. run the complete offline suite;
+5. run compilation and diff checks;
+6. document environment and deployment impact;
+7. preserve a recoverable stable commit.
+8. deploy to Render and run the post-deploy smoke checks when the change affects runtime behaviour or configuration.
 
-## 🏷️ 版本发布 / Release Process
-
-我们使用[语义版本控制](https://semver.org/)：
-
-- **主版本号**: 不兼容的API更改
-- **次版本号**: 向后兼容的功能添加
-- **修订号**: 向后兼容的bug修复
-
-## 📞 获取帮助 / Getting Help
-
-- 📧 Email: wangdw495@gmail.com
-- 💬 [GitHub Discussions](https://github.com/wangdw495/ecommerce-price-analysis/discussions)
-- 📖 [文档](https://github.com/wangdw495/ecommerce-price-analysis/wiki)
-
-## 🎯 贡献想法 / Contribution Ideas
-
-### 🔥 热门需求 / High Priority
-- [ ] 添加新的电商平台支持 (Target, Best Buy)
-- [ ] 改进价格预测算法
-- [ ] 添加移动端友好的报告模板
-- [ ] 实现实时价格监控
-
-### 📊 数据分析增强 / Analytics Enhancements
-- [ ] 季节性分析改进
-- [ ] 价格弹性分析
-- [ ] 竞争对手分析功能
-- [ ] 机器学习价格预测
-
-### 🎨 可视化改进 / Visualization Improvements
-- [ ] 交互式仪表板
-- [ ] 更多图表类型
-- [ ] 移动端适配
-- [ ] 深色主题支持
-
-### 🔧 基础设施 / Infrastructure
-- [ ] Docker容器化
-- [ ] API接口开发
-- [ ] 数据库优化
-- [ ] 缓存机制改进
-
-## ⚖️ 行为准则 / Code of Conduct
-
-请友善和尊重地对待所有项目参与者。我们致力于为所有人创造一个开放和欢迎的环境。
-
-Please be kind and respectful to all project participants. We are committed to creating an open and welcoming environment for everyone.
-
-## 📝 许可证 / License
-
-通过贡献代码，您同意您的贡献将按照项目的MIT许可证进行许可。
-
-By contributing, you agree that your contributions will be licensed under the project's MIT License.
-
----
-
-再次感谢您的贡献！🎉
-
-Thank you again for your contributions! 🎉
+External marketplace, AI, email, database, and hosting services remain third-party dependencies. Application safeguards reduce risk but do not eliminate service failure or guarantee every security property.

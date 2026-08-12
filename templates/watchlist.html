@@ -21,7 +21,7 @@
 {% if not can_access(current_user, 'watchlist') %}
 <section class="mt-6 rounded-3xl border border-blue-100 bg-blue-50 p-6 text-sm text-slate-700 shadow-sm">
   <p class="font-bold text-slate-900">Premium unlocks evidence saving, watchlists, analytics dashboards, and AI-assisted price forecasting.</p>
-  <p class="mt-2">Professional adds forecast validation, source audit, activity logs, and exportable research reports.</p>
+  <p class="mt-2">Professional adds source audit, activity logs, advanced provenance, and exportable research reports.</p>
   <a href="{{ url_for('membership') }}" class="mt-4 inline-flex rounded-xl bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">View plans</a>
 </section>
 {% endif %}
@@ -71,21 +71,22 @@
     <div class="mt-2 flex flex-wrap gap-2 text-xs"><span class="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-600">{{ selected_item.platform_scope }}</span><span class="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-600">{{ 'Selected comparison records' if selected_item.tracking_mode == 'selected_records' else 'Full search result' }}</span><span class="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-600">{{ selected_item.snapshot_count or 0 }} snapshots</span></div>
     <div class="mt-4 grid items-start gap-4 lg:grid-cols-2" data-monitor-status-grid>
     <section class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm" aria-label="Daily Refresh status" data-status-card="daily-refresh">
-      <div class="flex items-start justify-between gap-3"><div><p class="font-bold text-slate-900">Daily Refresh</p><p class="mt-1 text-xs text-slate-500">Automatic daily Snapshot collection.</p></div><span class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-700">{{ 'Active' if selected_item.auto_refresh_enabled else 'Paused' }}</span></div>
+      <div class="flex items-start justify-between gap-3"><div><p class="font-bold text-slate-900">Daily Refresh</p><p class="mt-1 text-xs leading-5 text-slate-500">{% if selected_item.auto_refresh_enabled %}Automatically collects one market snapshot on schedule. A pending forecast is validated by that snapshot.{% else %}Paused. Manual collection still updates prices and validates a pending forecast without changing the daily schedule.{% endif %}</p></div><span class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-700">{{ 'Active' if selected_item.auto_refresh_enabled else 'Paused' }}</span></div>
       <div class="mt-3 grid grid-cols-2 gap-2 text-xs"><div><p class="text-slate-400">Last refreshed</p><p class="font-bold text-slate-800">{{ format_sgt_datetime(selected_item.last_refreshed_at) if selected_item.last_refreshed_at else 'Never' }}</p></div><div><p class="text-slate-400">Next refresh</p><p class="font-bold text-slate-800">{{ format_sgt_datetime(selected_item.next_refresh_at) if selected_item.next_refresh_at else 'Not scheduled' }}</p></div><div><p class="text-slate-400">Last result</p><p class="font-bold text-slate-800">{{ (selected_item.last_refresh_status or 'never')|title }}</p></div></div>
       {% if selected_item.auto_refresh_enabled %}<form method="post" action="{{ url_for('pause_watchlist_auto_refresh', watchlist_id=selected_item._id) }}" class="mt-3" data-monitor-action><button class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-blue-700">Pause</button></form>{% else %}<form method="post" action="{{ url_for('enable_watchlist_auto_refresh', watchlist_id=selected_item._id) }}" class="mt-3" data-monitor-action><button class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-blue-700">{{ 'Resume' if selected_item.auto_refresh_ever_enabled else 'Enable' }}</button></form>{% endif %}
     </section>
     <section class="rounded-xl border border-slate-200 bg-slate-50/70 p-4" aria-labelledby="price-alert-heading" data-status-card="price-alert">
-      <div class="flex flex-wrap items-start justify-between gap-3"><div><p id="price-alert-heading" class="font-bold text-slate-900">Price Alert</p><p class="mt-1 text-xs text-slate-500">Uses the comparable average price shown in the trend chart.</p></div><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ 'bg-emerald-100 text-emerald-800' if selected_item.alert_enabled else 'bg-slate-200 text-slate-600' }}">Price alert: {{ 'On' if selected_item.alert_enabled else 'Paused' }}</span></div>
+      <div class="flex flex-wrap items-start justify-between gap-3"><div><p id="price-alert-heading" class="font-bold text-slate-900">Price Alert</p><p class="mt-1 text-xs text-slate-500">Tracks changes in the comparable average price shown in the trend chart. Incomplete or materially different snapshots are not evaluated.</p></div><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ 'bg-emerald-100 text-emerald-800' if selected_item.alert_enabled else 'bg-slate-200 text-slate-600' }}">Price alert: {{ 'On' if selected_item.alert_enabled else 'Paused' }}</span></div>
       <div class="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-        <div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Rule</p><p class="mt-1 font-bold text-slate-800">{{ '%.2g'|format(selected_item.alert_threshold_percent or 5) }}% price {{ selected_item.alert_direction or 'drop' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Email notification</p><p class="mt-1 font-bold text-slate-800">{{ 'On' if selected_item.alert_email_enabled else 'Off' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Last evaluated</p><p class="mt-1 font-bold text-slate-800">{{ format_sgt_datetime(selected_item.alert_last_evaluated_at) if selected_item.alert_last_evaluated_at else 'Never' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Latest change</p><p class="mt-1 font-bold text-slate-800">{{ '%+.2f%%'|format(selected_item.alert_last_change_percent) if selected_item.alert_last_change_percent is not none else 'Not available' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Last alert</p><p class="mt-1 font-bold text-slate-800">{{ format_sgt_datetime(selected_item.alert_last_triggered_at) if selected_item.alert_last_triggered_at else 'Never' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Email status</p><p class="mt-1 font-bold text-slate-800">{{ {'sent':'Sent','failed':'Failed','not_required':'Not triggered'}.get(selected_item.alert_last_email_status, 'Not triggered') }}</p></div>
+        <div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Rule</p><p class="mt-1 font-bold text-slate-800">{{ '%.2g'|format(selected_item.alert_threshold_percent or 5) }}% average price {{ selected_item.alert_direction or 'drop' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Email notification</p><p class="mt-1 font-bold text-slate-800">{{ 'On' if selected_item.alert_email_enabled else 'Off' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Last checked</p><p class="mt-1 font-bold text-slate-800">{{ format_sgt_datetime(selected_item.alert_last_evaluated_at) if selected_item.alert_last_evaluated_at else 'Never' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Latest change</p><p class="mt-1 font-bold text-slate-800">{{ '%+.2f%%'|format(selected_item.alert_last_change_percent) if selected_item.alert_last_change_percent is not none else 'Not available' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Last alert</p><p class="mt-1 font-bold text-slate-800">{{ format_sgt_datetime(selected_item.alert_last_triggered_at) if selected_item.alert_last_triggered_at else 'Never' }}</p></div><div class="rounded-lg bg-white p-2.5"><p class="text-slate-400">Evaluation</p><p class="mt-1 font-bold text-slate-800">{{ {'sent':'Triggered · email sent','failed':'Triggered · email failed','not_required':'Threshold not reached','not_evaluated':'Not evaluated'}.get(selected_item.alert_last_email_status, 'Not checked') }}</p></div>
       </div>
       {% if selected_item.alert_last_evaluated_at and selected_item.alert_last_change_percent is not none and selected_item.alert_last_email_status == 'not_required' %}<p class="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Evaluated: {{ '%+.2f%%'|format(selected_item.alert_last_change_percent) }}. Alert threshold not reached.</p>{% endif %}
-      <div class="mt-3 flex flex-wrap gap-2">
-        {% if selected_item.alert_enabled %}<form method="post" action="{{ url_for('pause_watchlist_price_alert', watchlist_id=selected_item._id) }}"><button class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Pause price alert</button></form>{% else %}<form method="post" action="{{ url_for('enable_watchlist_price_alert', watchlist_id=selected_item._id) }}"><button class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">Enable price alert</button></form>{% endif %}
-        <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700" data-alert-modal-open aria-haspopup="dialog" aria-controls="price-alert-modal">Edit alert</button>
-        <form method="post" action="{{ url_for('test_watchlist_price_alert_email', watchlist_id=selected_item._id) }}"><button class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Send test email</button></form>
-        <a href="#alert-history" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">View history</a>
+      {% if selected_item.alert_last_evaluation_status == 'not_evaluated' %}{% set alert_quality_messages = {'partial_source_coverage':'Not evaluated because one or more marketplace sources were unavailable.','insufficient_comparable_records':'Not evaluated because fewer than two comparable listings were available.','record_count_changed_substantially':'Not evaluated because the number of comparable listings changed substantially.','comparison_scope_changed':'Not evaluated because the monitored comparison scope changed.'} %}<p class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{{ alert_quality_messages.get(selected_item.alert_last_evaluation_reason, 'This snapshot was not comparable with the previous alert baseline.') }}</p>{% endif %}
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        {% if selected_item.alert_enabled %}<form method="post" action="{{ url_for('pause_watchlist_price_alert', watchlist_id=selected_item._id) }}" class="inline-flex"><button class="app-compact-action">Pause price alert</button></form>{% else %}<form method="post" action="{{ url_for('enable_watchlist_price_alert', watchlist_id=selected_item._id) }}" class="inline-flex"><button class="app-compact-action app-compact-action--primary">Enable price alert</button></form>{% endif %}
+        <button type="button" class="app-compact-action" data-alert-modal-open aria-haspopup="dialog" aria-controls="price-alert-modal">Edit alert</button>
+        <form method="post" action="{{ url_for('test_watchlist_price_alert_email', watchlist_id=selected_item._id) }}" class="inline-flex"><button class="app-compact-action">Send test email</button></form>
+        <a href="#alert-history" class="app-compact-action" data-view-alert-history>View history</a>
       </div>
       <details id="alert-history" class="mt-4 border-t border-slate-200 pt-3"><summary class="cursor-pointer text-sm font-bold text-slate-800">Alert history</summary>
         {% if alert_events %}<div class="mt-2 overflow-x-auto"><table class="min-w-full text-left text-xs"><thead class="text-slate-400"><tr><th class="py-2 pr-4">Trigger time</th><th class="py-2 pr-4">Previous</th><th class="py-2 pr-4">Current</th><th class="py-2 pr-4">Change</th><th class="py-2 pr-4">Threshold</th><th class="py-2">Email</th></tr></thead><tbody>{% for event in alert_events %}<tr class="border-t border-slate-200"><td class="py-2 pr-4">{{ format_sgt_datetime(event.triggered_at) }}</td><td class="py-2 pr-4">USD {{ '%.2f'|format(event.previous_price) }}</td><td class="py-2 pr-4">USD {{ '%.2f'|format(event.current_price) }}</td><td class="py-2 pr-4">{{ '%+.2f%%'|format(event.change_percent) }}</td><td class="py-2 pr-4">{{ '%.2f%%'|format(event.threshold_percent) }}</td><td class="py-2">{{ (event.email_status or 'not requested')|replace('_', ' ')|title }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="mt-2 text-xs text-slate-500">No threshold-triggered alerts yet.</p>{% endif %}
@@ -101,24 +102,35 @@
     </section>
     </div>
     {% if selected_item.last_refresh_status == 'failed' %}<div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">The last refresh could not collect sufficient comparable marketplace data. Existing snapshots remain available.</div>{% endif %}
-    <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-sm text-slate-700"><div class="flex flex-wrap items-start justify-between gap-2"><div><p class="font-bold text-slate-900">{% if forecast_workflow_status == 'Forecast validated' %}Forecast validation complete{% elif forecast_workflow_status == 'Waiting for validation snapshot' %}Step 3 of 3{% elif snapshots|length >= 2 %}Step 2 of 3{% else %}Step 1 of 3{% endif %}</p><p class="mt-1">{% if forecast_workflow_status == 'Forecast validated' %}Your forecast has been checked against a later market snapshot.{% elif forecast_workflow_status == 'Waiting for validation snapshot' %}Collect a later snapshot to validate the forecast.{% elif snapshots|length >= 2 %}Enough observations are available to generate a forecast.{% else %}Collect another snapshot to establish a price trend.{% endif %}</p></div><span class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-100">{{ forecast_workflow_status }}</span></div><p class="mt-2 text-xs font-semibold text-slate-500">Track → Refresh → Review</p></div>
+    <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-sm text-slate-700"><div class="flex flex-wrap items-start justify-between gap-3"><div><p class="font-bold text-slate-950">{{ forecast_workflow_status }}</p><p class="mt-1 leading-5">{% if forecast_workflow_state == 'validated' %}The forecast was checked against a later market snapshot. Review the result or begin the next forecast cycle.{% elif forecast_workflow_state == 'pending' and selected_item.auto_refresh_enabled %}The next successful Daily Refresh will validate this forecast automatically. You can also collect now to validate it sooner.{% elif forecast_workflow_state == 'pending' %}Daily Refresh is paused. Collect a new snapshot manually to validate this forecast.{% elif forecast_workflow_state == 'ready' %}A baseline snapshot is ready. Generate a forecast for the next market observation.{% else %}Collect the first market snapshot to establish a price baseline.{% endif %}</p></div><span class="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-100">{{ 'Automatic validation active' if forecast_workflow_state == 'pending' and selected_item.auto_refresh_enabled else forecast_workflow_status }}</span></div></div>
     {% if snapshots and snapshots|selectattr('source_label', 'equalto', 'demo')|list %}
     <div class="mt-4 rounded-2xl border border-dashed border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
       Demo snapshot history for presentation.
     </div>
     {% endif %}
     <div class="watchlist-action-row app-action-row mt-4 max-sm:flex-col lg:flex-nowrap" aria-label="Monitor actions">
-      <form method="post" action="{{ url_for('refresh_watchlist_snapshot', watchlist_id=selected_item._id) }}" class="max-sm:w-full" data-monitor-action><button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70 max-sm:w-full" data-action-button data-loading-label="Collecting…">Collect latest snapshot</button></form>
       {% if can_access(current_user, 'prediction') %}
-      {% if forecast_workflow_status == 'Forecast validated' %}<form method="post" action="{{ url_for('generate_watchlist_prediction', watchlist_id=selected_item._id) }}" class="max-sm:w-full"><button class="app-button-primary bg-indigo-600 py-2 text-sm max-sm:w-full">Generate next forecast</button></form>{% elif forecast_workflow_status == 'Waiting for validation snapshot' %}<button type="button" disabled class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800 max-sm:w-full">Forecast pending</button>{% else %}<form method="post" action="{{ url_for('generate_watchlist_prediction', watchlist_id=selected_item._id) }}" class="max-sm:w-full"><button class="app-button-primary bg-indigo-600 py-2 text-sm max-sm:w-full" {% if not snapshots %}disabled title="Collect a snapshot before generating a forecast."{% endif %}>Generate forecast</button></form>{% endif %}
+      {% if forecast_workflow_state == 'empty' %}
+      <form method="post" action="{{ url_for('refresh_watchlist_snapshot', watchlist_id=selected_item._id) }}" class="max-sm:w-full" data-monitor-action><input type="hidden" name="refresh_request_id" value="{{ refresh_request_id }}"><button class="app-button-primary py-2 text-sm max-sm:w-full" data-action-button data-collect-button data-ready-label="Collect first snapshot" data-cooldown-seconds="{{ manual_refresh_cooldown_remaining }}" data-loading-label="Collecting…" {{ 'disabled' if manual_refresh_cooldown_remaining else '' }}>Collect first snapshot</button></form>
+      <button type="button" disabled title="Collect a snapshot before generating a forecast." class="app-button-secondary py-2 text-sm opacity-60 max-sm:w-full">Generate forecast</button>
+      {% elif forecast_workflow_state == 'pending' %}
+      <form method="post" action="{{ url_for('refresh_watchlist_snapshot', watchlist_id=selected_item._id) }}" class="max-sm:w-full" data-monitor-action><input type="hidden" name="refresh_request_id" value="{{ refresh_request_id }}"><button class="app-button-primary py-2 text-sm max-sm:w-full" data-action-button data-collect-button data-ready-label="Collect now and validate" data-cooldown-seconds="{{ manual_refresh_cooldown_remaining }}" data-loading-label="Collecting…" {{ 'disabled' if manual_refresh_cooldown_remaining else '' }}>Collect now and validate</button></form>
+      {% if not selected_item.auto_refresh_enabled %}<form method="post" action="{{ url_for('enable_watchlist_auto_refresh', watchlist_id=selected_item._id) }}" class="max-sm:w-full" data-monitor-action><button class="app-button-secondary py-2 text-sm max-sm:w-full">Resume daily refresh</button></form>{% endif %}
+      {% elif forecast_workflow_state == 'validated' %}
+      <form method="post" action="{{ url_for('generate_watchlist_prediction', watchlist_id=selected_item._id) }}" class="max-sm:w-full"><button class="app-button-primary py-2 text-sm max-sm:w-full">Generate next forecast</button></form>
+      <form method="post" action="{{ url_for('refresh_watchlist_snapshot', watchlist_id=selected_item._id) }}" class="max-sm:w-full" data-monitor-action><input type="hidden" name="refresh_request_id" value="{{ refresh_request_id }}"><button class="app-button-secondary py-2 text-sm max-sm:w-full" data-action-button data-collect-button data-ready-label="Collect latest prices" data-cooldown-seconds="{{ manual_refresh_cooldown_remaining }}" data-loading-label="Collecting…" {{ 'disabled' if manual_refresh_cooldown_remaining else '' }}>Collect latest prices</button></form>
+      {% else %}
+      <form method="post" action="{{ url_for('generate_watchlist_prediction', watchlist_id=selected_item._id) }}" class="max-sm:w-full"><button class="app-button-primary py-2 text-sm max-sm:w-full">Generate forecast</button></form>
+      <form method="post" action="{{ url_for('refresh_watchlist_snapshot', watchlist_id=selected_item._id) }}" class="max-sm:w-full" data-monitor-action><input type="hidden" name="refresh_request_id" value="{{ refresh_request_id }}"><button class="app-button-secondary py-2 text-sm max-sm:w-full" data-action-button data-collect-button data-ready-label="Collect latest prices" data-cooldown-seconds="{{ manual_refresh_cooldown_remaining }}" data-loading-label="Collecting…" {{ 'disabled' if manual_refresh_cooldown_remaining else '' }}>Collect latest prices</button></form>
+      {% endif %}
       <a href="#snapshot-history" class="app-button-secondary py-2 text-center text-sm max-sm:w-full">View snapshots</a>
       <div class="relative max-sm:w-full lg:ml-auto" data-export-dropdown>
-        <button type="button" class="app-export-button max-sm:w-full" aria-haspopup="menu" aria-expanded="false" data-export-trigger>Export <svg aria-hidden="true" viewBox="0 0 12 8" class="ml-1 inline h-3 w-3 fill-current"><path d="M1 1l5 5 5-5z"/></svg></button>
-        <div class="absolute right-0 z-20 mt-2 hidden min-w-64 rounded-xl border border-slate-200 bg-white p-2 text-sm shadow-lg max-sm:left-0 max-sm:right-auto" role="menu" data-export-menu>
-          <a href="{{ url_for('watchlist_report', monitor_id=selected_item._id, forecast_id=selected_forecast_id) if selected_forecast_cycle else url_for('watchlist_report', monitor_id=selected_item._id) }}" class="block rounded-lg px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50" role="menuitem">Export Monitor report</a>
-          {% if snapshots %}<a href="{{ url_for('export_watchlist_snapshots_csv', monitor_id=selected_item._id) }}" class="block rounded-lg px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50" role="menuitem">Export Snapshot history CSV</a>{% else %}<span class="block rounded-lg px-3 py-2 text-slate-400" aria-disabled="true">Export Snapshot history CSV - no snapshots</span>{% endif %}
-          {% if can_access(current_user, 'prediction_validation') and predictions and predictions|selectattr('actual_average_price')|list %}<a href="{{ url_for('export_watchlist_validation_csv', monitor_id=selected_item._id, forecast_id=selected_forecast_id) if selected_forecast_cycle else url_for('export_watchlist_validation_csv', monitor_id=selected_item._id) }}" class="block rounded-lg px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50" role="menuitem">Export Forecast validation CSV</a>{% elif not can_access(current_user, 'prediction_validation') %}<span class="block rounded-lg px-3 py-2 text-slate-400" aria-disabled="true">Export Forecast validation CSV <span class="app-dropdown-badge app-dropdown-badge-pro">Professional</span></span>{% else %}<span class="block rounded-lg px-3 py-2 text-slate-400" aria-disabled="true">Export Forecast validation CSV - no validation</span>{% endif %}
-          {% if trend_chart and trend_chart.labels %}<button type="button" id="watchlist-export-chart-png" class="block w-full rounded-lg px-3 py-2 text-left font-semibold text-slate-700 hover:bg-slate-50" role="menuitem">Export Trend chart PNG</button>{% else %}<span class="block rounded-lg px-3 py-2 text-slate-400" aria-disabled="true">Export Trend chart PNG - no chart</span>{% endif %}
+        <button type="button" class="app-export-summary max-sm:w-full" aria-haspopup="menu" aria-expanded="false" data-export-trigger><span class="material-symbols-outlined text-[18px]">download</span><span>Export</span><span class="material-symbols-outlined text-[18px]">expand_more</span></button>
+        <div class="app-dropdown-panel hidden max-sm:left-0 max-sm:right-auto" role="menu" data-export-menu>
+          <a href="{{ url_for('watchlist_report', monitor_id=selected_item._id, forecast_id=selected_forecast_id) if selected_forecast_cycle else url_for('watchlist_report', monitor_id=selected_item._id) }}" class="app-dropdown-item" role="menuitem">Export Monitor report</a>
+          {% if snapshots %}<a href="{{ url_for('export_watchlist_snapshots_csv', monitor_id=selected_item._id) }}" class="app-dropdown-item" role="menuitem">Export Snapshot history CSV</a>{% else %}<span class="app-dropdown-item is-locked" aria-disabled="true">Export Snapshot history CSV - no snapshots</span>{% endif %}
+          {% if can_access(current_user, 'prediction_validation') and predictions and predictions|selectattr('actual_average_price')|list %}<a href="{{ url_for('export_watchlist_validation_csv', monitor_id=selected_item._id, forecast_id=selected_forecast_id) if selected_forecast_cycle else url_for('export_watchlist_validation_csv', monitor_id=selected_item._id) }}" class="app-dropdown-item" role="menuitem">Export Forecast validation CSV</a>{% elif not can_access(current_user, 'prediction_validation') %}<span class="app-dropdown-item is-locked" aria-disabled="true">Export Forecast validation CSV <span class="app-dropdown-badge app-dropdown-badge-pro">Premium</span></span>{% else %}<span class="app-dropdown-item is-locked" aria-disabled="true">Export Forecast validation CSV - no validation</span>{% endif %}
+          {% if trend_chart and trend_chart.labels %}<button type="button" id="watchlist-export-chart-png" class="app-dropdown-item w-full text-left" role="menuitem">Export Trend chart PNG</button>{% else %}<span class="app-dropdown-item is-locked" aria-disabled="true">Export Trend chart PNG - no chart</span>{% endif %}
         </div>
       </div>
       {% endif %}
@@ -130,8 +142,7 @@
         </div>
       </details>
     </div>
-    {% if current_user.role == 'researcher' %}<p class="mt-2 text-xs text-slate-500">A pending forecast will be validated automatically after the next snapshot.</p>{% endif %}
-    <p class="mt-3 text-xs text-slate-500">Collect a snapshot first, then generate a forecast. Validation appears automatically after a later snapshot is available.</p>
+    <p class="mt-3 text-xs leading-5 text-slate-500">Manual collection runs the same market check as Daily Refresh and does not change its schedule. Successful collections are briefly protected against duplicate submissions.</p>
     <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
         <style>
           .chart-card canvas {
@@ -202,14 +213,14 @@
             </div>
             <span class="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-500">Marketplace snapshots</span>
           </div>
-          <div id="watchlist-trend-echart" class="h-[300px] w-full"></div>
+          <div id="watchlist-trend-echart" class="h-[260px] w-full"></div>
         </div>
         {% endif %}
         {% endif %}
       </div>
       <section class="mt-5" id="forecast-cycles" aria-labelledby="forecast-cycles-heading">
       <div class="flex flex-wrap items-end justify-between gap-3">
-        <div><p id="forecast-cycles-heading" class="font-bold text-slate-900">Forecast Cycles</p><p class="text-xs text-slate-500">Review the lineage and validation for each saved forecast.</p></div>
+        <div><p id="forecast-cycles-heading" class="font-bold text-slate-900">Forecast review</p><p class="text-xs text-slate-500">Inspect a saved forecast and its later validation.</p></div>
         {% if forecast_cycles %}<form method="get" action="{{ url_for('watchlist') }}" class="w-full sm:w-auto"><input type="hidden" name="item_id" value="{{ selected_item._id }}"><label class="text-xs font-semibold text-slate-600">Selected Forecast Cycle<select name="forecast_id" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm sm:min-w-72" onchange="this.form.submit()">{% for cycle in forecast_cycles %}<option value="{{ cycle.forecast_id }}" {{ 'selected' if cycle.forecast_id|string == selected_forecast_id|string else '' }}>{{ format_sgt_datetime(cycle.forecast_created_at) }} — {{ cycle.visible_status|title }}{% if cycle.predicted_average_price is not none %} — USD {{ '%.2f'|format(cycle.predicted_average_price) }}{% endif %}</option>{% endfor %}</select></label></form>{% endif %}
       </div>
       {% if not predictions %}
@@ -227,10 +238,10 @@
         <div class="flex flex-wrap items-start justify-between gap-2"><div><p class="font-bold">Forecast summary</p><p class="mt-0.5 text-xs text-slate-500">{{ format_sgt_datetime(selected_forecast_cycle.forecast_created_at) if selected_forecast_cycle.forecast_created_at else 'Legacy forecast' }} — {{ selected_forecast_cycle.visible_status|title }}</p></div><span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-700">{{ selected_forecast_cycle.visible_status|title }}</span></div>
         <div class="mt-4 grid gap-3 sm:grid-cols-3">
           <section class="rounded-xl border border-slate-200 bg-white p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Source Snapshot</p><dl class="mt-2 space-y-2 text-xs"><div><dt class="text-slate-400">Snapshot time</dt><dd class="font-semibold text-slate-700">{{ format_sgt_datetime(selected_forecast_cycle.baseline_snapshot_at) if selected_forecast_cycle.baseline_snapshot_at else 'Not available in this legacy Forecast Cycle' }}</dd></div><div><dt class="text-slate-400">Observed average</dt><dd class="font-semibold text-slate-700">{{ 'USD %.2f'|format(selected_forecast_cycle.baseline_snapshot_observed_price) if selected_forecast_cycle.baseline_snapshot_observed_price is not none else 'Not available' }}</dd></div></dl></section>
-          <section class="rounded-xl border border-violet-100 bg-violet-50/50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-violet-500">Predictions</p><dl class="mt-2 space-y-2 text-xs"><div><dt class="text-slate-400">Benchmark prediction</dt><dd class="font-semibold text-slate-700">{{ 'USD %.2f'|format(selected_forecast_cycle.benchmark_predicted_price) if selected_forecast_cycle.benchmark_predicted_price is not none else 'Not available' }}</dd></div><div><dt class="text-slate-400">Benchmark method</dt><dd class="font-semibold text-slate-700">{{ selected_forecast_cycle.benchmark_method_label }}</dd></div><div><dt class="text-slate-400">AI-assisted prediction</dt><dd class="font-semibold text-slate-700">{{ 'USD %.2f'|format(selected_forecast_cycle.ai_predicted_price) if selected_forecast_cycle.ai_predicted_price is not none else 'Not available' }}</dd></div><div><dt class="text-slate-400">AI method</dt><dd class="font-semibold text-slate-700">{{ selected_forecast_cycle.ai_method|replace('_', ' ')|title if selected_forecast_cycle.ai_method else 'Not available' }}</dd></div><div><dt class="text-slate-400">Generated time</dt><dd class="font-semibold text-slate-700">{{ format_sgt_datetime(selected_forecast_cycle.generated_at) if selected_forecast_cycle.generated_at else 'Not available' }}</dd></div></dl></section>
+          <section class="rounded-xl border border-violet-100 bg-violet-50/50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-violet-500">Predictions</p><dl class="mt-2 space-y-2 text-xs"><div><dt class="text-slate-400">Benchmark prediction</dt><dd class="font-semibold text-slate-700">{{ 'USD %.2f'|format(selected_forecast_cycle.benchmark_predicted_price) if selected_forecast_cycle.benchmark_predicted_price is not none else 'Not available' }}</dd></div><div><dt class="text-slate-400">Benchmark method</dt><dd class="font-semibold text-slate-700">{{ selected_forecast_cycle.benchmark_method_label }}</dd></div><div><dt class="text-slate-400">AI-assisted prediction</dt><dd class="font-semibold text-slate-700">{{ 'USD %.2f'|format(selected_forecast_cycle.ai_predicted_price) if selected_forecast_cycle.ai_predicted_price is not none else selected_forecast_cycle.ai_availability_label }}</dd></div><div><dt class="text-slate-400">AI method</dt><dd class="font-semibold text-slate-700">{{ selected_forecast_cycle.ai_method|replace('_', ' ')|title if selected_forecast_cycle.ai_method else 'Not available' }}</dd></div><div><dt class="text-slate-400">Generated time</dt><dd class="font-semibold text-slate-700">{{ format_sgt_datetime(selected_forecast_cycle.generated_at) if selected_forecast_cycle.generated_at else 'Not available' }}</dd></div></dl></section>
           <section class="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Validation</p><dl class="mt-2 space-y-2 text-xs"><div><dt class="text-slate-400">Validation Snapshot time</dt><dd class="font-semibold text-slate-700">{{ format_sgt_datetime(selected_forecast_cycle.validation_snapshot_at) if selected_forecast_cycle.validation_snapshot_at else 'Pending' }}</dd></div><div><dt class="text-slate-400">Observed market average</dt><dd class="font-semibold text-slate-700">{{ 'USD %.2f'|format(validation_observed_price) if validation_observed_price is not none else 'Pending' }}</dd></div><div><dt class="text-slate-400">Benchmark error</dt><dd class="font-semibold text-slate-700">{{ '%.2f%%'|format(benchmark_error_percent) if benchmark_error_percent is not none else 'Pending' }}</dd></div><div><dt class="text-slate-400">AI forecast error</dt><dd class="font-semibold text-slate-700">{{ '%.2f%%'|format(ai_error_percent) if ai_error_percent is not none else 'Pending' }}</dd></div></dl></section>
         </div>
-        {% if not prediction_has_actual %}<p class="mt-3 inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">Waiting for a later eligible snapshot</p>{% else %}<p class="mt-3 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">Validated with later snapshot</p>{% endif %}
+        {% if not prediction_has_actual %}<p class="mt-3 inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">Waiting for the next successful snapshot</p>{% else %}<p class="mt-3 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">Validated with later snapshot</p>{% endif %}
         {% if prediction_has_actual and selected_forecast_cycle.source_label == 'demo' %}
         <p class="mt-2 text-xs font-semibold text-amber-700">A demo validation snapshot has already been attached for review.</p>
         {% endif %}
@@ -325,7 +336,7 @@
               </div>
               <span class="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-500">Prediction validation</span>
             </div>
-            <div id="watchlist-validation-echart" class="h-[300px] w-full"></div>
+            <div id="watchlist-validation-echart" class="h-[240px] w-full"></div>
           </div>
           {% elif prediction_chart.pending %}
             <div class="rounded-2xl border border-amber-200/70 border-l-4 border-l-amber-400 bg-gradient-to-br from-amber-50 to-white p-5 text-sm text-slate-600 shadow-sm">
@@ -348,19 +359,20 @@
                   </div>
                   <span class="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-500">Prediction validation</span>
                 </div>
-                <div id="watchlist-validation-echart" class="h-[300px] w-full"></div>
+                <div id="watchlist-validation-echart" class="h-[240px] w-full"></div>
               </div>
             </div>
           {% elif selected_forecast_cycle %}
           <div class="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 text-sm text-slate-600 shadow-sm">
-            <p class="font-semibold text-slate-700">No forecast is available yet</p>
+            <p class="font-semibold text-slate-700">Forecast comparison chart unavailable</p>
+            <p class="mt-1 text-xs text-slate-500">The saved forecast details above remain available.</p>
             {% if debug_validation and reason_validation_not_available %}
             <p class="mt-2 text-[11px] uppercase tracking-wider text-slate-400">Reason: {{ reason_validation_not_available }}</p>
             {% endif %}
           </div>
           {% else %}
           <div class="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 text-sm text-slate-600 shadow-sm">
-            <p class="font-semibold text-slate-700">No forecast is available yet</p>
+            <p class="font-semibold text-slate-700">No forecast generated yet</p>
             {% if debug_validation and reason_validation_not_available %}
             <p class="mt-2 text-[11px] uppercase tracking-wider text-slate-400">Reason: {{ reason_validation_not_available }}</p>
             {% endif %}
@@ -402,6 +414,33 @@
 </div>
 {% endif %}
 <script>
+  function activateCollectCooldown(button) {
+    if (!button || button.dataset.cooldownActive === 'true') return button?.dataset.cooldownActive === 'true';
+    let remaining = Number.parseInt(button.dataset.cooldownSeconds || '0', 10);
+    if (!Number.isFinite(remaining) || remaining <= 0) return false;
+    const readyLabel = button.dataset.readyLabel || button.textContent.trim();
+    const updateLabel = () => {
+      if (remaining <= 0) {
+        button.disabled = false;
+        button.textContent = readyLabel;
+        button.dataset.cooldownSeconds = '0';
+        button.dataset.cooldownActive = 'false';
+        return false;
+      }
+      const minutes = Math.floor(remaining / 60);
+      const seconds = String(remaining % 60).padStart(2, '0');
+      button.disabled = true;
+      button.textContent = `Available in ${minutes}:${seconds}`;
+      remaining -= 1;
+      button.dataset.cooldownSeconds = String(remaining);
+      return true;
+    };
+    button.dataset.cooldownActive = 'true';
+    updateLabel();
+    const timer = window.setInterval(() => { if (!updateLabel()) window.clearInterval(timer); }, 1000);
+    return true;
+  }
+  document.querySelectorAll('[data-collect-button]').forEach(activateCollectCooldown);
   document.querySelectorAll('[data-monitor-action]').forEach((form) => {
     form.addEventListener('submit', (event) => {
       if (form.dataset.submitting === 'true') {
@@ -423,8 +462,10 @@
     form.setAttribute('aria-busy', 'false');
     const button = form.querySelector('[data-action-button]');
     if (button) {
-      button.disabled = false;
-      if (button.dataset.normalLabel) button.textContent = button.dataset.normalLabel;
+      if (!activateCollectCooldown(button)) {
+        button.disabled = false;
+        if (button.dataset.normalLabel) button.textContent = button.dataset.normalLabel;
+      }
     }
   }));
 </script>
@@ -615,6 +656,14 @@
       modal.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
       modal.addEventListener('close', () => openButton.focus());
     })();
+    document.querySelector('[data-view-alert-history]')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      const history = document.getElementById('alert-history');
+      if (!history) return;
+      history.open = true;
+      history.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      history.querySelector('summary')?.focus({ preventScroll: true });
+    });
     document.querySelectorAll('[data-export-dropdown]').forEach((dropdown) => {
       const trigger = dropdown.querySelector('[data-export-trigger]');
       const menu = dropdown.querySelector('[data-export-menu]');

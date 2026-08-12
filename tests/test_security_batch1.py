@@ -161,6 +161,59 @@ def test_researcher_logs_are_owner_scoped_and_retailer_cannot_read_logs():
     assert "research-other-event" not in retailer_logs
 
 
+def test_researcher_dashboard_metrics_and_activity_are_owner_scoped():
+    client = _setup_client()
+    researcher = _create_user("Dashboard Research Owner", "researcher")
+    other = _create_user("Dashboard Research Other", "researcher")
+    owner_search = precision_app.repository.create_search(
+        researcher["_id"], "owner-dashboard-query", "ebay", role="researcher"
+    )
+    other_search = precision_app.repository.create_search(
+        other["_id"], "other-dashboard-query", "ebay", role="researcher"
+    )
+    precision_app.repository.save_evidence(
+        researcher["_id"],
+        owner_search,
+        {"title": "Owner evidence title", "platform": "eBay", "price": 499, "currency": "USD"},
+    )
+    precision_app.repository.save_evidence(
+        other["_id"],
+        other_search,
+        {"title": "Other evidence title", "platform": "Walmart", "price": 599, "currency": "USD"},
+    )
+    precision_app.repository.save_research(researcher["_id"], {"title": "Owner research package"})
+    precision_app.repository.save_research(other["_id"], {"title": "Other research package"})
+    precision_app.repository.log_ai_search(
+        researcher["_id"], "owner-ai-dashboard", "offline-model", "Owner summary", "Owner response"
+    )
+    precision_app.repository.log_ai_search(
+        other["_id"], "other-ai-dashboard", "offline-model", "Other summary", "Other response"
+    )
+    precision_app.repository.log_event(
+        researcher["_id"], "search_started", "researcher", researcher["display_name"], {"query": "owner-dashboard-event"}
+    )
+    precision_app.repository.log_event(
+        other["_id"], "api_call_failed", "researcher", other["display_name"], {"query": "other-dashboard-event"}
+    )
+
+    _login(client, researcher)
+    response = client.get("/dashboard/researcher")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Owner evidence title" in body
+    assert "owner-ai-dashboard" in body
+    assert "owner-dashboard-event" in body
+    assert "Other evidence title" not in body
+    assert "other-ai-dashboard" not in body
+    assert "other-dashboard-event" not in body
+    view = precision_app.build_researcher_dashboard_view(researcher["_id"])
+    assert view["snapshot"]["search_records"] == 1
+    assert view["snapshot"]["evidence_records"] == 1
+    assert view["snapshot"]["research_records"] == 1
+    assert view["source_warning_count"] == 0
+
+
 def test_administrator_audit_scope_is_global():
     client = _setup_client()
     administrator = _create_user("Global Admin", "administrator")
@@ -240,11 +293,12 @@ def test_demo_get_routes_do_not_seed_and_demo_mutations_require_approved_operato
 
 def test_production_rejects_missing_mongodb_and_memory_fallback(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
-    monkeypatch.setenv("ALLOW_MEMORY_FALLBACK", "false")
-    with pytest.raises(RuntimeError, match="MONGODB_URI is required"):
+    monkeypatch.setenv("DEMO_MODE", "false")
+    with pytest.raises(RuntimeError, match="MONGO_URI is required"):
         MongoRepository(uri="")
     with pytest.raises(ProductionConfigurationError, match="cannot be enabled"):
         MongoRepository(uri="", allow_memory_fallback=True)
+    monkeypatch.setenv("DEMO_MODE", "true")
     monkeypatch.setenv("APP_ENV", "test")
     repository = MongoRepository(uri="", allow_memory_fallback=True)
     assert repository.mode == "memory_fallback"
@@ -258,7 +312,7 @@ def test_production_startup_validation_rejects_unsafe_flags_and_missing_secret()
             "DEMO_LOGIN_ENABLED": "true",
             "DEMO_TOOLS_ENABLED": "true",
             "DEMO_MEMBERSHIP_UPGRADE_ENABLED": "true",
-            "ALLOW_MEMORY_FALLBACK": "true",
+            "DEMO_MODE": "true",
             "PRECISION_ADMIN_PASSWORD": "Admin123!",
         })
     message = str(error.value)
@@ -266,5 +320,5 @@ def test_production_startup_validation_rejects_unsafe_flags_and_missing_secret()
     assert "DEMO_LOGIN_ENABLED" in message
     assert "DEMO_TOOLS_ENABLED" in message
     assert "DEMO_MEMBERSHIP_UPGRADE_ENABLED" in message
-    assert "ALLOW_MEMORY_FALLBACK" in message
+    assert "DEMO_MODE" in message
     assert "default administrator password" in message

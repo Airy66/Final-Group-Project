@@ -41,10 +41,9 @@ class DatabaseConfig:
 class NotificationConfig:
     """Configuration for notifications."""
     enabled: bool = False
-    email_smtp_server: str = ""
-    email_smtp_port: int = 587
-    email_username: str = ""
-    email_password: str = ""
+    email_provider: str = "brevo_api"
+    sender_email: str = ""
+    sender_name: str = "Precision Curator"
     email_recipients: list = field(default_factory=list)
     slack_webhook_url: str = ""
 
@@ -165,10 +164,9 @@ class ConfigManager:
             },
             'notification': {
                 'enabled': config.notification.enabled,
-                'email_smtp_server': config.notification.email_smtp_server,
-                'email_smtp_port': config.notification.email_smtp_port,
-                'email_username': config.notification.email_username,
-                'email_password': config.notification.email_password,
+                'email_provider': config.notification.email_provider,
+                'sender_email': config.notification.sender_email,
+                'sender_name': config.notification.sender_name,
                 'email_recipients': config.notification.email_recipients,
                 'slack_webhook_url': config.notification.slack_webhook_url,
             },

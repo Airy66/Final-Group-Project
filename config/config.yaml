@@ -28,10 +28,9 @@ database:
 # Notification configuration
 notification:
   enabled: false                    # Enable notifications
-  email_smtp_server: ""             # SMTP server for email notifications
-  email_smtp_port: 587              # SMTP port
-  email_username: ""                # Email username
-  email_password: ""                # Email password
+  email_provider: "brevo_api"       # Runtime credentials come from environment variables
+  sender_email: ""                  # Verified Brevo sender email; do not store API keys here
+  sender_name: "Precision Curator"  # Public sender display name
   email_recipients: []              # List of email recipients
   slack_webhook_url: ""             # Slack webhook URL
 

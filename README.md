@@ -1,97 +1,109 @@
 # Precision Curator
 
-Precision Curator is an academic Flask prototype for collecting, comparing, monitoring, and analysing marketplace price records. It provides role-aware workspaces, evidence preservation, Search Run history, comparison sets, analytics, Watchlist snapshots, deterministic forecasts, and controlled AI-assisted explanations.
+Precision Curator is a SaaS-style marketplace price-intelligence application built with Flask and MongoDB. It turns marketplace listings into comparable price records, saved evidence, monitored snapshots, analytics, forecasts, and traceable research outputs.
 
-The canonical production WSGI entry point is `precision_app:app`. The root `app.py` exists only as a compatibility import.
+This repository is prepared for deployment as an academic SaaS product and controlled public demonstration on Render. It is not a payment-enabled commercial service and does not guarantee marketplace coverage, future prices, or the lowest available offer.
 
-## 1. Project overview
+## Product capabilities
 
-The application demonstrates a traceable price-intelligence workflow rather than claiming complete marketplace coverage or commercial production readiness. Search results retain source and collection metadata so users can distinguish marketplace evidence, deterministic calculations, mock data, and AI assistance.
+- Multi-source product search using eBay and a configured Walmart retrieval provider.
+- Product normalization, comparability checks, configuration and condition filtering.
+- Search Run history and persistent marketplace records.
+- Like-for-like comparison sets and platform-level price interpretation.
+- Saved evidence and research packages with source provenance.
+- Retailer Watchlist monitors, scheduled snapshots, price trends, and alerts.
+- Deterministic forecast benchmarks, optional Gemini assistance, and later-snapshot validation.
+- Analytics dashboards and CSV, XLSX, and report exports.
+- Password reset, welcome email, administrator tools, role controls, and audit logs.
+- Responsive Consumer, Retailer / Reseller, Researcher, and Administrator workspaces.
 
-## 2. Main features
+## Roles and membership
 
-- authenticated Search Runs with source diagnostics and saved history
-- comparable-product filtering and comparison sets
-- evidence and research-record preservation
-- analytics dashboards and CSV/XLSX/report exports
-- Watchlist snapshots, baseline forecasts, and later validation
-- password-reset email workflow and explicit administrator bootstrap
-- CSRF, ownership, role, membership, session, and production configuration controls
+Every account has exactly one workspace role:
 
-## 3. Roles and workspaces
+| Role | Primary workflow |
+| --- | --- |
+| Consumer | Search, compare, save, and monitor products. |
+| Retailer / Reseller | Monitor competitor prices, trends, alerts, and forecast cycles. |
+| Researcher | Preserve evidence, review provenance, analyse records, and export research. |
+| Administrator | Manage users, membership, source status, evidence history, and activity logs. |
 
-- **Consumer**: search, compare, save evidence, monitor prices, and view permitted analytics.
-- **Retailer**: market monitoring and retailer-oriented summaries.
-- **Researcher**: research records, advanced analytics, audit views, and research exports.
-- **Administrator**: account, role, membership, test-data, and audit administration.
+Membership controls feature access independently of workspace role:
 
-Accounts may hold multiple assigned roles but operate through one active workspace at a time.
+- **Basic:** product search and comparison.
+- **Premium:** saved evidence, Watchlist, analytics, AI-assisted explanations and forecasts, validation, and standard exports.
+- **Professional:** Premium capabilities plus source audit, activity logs, advanced provenance, and research/report workflows.
 
-## 4. Membership tiers
+Membership changes are administrative demonstration controls. This repository contains no billing or payment processing.
 
-- **Basic**: product search and comparison.
-- **Premium**: saved evidence/research, Watchlist, analytics, AI-assisted summaries and forecasts, and standard exports.
-- **Professional**: advanced analytics, prediction validation, audit/log access, and research/report packages.
+## Price and forecast semantics
 
-Membership upgrades in this repository are demonstration controls, not payment processing. They must remain disabled in production.
+Precision Curator deliberately separates descriptive metrics from decision signals:
 
-## 5. Data sources and provenance
+- Lowest, average, highest, and spread cards describe the current comparable result set.
+- A platform recommendation is calculated only for a qualified like-for-like scope: one product configuration, one condition, and at least two marketplaces.
+- Qualified platform comparison uses each platform's median comparable price so one abnormal listing does not decide the result.
+- Watchlist trend and alert calculations retain the monitor's comparable average-price series and apply snapshot-quality and scope-consistency checks.
+- Daily refresh collects a new monitor snapshot. It does not automatically generate an AI forecast.
+- A pending Forecast Cycle is validated by the next eligible snapshot collected after that forecast.
+- AI text explains server-calculated facts; it is not marketplace evidence and cannot replace source records.
 
-- **eBay**: official eBay API integration when credentials are configured.
-- **Walmart**: retrieval through a configured third-party marketplace service (SerpAPI), not direct official Walmart API access.
-- **MongoDB**: persistent Search Runs, normalized records, evidence, comparisons, analytics, Watchlist state, users, and audit events.
-- **Mock/demo records**: deterministic and explicitly labelled for offline tests or prepared demonstrations.
-- **AI**: optional assistance and explanation. AI output is not an authoritative marketplace source and does not replace stored source records.
+## Data sources and provenance
 
-Coverage depends on provider availability, configured credentials, query quality, and returned listings. It is not complete global market coverage.
+| Source | Usage |
+| --- | --- |
+| eBay | Official eBay API when credentials are configured. |
+| Walmart | Marketplace retrieval through configured SerpAPI integration; not an official Walmart API. |
+| MongoDB Atlas | Persistent users, Search Runs, results, evidence, comparisons, analytics, monitors, snapshots, forecasts, and audit data. |
+| Gemini | Optional market explanation and forecast assistance grounded in the selected records. |
+| Demo records | Deterministic, explicitly labelled data available only in intentional demo/test mode. |
 
-## 6. Architecture summary
+Provider availability, quotas, query quality, and the listings returned at collection time determine coverage.
+
+## Architecture
 
 ```text
-Browser -> Flask routes/templates -> service adapters -> MongoDB
-                               |-> eBay official API
-                               |-> SerpAPI marketplace retrieval
-                               |-> optional Gemini/OpenAI assistance
+Browser
+  -> Flask routes and Jinja templates
+      -> MongoRepository -> MongoDB Atlas
+      -> eBay / SerpAPI provider adapters
+      -> Brevo Transactional Email HTTPS API
+      -> Gemini assistance
+
+Render Web Service -> Gunicorn -> precision_app:app
+Render Cron Job    -> tools.refresh_due_monitors -> the same Atlas database
 ```
 
-`precision_app.py` owns the Flask application and workflows. `services/` contains persistence, mail, provider, category, and runtime-configuration modules. Runtime charts and uploaded avatars are written beneath `static/` but are not source assets.
+`precision_app.py` is the canonical application and WSGI entry point. Root-level `app.py` is compatibility-only and must not become a second application.
 
-## 7. Technology stack
+## Technology
 
-- Python 3.11–3.13 (deployment reference: Python 3.13.6)
-- Flask and Gunicorn
-- MongoDB/PyMongo
-- Jinja templates and JavaScript
+- Python 3.11-3.13; Render reference version: Python 3.13.6
+- Flask, Gunicorn, Jinja, and browser JavaScript
+- MongoDB Atlas and PyMongo
 - pandas, NumPy, SciPy, matplotlib, Plotly, and openpyxl
-- pytest for offline regression coverage
+- Gemini and OpenAI SDK integrations where configured
+- pytest for deterministic offline regression coverage
 
-## 8. Repository structure
+## Repository layout
 
 ```text
-precision_app.py          canonical Flask application
-app.py                    compatibility import only
-services/                 database, mail, AI and provider adapters
-src/ecommerce_price_monitor/ bundled analysis/collector package
-templates/                Jinja pages
-static/                   required source assets plus ignored runtime folders
-tools/                    administrator and optional development utilities
-tests/, src/tests/        application and package tests
-render.yaml               Render staging blueprint
-requirements.txt          direct runtime dependencies
-requirements-dev.txt      test/development dependencies
-.env.example              placeholder-only environment template
-docs/                     release and legacy inventories
+precision_app.py       Canonical Flask application and workflows
+app.py                 Compatibility import
+services/              Database, mail, provider, AI, category, and config services
+templates/             Product and public Jinja templates
+static/                Versioned assets and ignored runtime output directories
+tools/                 Administrator, maintenance, and monitor-refresh commands
+tests/                  Flask application regression tests
+src/                    Bundled analysis package and package tests
+docs/                   Release, API, and legacy notes
+render.yaml             Render Web Service and monitor Cron blueprint
+.env.example            Placeholder-only environment reference
 ```
 
-## 9. Prerequisites
+## Local setup
 
-- Python 3.11–3.13
-- MongoDB for persistent local or staging operation
-- provider credentials only for the providers being exercised
-
-Linux is expected for Gunicorn deployment. Gunicorn is not used as a Windows development server.
-
-## 10. Local installation
+Windows PowerShell:
 
 ```powershell
 python -m venv .venv
@@ -99,53 +111,61 @@ python -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 Copy-Item .env.example .env
-```
-
-Edit the local `.env` without committing it. Production secrets belong in the hosting platform's environment settings.
-
-## 11. Environment configuration
-
-See `.env.example` for every supported setting. Important production values are:
-
-- `APP_ENV=production`
-- a unique `FLASK_SECRET_KEY` of at least 32 characters
-- public HTTPS `APP_BASE_URL`
-- authenticated `MONGODB_URI` and intended `MONGODB_DATABASE`
-- `ALLOW_MEMORY_FALLBACK=false`
-- all demo and membership-upgrade switches set to `false`
-
-Provider and SMTP secrets are optional only when those capabilities are unused. Never copy real secrets into `.env.example`, `render.yaml`, README, tests, or screenshots.
-
-## 12. MongoDB setup
-
-For local development, use local MongoDB or explicitly set `ALLOW_MEMORY_FALLBACK=true`. For staging/production, use MongoDB Atlas or equivalent persistent MongoDB, restrict network/database users appropriately, store the authenticated URI only as an environment secret, and keep memory fallback disabled.
-
-Local MongoDB data does not automatically appear in Atlas. Prepare a clean staging dataset rather than copying all prototype/test history.
-
-## 13. Demo and mock setup
-
-Offline tests replace providers with deterministic doubles. Optional utilities under `tools/` may prepare labelled demo data; review their help/source before running them because seed tools can write database records or local documentation assets.
-
-Example:
-
-```powershell
-python -m tools.seed_demo_snapshots --user demo@example.com
-```
-
-Do not seed at application startup. Create intentional demo users, roles, membership examples, Search Runs, and Watchlist records only.
-
-## 14. Running locally
-
-```powershell
-$env:APP_ENV="development"
 python -m flask --app precision_app:app run
 ```
 
-The canonical module does not start a development server when imported. `app:app` remains import-compatible, but new commands and deployment configuration should use `precision_app:app`.
+macOS or Linux:
 
-## 15. Creating the first administrator
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+cp .env.example .env
+python -m flask --app precision_app:app run
+```
 
-Use a password of at least 12 characters that is not a public/default password. The command does not print the password, does not overwrite an existing administrator by default, and requires explicit `--reset-password` for replacement.
+Never commit `.env`. Development may use `DEMO_MODE=true` for explicit in-memory test/demo operation. Normal development with persistent data and every production deployment must use MongoDB.
+
+## Environment configuration
+
+`.env.example` is the canonical variable reference. The most important settings are:
+
+| Variable | Production requirement |
+| --- | --- |
+| `APP_ENV` | Set to `production`. |
+| `FLASK_SECRET_KEY` | Unique random value of at least 32 characters. |
+| `APP_BASE_URL` | Public HTTPS Render or custom-domain URL. |
+| `DEMO_MODE` | Must be `false`. Memory fallback is allowed only when explicitly `true`. |
+| `MONGO_URI` | Authenticated MongoDB Atlas URI stored as a secret. |
+| `MONGO_DATABASE` | `precision_curator_production` unless intentionally changed. |
+| `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET` | Required for live eBay collection. |
+| `SERPAPI_API_KEY` | Required for configured Walmart retrieval. |
+| `GEMINI_API_KEY` | Required for Gemini-assisted explanations and forecasts. |
+| `MAIL_PROVIDER` | Set to `brevo_api`. |
+| `MAIL_ENABLED` | Set to `true` to deliver transactional email. |
+| `BREVO_API_KEY` | Brevo API key stored only as a Render secret. |
+| `BREVO_SENDER_EMAIL` | Sender address verified in Brevo. |
+| `BREVO_SENDER_NAME` | Display name, normally `Precision Curator`. |
+
+The application uses `MONGO_URI` and `MONGO_DATABASE`. The old names `MONGODB_URI` and `MONGODB_DATABASE` are not the production configuration contract.
+
+At startup the database service loads the configured URI, executes `client.admin.command("ping")`, and logs only the Atlas hostname and database name. It never logs the URI, username, password, API keys, or Flask secret.
+
+## MongoDB Atlas persistence
+
+Production is fail-closed:
+
+- Atlas connection failure must not silently create users or evidence in memory.
+- `DEMO_MODE=false` disables in-memory fallback.
+- Registration failure must not create a temporary Session account.
+- All application modules use the shared repository/database connection.
+
+Before release, verify registration, hashed password storage, login after restart, saved evidence, Watchlist snapshots, and persistence after another restart while local MongoDB remains stopped.
+
+## Administrator bootstrap
+
+Create the first administrator explicitly. The command does not print the password or overwrite an existing administrator unless requested.
 
 ```powershell
 $env:PRECISION_ADMIN_PASSWORD="use-a-strong-unique-password"
@@ -153,130 +173,166 @@ python -m tools.create_admin --email administrator@example.com
 Remove-Item Env:PRECISION_ADMIN_PASSWORD
 ```
 
-To intentionally reset an existing administrator:
+Intentional password replacement:
 
 ```powershell
 python -m tools.create_admin --email administrator@example.com --reset-password
 ```
 
-Production startup never creates or resets an administrator automatically.
+Administrators have system access rather than a customer membership tier. Production startup never creates an administrator automatically.
 
-## 16. Running tests
+## Testing
 
-The full offline command is:
+Run the complete offline suite:
 
 ```powershell
 $env:APP_ENV="development"
-$env:USE_MOCK_SCRAPER="true"
-$env:ALLOW_DEMO_DATA="true"
-$env:ALLOW_MEMORY_FALLBACK="true"
+$env:DEMO_MODE="true"
 python -m pytest tests src/tests -q -p no:cacheprovider
 ```
 
-Provider check utilities in `tools/` are manual, may use network access, and are not part of the offline suite.
-
-Coverage is a separate diagnostic run so the normal regression command remains
-fast and its result is not confused with the bundled legacy package. Measure the
-canonical production application and services with:
+Additional release checks:
 
 ```powershell
-python -m pytest tests src/tests -q -p no:cacheprovider --cov=precision_app --cov=services --cov-report=term-missing --cov-report=html
+python -m compileall precision_app.py services tools
+python -m pip check
+git diff --check
 ```
 
-The coverage headline intentionally excludes tests, development tools, virtual
-environments, generated files, and the legacy/experimental collector package.
-No minimum percentage is asserted; report the measured result as generated.
+Automated tests must use deterministic substitutes and must not require live Atlas, marketplace, AI, email, or hosting services.
 
-## 17. Production deployment
+## Production deployment on Render
 
-Install `requirements.txt` and start the canonical WSGI app with:
+`render.yaml` defines the Web Service, `/health` check, and an optional daily Monitor refresh Cron Job. The canonical production command is:
 
 ```text
 gunicorn precision_app:app --workers 2 --timeout 120 --access-logfile -
 ```
 
-Do not use Flask debug mode or reload in production. Verify `/health`, authentication, password reset, provider availability, and a clean staging dataset before any public release.
+### 1. Prepare external services
 
-## 18. Render configuration
+Before creating the Render service:
 
-`render.yaml` defines:
+1. Create the MongoDB Atlas application user and allow network access from the deployment.
+2. Confirm `precision_curator_production` is the intended database.
+3. Configure the eBay and SerpAPI credentials required by the live search scope.
+4. Create a Brevo **API v3 key**, activate Transactional Email, and verify the sender. An SMTP key is not interchangeable with `BREVO_API_KEY`.
+5. Configure the Gemini key if AI assistance is enabled.
 
-- build: `python -m pip install -r requirements.txt`
-- start: the conservative two-worker Gunicorn command above
-- health check: `GET /health`
-- Python expectation: 3.13.6
-- production-safe demo and memory-fallback values
-- secret/environment prompts without embedded credentials
+### 2. Create the Web Service
 
-Render's filesystem is ephemeral. MongoDB Atlas is required for persistent application data. Dynamically uploaded avatars and runtime PNG charts may disappear after deploy/restart; use preloaded source assets or external object storage for durable production uploads. Object-storage integration is outside this academic batch.
+Connect the repository through the Render Dashboard or create a Blueprint from `render.yaml`. For an academic demonstration, the Web Service may use Render's Free instance type. The Blueprint does not pin an instance plan, so confirm the Web Service plan before approving creation. Free instances can spin down after inactivity and may take about a minute to wake; they are not intended for commercial production workloads.
 
-### Daily Watchlist Monitor Cron preparation
+Set every secret value in Render's Environment page, never in `render.yaml`, `.env.example`, source code, screenshots, or Git history. Variables declared with `sync: false` are requested only during initial Blueprint creation. When adding one to an existing Blueprint, set it manually in the Render Dashboard.
 
-The blueprint also prepares, but does not deploy automatically from this repository, a daily Cron command:
+Required Web Service values:
+
+```text
+APP_ENV=production
+DEMO_MODE=false
+APP_BASE_URL=https://<service-name>.onrender.com
+MONGO_URI=<Atlas connection URI>
+MONGO_DATABASE=precision_curator_production
+EBAY_CLIENT_ID=<secret>
+EBAY_CLIENT_SECRET=<secret>
+SERPAPI_API_KEY=<secret>
+GEMINI_API_KEY=<secret when AI is enabled>
+MAIL_PROVIDER=brevo_api
+MAIL_ENABLED=true
+BREVO_API_KEY=<Brevo API v3 key>
+BREVO_SENDER_EMAIL=<verified sender>
+BREVO_SENDER_NAME=Precision Curator
+```
+
+`FLASK_SECRET_KEY` is generated by the Blueprint. If the Web Service is created manually, supply a unique random value of at least 32 characters and keep it stable across deploys.
+
+### 3. Deploy and verify
+
+After the first successful deploy:
+
+1. Open `/health` and confirm it returns successfully.
+2. Confirm startup logs show only the expected Atlas hostname and `precision_curator_production`, never the URI or credentials.
+3. Register a new account, confirm its password is hashed in Atlas, and verify the welcome email in Brevo Transactional Logs.
+4. Test password reset and confirm the link begins with the public HTTPS `APP_BASE_URL` and cannot be reused.
+5. Restart or redeploy the Web Service, then confirm the account and saved Evidence still exist.
+6. Exercise one live search per configured marketplace and distinguish a provider failure from a valid zero-result response.
+7. Confirm role, membership, ownership, administrator, export, Watchlist, and mobile navigation behaviour.
+
+Create the first administrator from a trusted local terminal connected to the production Atlas database. Free Web Services do not provide shell access, and administrator passwords must not be stored as persistent Render environment variables.
+
+Render's filesystem is ephemeral. MongoDB Atlas provides durable application records, but uploaded avatars and generated local chart files can disappear after a deploy or restart. Use source-controlled assets or external object storage for any file that must persist.
+
+### Scheduled Watchlist refresh
+
+The scheduled command is:
 
 ```text
 python -m tools.refresh_due_monitors --limit 5
 ```
 
-The Render UTC schedule `0 0 * * *` corresponds to 08:00 in Asia/Singapore. The Web Service and Cron Job must use the same repository version, MongoDB Atlas database, provider credentials, and application settings. Keep every secret in Render environment settings; never place credentials in `render.yaml` or documentation. No scheduler runs inside Flask or Gunicorn.
+The blueprint schedule `0 0 * * *` runs at 00:00 UTC, which is 08:00 Asia/Singapore. The Web Service and Cron Job must use the same code revision, `MONGO_URI`, `MONGO_DATABASE`, marketplace credentials, `APP_BASE_URL`, and Brevo settings. Flask and Gunicorn do not run an internal scheduler.
 
-For a read-only local due-list check:
+Render Cron Jobs are billed separately and have a minimum monthly charge; they are not available as Free instances. If the Cron Job is not provisioned, manual collection still works but Daily Refresh will not run automatically. The scheduled command is idempotent, bounded by `--limit 5`, and must exit after processing eligible Monitors.
+
+Read-only local inspection:
 
 ```powershell
 python -m tools.refresh_due_monitors --dry-run
 ```
 
-For a controlled development/administrator test after explicitly enabling `MONITOR_DAILY_REFRESH_ENABLED`, use:
+Existing Monitors remain disabled until a user enables daily refresh.
 
-```powershell
-python -m tools.refresh_due_monitors --monitor-id <ID> --force --limit 1
-```
+## Email delivery with Brevo
 
-The forced command may call configured marketplace providers and mutate the selected Monitor. It is a local CLI path only and is not exposed to unauthenticated web users. Existing Monitors remain disabled until a user explicitly enables daily refresh.
+Welcome, password-reset, test-alert, and price-alert messages use the shared `services/email_service.py` adapter and Brevo Transactional Email over HTTPS. The application does not use SMTP ports 25, 465, or 587.
 
-## 19. Password-reset email
+Set `MAIL_PROVIDER=brevo_api`, `MAIL_ENABLED=true`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, and `APP_BASE_URL` on both the Render Web Service and Cron Job. Use a Brevo API v3 key from **API Keys & MCP**, not an SMTP key. The Transactional Email platform must be active and the sender address verified. For production, `APP_BASE_URL` must be the public HTTPS application origin, not localhost.
 
-Local `EMAIL_MODE=console` avoids SMTP and is suitable only for development. Staging should use `EMAIL_MODE=smtp` with `MAIL_HOST`, port, username, password, sender address/name, TLS/SSL, timeout, public `APP_BASE_URL`, and token TTL configured through environment variables. Test delivery without exposing reset tokens in logs or screenshots.
+Registration is committed to MongoDB before the welcome message is attempted. A provider failure is recorded safely and does not roll back the account. Password-reset delivery failures revoke the newly created reset record while preserving generic account-enumeration-safe responses. API calls have a bounded timeout and provider response bodies are not copied into logs.
 
-## 20. Security controls
+Automated tests mock the HTTPS boundary and never contact Brevo. Before release, perform one controlled welcome email, password reset, and price-alert delivery with a verified sender, then inspect the Brevo transactional log for `delivered`, `blocked`, or `bounce` events without copying credentials or reset links into project records. New or unauthenticated senders may initially reach spam; a custom sending domain with SPF, DKIM, and DMARC provides the stronger deployment baseline.
 
-- strong production secret and fail-closed production configuration
-- secure, HttpOnly, SameSite session cookies and bounded lifetime
-- password hashing, reset-token hashing/expiry/revocation, and login failure controls
-- central CSRF validation for HTML and JSON mutations
-- POST-only mutations and safe internal redirect validation
-- authentication, active-role, membership, ownership, and administrator checks
-- safe upload validation and audit events without credential/token contents
+Real Brevo API key values must never appear in `.env.example`, `render.yaml`, documentation, test fixtures, screenshots, or Git history.
 
-## 21. Known limitations
+## Security baseline
 
-- academic prototype, not independently security-certified or commercially production-ready
-- provider availability and quotas affect live results
-- Walmart data uses a third-party retrieval service
-- forecasts are experimental and accuracy is not guaranteed
-- no payment system, distributed task queue, Redis, or object storage
-- Render local files are ephemeral
-- legacy collectors remain for package/manual review and are not claims of active source coverage
+- Password hashing and hashed, expiring, revocable reset tokens.
+- Secure production Session cookies and bounded Session lifetime.
+- CSRF validation for HTML forms and JSON mutations.
+- Server-side role, membership, ownership, and administrator checks.
+- Safe internal redirects, upload validation, and source-link validation.
+- Fail-closed production database and secret configuration.
+- Audit events that exclude passwords, API keys, connection strings, and reset tokens.
 
-## 22. Data provenance statement
+See [SECURITY_NOTES.md](SECURITY_NOTES.md) for implementation notes and responsible reporting guidance.
 
-Every demonstration should distinguish official eBay API records, third-party Walmart retrieval, stored MongoDB records, deterministic mock/demo data, calculated analytics, and optional AI text. Historical prototype/test records should not be presented as current marketplace observations.
+## Known limitations
 
-## 23. Academic prototype disclaimer
+- Academic SaaS project, not independently security-certified.
+- No payment gateway, billing engine, Redis, Celery, or distributed task queue.
+- Provider availability, quotas, and changing marketplace responses affect coverage.
+- Walmart retrieval is third-party rather than an official Walmart API.
+- Forecasts are experimental decision support and are not guarantees.
+- Render runtime files are ephemeral without external object storage.
+- Email deliverability still depends on Brevo sender/domain verification, account status, recipient policy, and provider availability.
 
-Precision Curator is supplied for academic evaluation and controlled staging demonstration. It does not provide purchasing, investment, or commercial pricing guarantees. Marketplace names and trademarks belong to their owners.
+## Release checklist
 
-## 24. Troubleshooting
+Before presenting or publishing the application:
 
-- **Production refuses to start:** check the strong secret, disabled demo flags, and `ALLOW_MEMORY_FALLBACK=false`.
-- **MongoDB unavailable:** verify Atlas network access, database user, URI encoding, and `MONGODB_DATABASE`.
-- **No provider results:** verify credentials, provider enablement, timeout, quota, and source diagnostics.
-- **Password email missing:** verify SMTP mode, sender, TLS/SSL selection, base URL, and provider logs without sharing secrets.
-- **Avatar/chart disappeared on Render:** the local filesystem is ephemeral; restore a source asset or use external durable storage.
-- **Gunicorn fails on Windows:** use Flask locally; Gunicorn is the Linux production server.
+- [ ] Production starts with `DEMO_MODE=false` and a strong Flask secret.
+- [ ] Startup logs show the expected Atlas hostname and `precision_curator_production` without credentials.
+- [ ] User, Evidence, comparison, Analysis, Monitor, Snapshot, and Forecast data persist across restarts.
+- [ ] eBay and Walmart source statuses truthfully distinguish no results from provider failure.
+- [ ] The optional paid Render Cron Job can collect one eligible due Monitor without duplicate snapshots, or Daily Refresh is clearly documented as unavailable.
+- [ ] Brevo sender/domain is verified and controlled welcome/password-reset/alert deliveries succeed.
+- [ ] `/health`, authentication, ownership, membership, exports, and administrator access are tested.
+- [ ] `.env`, real customer data, runtime uploads, reports, caches, and secrets are absent from Git.
 
-## 25. Submission contents
+See [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) for the operational checklist.
 
-Include canonical source, compatibility `app.py`, requirements files, `pyproject.toml`, services, templates, required static assets, tools, tests, README, `.env.example`, `render.yaml`, and release/legacy documentation.
+## Contributing and license
 
-Exclude `.env`, credentials, caches, coverage output, virtual environments, local database files, generated charts/uploads, temporary CSV/HTML exports, personal IDE state, and real user data. See `docs/RELEASE_CHECKLIST.md` before packaging.
+Contributions should follow [CONTRIBUTING.md](CONTRIBUTING.md). Precision Curator is distributed under the [MIT License](LICENSE).
+
+Marketplace names and trademarks belong to their respective owners. The software is provided without warranty and does not provide purchasing, investment, or commercial pricing guarantees.

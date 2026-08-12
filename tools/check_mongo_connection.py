@@ -4,10 +4,10 @@ from pymongo import MongoClient
 
 load_dotenv()
 
-mongo_uri = os.getenv("MONGODB_URI")
+mongo_uri = os.getenv("MONGO_URI")
 
 if not mongo_uri:
-    raise RuntimeError("MONGODB_URI is not set in .env")
+    raise RuntimeError("MONGO_URI is not set in .env")
 
 client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
 client.admin.command("ping")

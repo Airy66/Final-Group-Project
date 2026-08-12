@@ -32,10 +32,10 @@ def is_production_environment(environ=None):
 def memory_fallback_allowed(environ=None):
     values = os.environ if environ is None else environ
     production = is_production_environment(values)
-    allowed = env_flag("ALLOW_MEMORY_FALLBACK", default=not production, environ=values)
+    allowed = env_flag("DEMO_MODE", default=False, environ=values)
     if production and allowed:
         raise ProductionConfigurationError(
-            "ALLOW_MEMORY_FALLBACK must be false in production."
+            "DEMO_MODE must be false in production."
         )
     return allowed
 
@@ -51,7 +51,7 @@ def validate_production_configuration(environ=None):
     weak_secret_markers = {"secret", "changeme", "change-me", "replace-me", "dev", "development"}
     if len(secret) < 32 or secret.lower() in weak_secret_markers:
         errors.append("FLASK_SECRET_KEY must be a non-default value of at least 32 characters")
-    for flag in ("DEMO_LOGIN_ENABLED", "DEMO_TOOLS_ENABLED", "DEMO_MEMBERSHIP_UPGRADE_ENABLED"):
+    for flag in ("DEMO_MODE", "DEMO_LOGIN_ENABLED", "DEMO_TOOLS_ENABLED", "DEMO_MEMBERSHIP_UPGRADE_ENABLED"):
         if env_flag(flag, environ=values):
             errors.append(f"{flag} must be false in production")
     try:

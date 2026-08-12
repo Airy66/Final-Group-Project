@@ -1,13 +1,8 @@
-"""MongoDB persistence with a small in-memory development fallback.
-
-MongoDB is the production data store.  The fallback keeps the UI and automated
-tests usable when a local MongoDB server has not yet been configured; the UI
-always exposes which storage mode is active.
-"""
+"""MongoDB persistence with an explicitly enabled in-memory demo mode."""
 
 from collections import Counter
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 import threading
 import uuid
@@ -20,9 +15,11 @@ try:
     from bson import ObjectId
     from pymongo import ASCENDING, DESCENDING, MongoClient
     from pymongo.errors import DuplicateKeyError
+    from pymongo.uri_parser import parse_uri
 except ImportError:  # pragma: no cover - exercised on minimal installations
     ObjectId = None
     MongoClient = None
+    parse_uri = None
     ASCENDING, DESCENDING = 1, -1
     class DuplicateKeyError(Exception):
         pass
@@ -65,15 +62,18 @@ class MongoRepository:
     )
 
     def __init__(self, uri=None, database_name=None, allow_memory_fallback=None):
-        self.uri = os.getenv("MONGODB_URI") if uri is None else uri
+        self.uri = os.getenv("MONGO_URI") if uri is None else uri
         self.database_name = (
             database_name
-            or os.getenv("MONGODB_DATABASE")
-            or os.getenv("MONGODB_DB_NAME", "precision_curator")
+            or os.getenv("MONGO_DATABASE")
+            or "precision_curator_production"
         )
         if is_production_environment() and allow_memory_fallback:
             raise ProductionConfigurationError("Memory fallback cannot be enabled in production.")
-        self.allow_memory_fallback = memory_fallback_allowed() if allow_memory_fallback is None else bool(allow_memory_fallback)
+        demo_mode = memory_fallback_allowed()
+        if allow_memory_fallback and not demo_mode:
+            raise ProductionConfigurationError("In-memory storage requires DEMO_MODE=true.")
+        self.allow_memory_fallback = demo_mode if allow_memory_fallback is None else bool(allow_memory_fallback)
         self.client = None
         self.db = None
         self.error = None
@@ -82,10 +82,14 @@ class MongoRepository:
         self._price_alert_lock = threading.Lock()
         if self.uri and MongoClient:
             try:
-                self.client = MongoClient(self.uri, serverSelectionTimeoutMS=1200)
+                self.client = MongoClient(self.uri, serverSelectionTimeoutMS=5000)
                 self.client.admin.command("ping")
                 self.db = self.client[self.database_name]
                 self._create_indexes()
+                parsed = parse_uri(self.uri) if parse_uri else {}
+                nodes = parsed.get("nodelist") or []
+                host = nodes[0][0] if nodes else "unknown"
+                print(f"MongoDB connected: host={host}, database={self.database_name}", flush=True)
             except Exception as exc:  # Never leak a URI through an error string.
                 self.client = None
                 self.db = None
@@ -93,9 +97,9 @@ class MongoRepository:
                 if not self.allow_memory_fallback:
                     raise RuntimeError("MongoDB is unavailable and memory fallback is disabled.") from exc
         elif not self.uri:
-            self.error = "MONGODB_URI is not configured"
+            self.error = "MONGO_URI is not configured"
             if not self.allow_memory_fallback:
-                raise RuntimeError("MONGODB_URI is required when memory fallback is disabled.")
+                raise RuntimeError("MONGO_URI is required unless DEMO_MODE=true.")
         else:
             self.error = "PyMongo is not installed"
             if not self.allow_memory_fallback:
@@ -233,7 +237,7 @@ class MongoRepository:
         query = query or {}
         if collection in {"search_records", "evidence_records", "research_records", "testing_records"} and "is_deleted" not in query:
             query = {**query, "is_deleted": {"$ne": True}}
-        if collection in {"audit_logs", "activity_logs"} and "is_archived" not in query:
+        if collection in {"audit_logs", "activity_logs", "ai_search_logs"} and "is_archived" not in query:
             query = {**query, "is_archived": {"$ne": True}}
         if self.db is not None:
             cursor = self.db[collection].find(query).sort("created_at", DESCENDING if descending else ASCENDING)
@@ -1009,6 +1013,7 @@ class MongoRepository:
             "category_key": payload.get("category_key"),
             "category_display": payload.get("category_display"),
             "condition_scope": payload.get("condition_scope"),
+            "storage_scope": payload.get("storage_scope") or (payload.get("frozen_scope") or {}).get("storage"),
             "source_scope": payload.get("source_scope") or "search",
             "record_scope": payload.get("record_scope") or ("selected_comparison_records" if payload.get("tracking_mode") == "selected_records" else "all_current_search_results"),
             "data_source_label": payload.get("data_source_label") or "live",
@@ -1044,6 +1049,8 @@ class MongoRepository:
             "alert_last_change_percent": None,
             "alert_last_triggered_at": None,
             "alert_last_email_status": None,
+            "alert_last_evaluation_status": None,
+            "alert_last_evaluation_reason": None,
             "alert_rule_updated_at": None,
             "alert_rule_version": 0,
         }
@@ -1075,6 +1082,8 @@ class MongoRepository:
         row.setdefault("alert_last_change_percent", None)
         row.setdefault("alert_last_triggered_at", None)
         row.setdefault("alert_last_email_status", None)
+        row.setdefault("alert_last_evaluation_status", None)
+        row.setdefault("alert_last_evaluation_reason", None)
         row.setdefault("alert_rule_updated_at", None)
         row.setdefault("alert_rule_version", 0)
         return row
@@ -1145,6 +1154,52 @@ class MongoRepository:
             "auto_refresh_enabled": False,
             "next_refresh_at": None,
         }, user_id=user_id)
+
+    def claim_manual_monitor_refresh(self, monitor_id, owner_id, now, cooldown_seconds, request_id=None):
+        """Atomically reserve a short manual-refresh window across web workers."""
+        now = now if getattr(now, "tzinfo", None) else now.replace(tzinfo=timezone.utc)
+        locked_until = now + timedelta(seconds=max(0, int(cooldown_seconds or 0)))
+        query = {
+            "_id": self._id(monitor_id),
+            "user_id": self._id(owner_id),
+            "status": "active",
+            "$or": [
+                {"manual_refresh_locked_until": {"$exists": False}},
+                {"manual_refresh_locked_until": None},
+                {"manual_refresh_locked_until": {"$lte": now}},
+            ],
+        }
+        updates = {"$set": {
+            "manual_refresh_started_at": now,
+            "manual_refresh_locked_until": locked_until,
+            "manual_refresh_request_id": str(request_id or uuid.uuid4().hex),
+            "updated_at": utcnow(),
+        }}
+        if self.db is not None:
+            result = self.db.watchlist_items.update_one(query, updates)
+            if result.matched_count:
+                return True, 0
+            current = self.get_watchlist_item(monitor_id, owner_id) or {}
+            current_until = current.get("manual_refresh_locked_until")
+            retry_after = max(1, int((current_until - now).total_seconds())) if isinstance(current_until, datetime) and current_until > now else 1
+            return False, retry_after
+        with self._monitor_refresh_lock:
+            monitor = next((row for row in self._memory["watchlist_items"] if str(row.get("_id")) == str(monitor_id) and str(row.get("user_id")) == str(owner_id) and row.get("status") == "active"), None)
+            if not monitor:
+                return False, 1
+            current_until = monitor.get("manual_refresh_locked_until")
+            if isinstance(current_until, datetime) and current_until > now:
+                return False, max(1, int((current_until - now).total_seconds()))
+            monitor.update(updates["$set"])
+            return True, 0
+
+    def release_manual_monitor_refresh(self, monitor_id, owner_id, now=None):
+        """Allow an immediate retry when a manual run produced no valid snapshot."""
+        return self.update_watchlist_item(
+            monitor_id,
+            {"manual_refresh_locked_until": now or utcnow()},
+            user_id=owner_id,
+        )
 
     def archive_watchlist_item(self, watchlist_id, user_id=None):
         return self.update_watchlist_item(watchlist_id, {"status": "archived", "auto_refresh_enabled": False, "next_refresh_at": None}, user_id=user_id)
@@ -1347,6 +1402,15 @@ class MongoRepository:
     def archive_activity_log(self, log_id, archived_by=None, reason=None):
         now = utcnow()
         return self._soft_update("activity_logs", log_id, {
+            "is_archived": True,
+            "archived_at": now,
+            "archived_by": self._id(archived_by) if archived_by else None,
+            "archive_reason": reason or "archive_selected",
+        })
+
+    def archive_ai_log(self, log_id, archived_by=None, reason=None):
+        now = utcnow()
+        return self._soft_update("ai_search_logs", log_id, {
             "is_archived": True,
             "archived_at": now,
             "archived_by": self._id(archived_by) if archived_by else None,

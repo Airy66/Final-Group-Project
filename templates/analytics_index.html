@@ -18,7 +18,7 @@
   </div>
 </section>
 
-<section id="analysis-list" class="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
+<section id="analysis-list" class="mt-5 overflow-visible rounded-xl border border-slate-200 bg-white">
   {% for analysis in analyses %}
   {% set analysis_type = 'comparison' if analysis.scope == 'selected_comparison' else 'search' %}
   {% set comparable_count = analysis.comparable_result_count or analysis.record_count or (analysis.included_result_ids|length) %}
@@ -32,8 +32,8 @@
     </div>
     <div class="flex shrink-0 items-center gap-2">
       <a class="rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-bold text-white hover:bg-blue-700" href="{{ url_for('analytics', search_record_id=analysis._id) }}">Open analysis</a>
-      <details class="app-dropdown">
-        <summary class="analysis-more-summary inline-flex items-center justify-center" aria-label="Lifecycle actions for {{ analysis.query or 'saved analysis' }}" title="Lifecycle actions"><span class="material-symbols-outlined text-[20px]">more_horiz</span></summary>
+      <details class="app-dropdown relative z-30">
+        <summary class="app-overflow-summary" aria-label="Lifecycle actions for {{ analysis.query or 'saved analysis' }}" title="Lifecycle actions"><span class="material-symbols-outlined text-[20px]">more_horiz</span></summary>
         <div class="app-dropdown-panel min-w-48" role="menu"><form method="post" action="{{ url_for('delete_analysis', analysis_id=analysis._id) }}" data-confirm-form data-confirm-message="Delete this saved analysis? The original Search Run, Comparison Set, Saved Evidence and Watchlist data will remain."><button class="app-dropdown-item w-full text-left text-red-700" type="submit" role="menuitem">Delete analysis</button></form></div>
       </details>
     </div>
