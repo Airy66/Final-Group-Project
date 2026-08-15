@@ -129,9 +129,6 @@ endif %}
       <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="mt-1 font-display text-2xl font-bold">{{ 'Price comparison records' if comparison_enabled else 'Search results' }}</h2>
       {% if comparison_enabled and can_access(current_user, 'analytics_dashboard') %}<button id="analytics-button" type="submit" formaction="{{ url_for('create_search_analysis') }}" formmethod="post" title="Analyzes all analytics-eligible records from this search." class="rounded-xl bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100">Analyze all comparable results</button>{% endif %}</div>
       <p class="mt-2 text-sm text-slate-500">{% if comparison_enabled %}Results are normalized for comparison. Review product fit, condition, and variant before saving or analyzing.{% else %}Browse all matched listings, then choose one {{ 'product type' if category_mode == 'multi_product_type' else 'category' }} above to create a reliable comparison scope.{% endif %}</p>
-      {% if search_scope == 'both' and result_platform_counts.get('Walmart', 0) == 0 and result_platform_counts.get('eBay', 0) > 0 %}
-      <p class="mt-2 text-sm font-medium text-amber-700">Only eBay has visible matched records. Cross-platform comparison is limited.</p>
-      {% endif %}
     </div>
   <div class="mt-4 flex flex-wrap items-center gap-2">
   <label class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">Platform <select id="result-platform-filter" class="ml-2 border-0 bg-transparent text-xs font-bold"><option value="All">All platforms</option>{% for platform in result_platforms %}<option value="{{ platform }}">{{ platform }}</option>{% endfor %}</select></label>

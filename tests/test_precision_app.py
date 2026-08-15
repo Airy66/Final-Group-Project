@@ -656,13 +656,19 @@ def test_gemini_success_and_failure_modes(monkeypatch):
             assert expected in summary
 
 
-def test_decision_guidance_does_not_call_ai_for_an_unqualified_scope(monkeypatch):
+def test_unqualified_scope_can_receive_a_guarded_ai_interpretation(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-not-real")
+    captured = {}
 
-    def unexpected_call(*_args, **_kwargs):
-        raise AssertionError("Gemini must not interpret an unqualified comparison")
+    def guarded_interpretation(_api_key, _model, prompt, _timeout_ms):
+        captured["prompt"] = prompt
+        return (
+            "Decision readiness\nCurrent-scope insight available; marketplace recommendation not qualified.\n\n"
+            "Key interpretation\nThe visible prices support a within-marketplace reading without establishing a marketplace winner.\n\n"
+            "Recommended next step\nReview seller and source evidence, then add matching marketplace coverage only if comparison is needed."
+        )
 
-    monkeypatch.setattr(ai_search, "_call_gemini", unexpected_call)
+    monkeypatch.setattr(ai_search, "_call_gemini", guarded_interpretation)
     context = {
         "qualified": False,
         "mixed_configuration": True,
@@ -671,12 +677,28 @@ def test_decision_guidance_does_not_call_ai_for_an_unqualified_scope(monkeypatch
     }
     summary, mode, reason = ai_search.summarize_market_gemini("phone", [], decision_context=context)
 
-    assert mode == "scope_guidance"
-    assert reason == "comparison_scope_not_qualified"
-    assert "Decision readiness\nNot ready" in summary
-    assert "Key interpretation\nDifferences in variant and condition" in summary
-    assert "Recommended next step\nChoose one product configuration and one condition" in summary
+    assert mode == "gemini_api"
+    assert reason is None
+    assert "Current-scope insight available" in summary
+    assert "within-marketplace reading" in summary
+    assert "not qualified for a marketplace winner" in captured["prompt"]
     assert not any(character.isdigit() for character in summary)
+
+
+def test_single_platform_scope_provides_useful_reading_without_claiming_a_winner():
+    summary = ai_search.decision_support_summary({
+        "qualified": False,
+        "platform_counts": {"eBay": 2},
+        "mixed_configuration": False,
+        "mixed_condition": False,
+        "price_pattern": "wide",
+    })
+
+    assert "Current-scope insight available" in summary
+    assert "Prices vary substantially" in summary
+    assert "within-marketplace reading" in summary
+    assert "no cross-marketplace price conclusion" in summary
+    assert "marketplace winner" in summary
 
 
 def test_decision_guidance_prioritizes_platform_sample_imbalance():

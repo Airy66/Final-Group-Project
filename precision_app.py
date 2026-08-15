@@ -7761,6 +7761,10 @@ def search(search_run_id=None):
     selected_facets = requested_facets if has_filter_request else stored_selected_facets
     selected_facets = {key: values if isinstance(values, list) else [values] for key, values in selected_facets.items() if key in category_profile["facets"]}
     selected_facets = {key: [canonical_facet_value(key, value) for value in values] for key, values in selected_facets.items()}
+    # Condition has its own single-select control and active-filter entry. Do
+    # not also retain it as a category facet, otherwise it is applied and
+    # displayed twice.
+    selected_facets.pop("condition", None)
     category_options = [
         {"key": key, "display_name": CATEGORY_PROFILES.get(key, CATEGORY_PROFILES["generic"])["display_name"], "count": scope["category_counts"][key]}
         for key in scope["detected_category_keys"]
@@ -8101,6 +8105,17 @@ def ai_discover():
     query = record.get("keyword", "current market") if record else "current market"
     comparison_summary = calculate_summary(items, category_key=record.get("selected_category_key") or None)
     platform_counts = dict(Counter(str(item.get("platform") or "Unknown") for item in items))
+    lowest_price = comparison_summary.get("lowest_price")
+    highest_price = comparison_summary.get("highest_price")
+    average_price = comparison_summary.get("average_price")
+    relative_spread = (
+        (float(highest_price) - float(lowest_price)) / float(average_price)
+        if lowest_price is not None and highest_price is not None and average_price
+        else None
+    )
+    price_pattern = "tight" if relative_spread is not None and relative_spread <= 0.10 else (
+        "moderate" if relative_spread is not None and relative_spread <= 0.25 else "wide"
+    )
     decision_context = {
         "qualified": bool(comparison_summary.get("best_platform")),
         "best_platform": comparison_summary.get("best_platform"),
@@ -8110,6 +8125,7 @@ def ai_discover():
         "mixed_configuration": bool(comparison_summary.get("mixed_configuration")),
         "mixed_condition": bool(comparison_summary.get("mixed_condition")),
         "qualification_reason": comparison_summary.get("platform_qualification_reason"),
+        "price_pattern": price_pattern,
     }
     summary, mode, fallback_reason = summarize_market(query, items, decision_context=decision_context)
     model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")

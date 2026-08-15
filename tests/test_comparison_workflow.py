@@ -452,7 +452,9 @@ def test_refine_platform_and_condition_override_stored_filters_and_scope_ai(monk
     assert condition_page.status_code == 200
     assert record["active_filters"]["condition"] == "New"
     assert record["active_filters"]["platform"] == ""
+    assert "condition" not in (record.get("selected_facets") or {})
     assert condition_soup.select_one('select[name="condition"] option[selected]').get("value") == "New"
+    assert condition_soup.get_text(" ", strip=True).count("Condition: New") == 1
 
     captured = {}
     def fake_summary(_query, items, **_kwargs):
@@ -478,6 +480,7 @@ def test_refine_platform_and_condition_override_stored_filters_and_scope_ai(monk
     assert record["active_filters"]["condition"] == ""
     assert platform_soup.select_one('select[name="platform"] option[selected]').get("value") == "eBay"
     assert {option.get("value") for option in platform_soup.select('select[name="platform"] option')} == {"", "eBay", "Walmart"}
+    assert "Only eBay has visible matched records" not in platform_soup.get_text(" ", strip=True)
 
 
 def test_channel_query_remains_unchanged_when_exact_results_are_strong():

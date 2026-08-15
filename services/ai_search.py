@@ -189,9 +189,40 @@ def decision_support_summary(decision_context):
             if str(name).strip()
         }
         limited_platforms = [name for name, count in platform_counts.items() if count < 2]
-        if platform_counts and (len(platform_counts) < 2 or limited_platforms):
+        price_pattern = str(context.get("price_pattern") or "varied").strip().lower()
+        pattern_text = {
+            "tight": "Prices are closely grouped within this scope",
+            "moderate": "Prices show moderate variation within this scope",
+            "wide": "Prices vary substantially within this scope",
+        }.get(price_pattern, "Prices vary within this scope")
+        if len(platform_counts) == 1:
+            platform = next(iter(platform_counts))
+            distortion = (
+                f"{pattern_text} on {platform}. This supports a within-marketplace reading, "
+                "but no cross-marketplace price conclusion."
+            )
+            actions = []
+            if mixed_configuration:
+                actions.append("choose one product configuration")
+            if mixed_condition:
+                actions.append("choose one product condition")
+            if actions:
+                action_text = ", then ".join(actions)
+                next_step = (
+                    f"{action_text[:1].upper()}{action_text[1:]} for a cleaner within-marketplace review; "
+                    "add matching records from another marketplace only when a platform comparison is needed."
+                )
+            else:
+                next_step = (
+                    f"Review the comparable {platform} listings in this scope; add matching records from another "
+                    "marketplace only when a platform comparison is needed."
+                )
+        elif platform_counts and limited_platforms:
             scope = ", ".join(f"{name}: {count}" for name, count in sorted(platform_counts.items())) or "fewer than two represented marketplaces"
-            distortion = f"The current marketplace sample is not balanced ({scope}), so platform-level pricing cannot be qualified."
+            distortion = (
+                f"{pattern_text}. The current marketplace sample is not balanced ({scope}); treat the visible "
+                "cross-marketplace pattern as directional rather than a platform recommendation."
+            )
             actions = []
             if limited_platforms:
                 actions.append(f"collect another comparable record for {', '.join(sorted(limited_platforms))}")
@@ -216,8 +247,8 @@ def decision_support_summary(decision_context):
             next_step = "Include comparable records from at least two marketplaces, then regenerate the interpretation."
             distortion = "The current scope does not support a cross-marketplace conclusion."
         return (
-            "Decision readiness\nNot ready for a marketplace-level conclusion.\n\n"
-            f"Key interpretation\n{distortion} The price cards remain descriptive of the current result set, not a platform recommendation.\n\n"
+            "Decision readiness\nCurrent-scope insight available; marketplace recommendation not qualified.\n\n"
+            f"Key interpretation\n{distortion} The price cards describe the current evidence scope rather than a marketplace winner.\n\n"
             f"Recommended next step\n{next_step}"
         )
 
@@ -291,18 +322,25 @@ def _gemini_fallback_reason(exc):
 def summarize_market_gemini(keyword, items, decision_context=None):
     """Generate through Gemini on the backend, with a deterministic local fallback."""
     fallback = decision_support_summary(decision_context) if decision_context is not None else rule_based_market_summary(keyword, items)
-    if decision_context is not None and not decision_context.get("qualified"):
-        return fallback, "scope_guidance", "comparison_scope_not_qualified"
+    unqualified_scope = decision_context is not None and not decision_context.get("qualified")
     api_key = os.getenv("GEMINI_API_KEY")
     model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     if not api_key:
+        if unqualified_scope:
+            return fallback, "scope_guidance", "comparison_scope_not_qualified"
         return fallback, "rule_based_fallback", "missing_key"
     condition_count, record_count = _condition_coverage(items)
     compact = [{key: row.get(key) for key in ("platform", "title", "product_name", "normalized_price", "price", "currency", "category", "condition_display", "condition", "confidence_level")} for row in items[:25]]
     if decision_context is not None:
+        scope_instruction = (
+            "The scope is not qualified for a marketplace winner. Still provide a useful interpretation of the current evidence, "
+            "including a within-marketplace reading when only one marketplace is represented. Do not name or imply a marketplace winner. "
+            if unqualified_scope else
+            "The scope is qualified for a marketplace comparison. Explain the supplied qualified signal without expanding it. "
+        )
         prompt = (
             "You are explaining a server-calculated marketplace comparison. Do not recalculate or repeat prices, percentages, counts, the product name, or other numeric values. "
-            "Do not repeat the KPI cards. Explain what the qualified signal means, its reliability, and the next review action. "
+            f"{scope_instruction}Do not repeat the KPI cards. Explain what the current signal means, its reliability, and the next review action. "
             "Return plain text using exactly these three labels on separate lines: Decision readiness, Key interpretation, Recommended next step. "
             "Use one short sentence under each label. Do not use Markdown, bullets, purchasing advice, or claims beyond the supplied decision context.\n"
             f"Decision context: {json.dumps(decision_context, ensure_ascii=False, default=str)}"
@@ -327,7 +365,7 @@ def summarize_market_gemini(keyword, items, decision_context=None):
             return grounded, "rule_based_fallback", "unsupported_condition_claim"
         return grounded, "gemini_api", None
     except Exception as exc:
-        return fallback, "rule_based_fallback", _gemini_fallback_reason(exc)
+        return fallback, "scope_guidance" if unqualified_scope else "rule_based_fallback", _gemini_fallback_reason(exc)
 
 
 def predict_price_gemini(product_label, tracking_scope, platform_scope, source_label, snapshots):
