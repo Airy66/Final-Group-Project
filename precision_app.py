@@ -4777,6 +4777,11 @@ def user_can_manage_record(record_user_id):
     return session.get("role") == "administrator" or str(record_user_id) == str(session.get("user_id"))
 
 
+def saved_evidence_scope_user_id():
+    """Return the owner filter for Saved Evidence and its derived workflows."""
+    return None if session.get("role") == "administrator" else session.get("user_id")
+
+
 def results_dataframe(items):
     rows = []
     for item in items:
@@ -5514,7 +5519,7 @@ def saved():
     locked = not can_access(current_user(), "saved_research")
     if locked:
         return locked_feature_response("saved_research", title="Saved Research")
-    scope = None if session.get("role") in {"researcher", "administrator"} else session["user_id"]
+    scope = saved_evidence_scope_user_id()
     return render_template("saved_packages.html", evidence=normalize_price_items(repository.list_evidence(scope, limit=100)), research=repository.list_research(scope, limit=50), comparison_sets=repository.list_comparison_groups(scope, saved_only=True, limit=50), synthetic_notice=True, search_record_id=session.get("last_search_record_id"))
 
 
@@ -5622,7 +5627,7 @@ def save_selected_evidence():
 @app.post("/saved/evidence/<evidence_id>/delete")
 @login_required
 def delete_saved_evidence(evidence_id):
-    evidence = repository.get_evidence(evidence_id)
+    evidence = repository.get_evidence(evidence_id, saved_evidence_scope_user_id())
     if not evidence or not user_can_manage_record(evidence.get("user_id")):
         flash("You do not have permission to delete this record.", "error")
         return redirect(url_for("saved"))
@@ -5644,7 +5649,7 @@ def delete_saved_evidence_selected():
         return redirect(url_for("saved"))
     deleted = 0
     for evidence_id in evidence_ids:
-        evidence = repository.get_evidence(evidence_id)
+        evidence = repository.get_evidence(evidence_id, saved_evidence_scope_user_id())
         if not evidence or not user_can_manage_record(evidence.get("user_id")):
             continue
         repository.delete_evidence(evidence_id, deleted_by=session.get("user_id"), reason="bulk_saved_evidence_deleted")
@@ -5759,7 +5764,7 @@ def save_research():
 @app.post("/saved/research/<research_id>/delete")
 @login_required
 def delete_saved_research(research_id):
-    research = repository.get_research(research_id)
+    research = repository.get_research(research_id, saved_evidence_scope_user_id())
     if not research or not user_can_manage_record(research.get("user_id")):
         flash("You do not have permission to delete this record.", "error")
         return redirect(url_for("saved"))
@@ -5778,7 +5783,7 @@ def delete_saved_research_selected():
         return redirect(url_for("saved"))
     deleted = 0
     for research_id in research_ids:
-        research = repository.get_research(research_id)
+        research = repository.get_research(research_id, saved_evidence_scope_user_id())
         if not research or not user_can_manage_record(research.get("user_id")):
             continue
         repository.delete_research(research_id, deleted_by=session.get("user_id"), reason="bulk_saved_research_deleted")
@@ -5794,7 +5799,7 @@ def delete_saved_research_selected():
 @app.route("/saved/research/<research_id>")
 @login_required
 def research_detail(research_id):
-    scope = None if session.get("role") in {"researcher", "administrator"} else session["user_id"]
+    scope = saved_evidence_scope_user_id()
     research = repository.get_research(research_id, scope)
     if not research:
         abort(404)
@@ -5806,7 +5811,7 @@ def research_detail(research_id):
 def saved_export_evidence_csv():
     if not can_access(current_user(), "save_evidence"):
         return export_forbidden_response("Export is available on Premium and Professional plans.")
-    evidence = safe_call(lambda: repository.list_evidence(session["user_id"], limit=200), [])
+    evidence = safe_call(lambda: repository.list_evidence(saved_evidence_scope_user_id(), limit=200), [])
     selected_ids = {str(value) for value in request.args.getlist("evidence_id") if value}
     if selected_ids:
         evidence = [item for item in evidence if str(item.get("_id")) in selected_ids]
@@ -5831,7 +5836,7 @@ def saved_export_evidence_csv():
 def saved_export_report():
     if not can_access(current_user(), "standard_export"):
         return export_forbidden_response("Saved evidence report is available on Premium and Professional plans.")
-    evidence = safe_call(lambda: repository.list_evidence(session["user_id"], limit=200), [])
+    evidence = safe_call(lambda: repository.list_evidence(saved_evidence_scope_user_id(), limit=200), [])
     report_rows = []
     for item in evidence:
         normalized_price = item.get("normalized_price")
@@ -8382,7 +8387,7 @@ def analytics(search_record_id):
             comparison_id=analysis_record.get("comparison_set_id"), analytics_heading="Comparison Analytics — Selected records" if scope == "selected_comparison" else "Search Analytics — All valid results",
             analysis_record=analysis_record,
         )
-    user_scope = None if session.get("role") == "researcher" else session["user_id"]
+    user_scope = saved_evidence_scope_user_id()
     record, items, source_kind = _analytics_records_for_search(search_record_id, user_scope)
     if not record:
         abort(404)
@@ -8518,7 +8523,7 @@ def _analytics_export_context(search_record_id):
     analysis_record = repository.get_analysis_record(search_record_id, session["user_id"])
     if analysis_record:
         return _analytics_context_from_frozen_analysis(analysis_record)
-    user_scope = None if session.get("role") == "researcher" else session["user_id"]
+    user_scope = saved_evidence_scope_user_id()
     record, items, _source_kind = _analytics_records_for_search(search_record_id, user_scope)
     if not record:
         abort(404)
